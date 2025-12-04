@@ -10,7 +10,8 @@ import {
   FileText,
   Download,
   Leaf,
-  Scale
+  Scale,
+  Smartphone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -110,7 +111,15 @@ const JobDetail = () => {
 
               {job.driver && (
                 <div className="pt-4 border-t">
-                  <p className="text-sm font-medium text-muted-foreground mb-3">Driver Assignment</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-muted-foreground">Driver Assignment</p>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/driver/jobs/${job.id}`}>
+                        <Smartphone className="h-4 w-4 mr-2" />
+                        Driver View
+                      </Link>
+                    </Button>
+                  </div>
                   <div className="flex flex-wrap gap-4">
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />

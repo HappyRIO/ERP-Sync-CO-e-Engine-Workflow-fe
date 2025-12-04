@@ -12,13 +12,17 @@ import {
   Leaf,
   Truck,
   TreeDeciduous,
-  Heart
+  Heart,
+  Calendar,
+  MapPin
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import { DatePicker } from "@/components/booking/DatePicker";
+import { MapPicker } from "@/components/booking/MapPicker";
 import { 
   assetCategories, 
   calculateReuseCO2e, 
@@ -42,6 +46,8 @@ interface AssetSelection {
 
 const Booking = () => {
   const [currentStep, setCurrentStep] = useState(1);
+  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
+  const [siteLocation, setSiteLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [siteDetails, setSiteDetails] = useState({
     siteName: "",
     address: "",
@@ -83,7 +89,12 @@ const Booking = () => {
 
   const canProceed = () => {
     if (currentStep === 1) {
-      return siteDetails.siteName && siteDetails.address && siteDetails.postcode;
+      return (
+        siteDetails.siteName &&
+        siteDetails.address &&
+        siteDetails.postcode &&
+        scheduledDate !== undefined
+      );
     }
     if (currentStep === 2) {
       return totalAssets > 0;
@@ -101,6 +112,8 @@ const Booking = () => {
     setIsSubmitting(false);
     // Reset form
     setCurrentStep(1);
+    setScheduledDate(undefined);
+    setSiteLocation(null);
     setSiteDetails({ siteName: "", address: "", postcode: "", contactName: "", contactPhone: "" });
     setSelectedAssets([]);
     setCharityPercent(10);
@@ -148,57 +161,71 @@ const Booking = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <Card>
-              <CardHeader>
-                <CardTitle>Collection Site Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Collection Site Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="siteName">Site Name *</Label>
+                      <Input
+                        id="siteName"
+                        placeholder="e.g., London HQ"
+                        value={siteDetails.siteName}
+                        onChange={(e) =>
+                          setSiteDetails({ ...siteDetails, siteName: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="scheduledDate">
+                        <Calendar className="inline h-4 w-4 mr-2" />
+                        Scheduled Date *
+                      </Label>
+                      <DatePicker
+                        date={scheduledDate}
+                        onDateChange={setScheduledDate}
+                        placeholder="Select collection date"
+                        minDate={new Date()}
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="siteName">Site Name *</Label>
+                    <Label htmlFor="address">Full Address *</Label>
                     <Input
-                      id="siteName"
-                      placeholder="e.g., London HQ"
-                      value={siteDetails.siteName}
+                      id="address"
+                      placeholder="Street address, city"
+                      value={siteDetails.address}
                       onChange={(e) =>
-                        setSiteDetails({ ...siteDetails, siteName: e.target.value })
+                        setSiteDetails({ ...siteDetails, address: e.target.value })
                       }
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="postcode">Postcode *</Label>
-                    <Input
-                      id="postcode"
-                      placeholder="e.g., EC1A 1BB"
-                      value={siteDetails.postcode}
-                      onChange={(e) =>
-                        setSiteDetails({ ...siteDetails, postcode: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Full Address *</Label>
-                  <Input
-                    id="address"
-                    placeholder="Street address, city"
-                    value={siteDetails.address}
-                    onChange={(e) =>
-                      setSiteDetails({ ...siteDetails, address: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="contactName">Contact Name</Label>
-                    <Input
-                      id="contactName"
-                      placeholder="Site contact person"
-                      value={siteDetails.contactName}
-                      onChange={(e) =>
-                        setSiteDetails({ ...siteDetails, contactName: e.target.value })
-                      }
-                    />
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="postcode">Postcode *</Label>
+                      <Input
+                        id="postcode"
+                        placeholder="e.g., EC1A 1BB"
+                        value={siteDetails.postcode}
+                        onChange={(e) =>
+                          setSiteDetails({ ...siteDetails, postcode: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="contactName">Contact Name</Label>
+                      <Input
+                        id="contactName"
+                        placeholder="Site contact person"
+                        value={siteDetails.contactName}
+                        onChange={(e) =>
+                          setSiteDetails({ ...siteDetails, contactName: e.target.value })
+                        }
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="contactPhone">Contact Phone</Label>
@@ -211,9 +238,42 @@ const Booking = () => {
                       }
                     />
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              {/* Map Picker */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="h-5 w-5" />
+                    Select Location on Map
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <MapPicker
+                    position={siteLocation}
+                    onPositionChange={(position) => {
+                      setSiteLocation(position);
+                      // Optionally update address from reverse geocoding
+                      if (position && !siteDetails.address) {
+                        // Could add reverse geocoding here if needed
+                      }
+                    }}
+                    onAddressChange={(address) => {
+                      if (address && !siteDetails.address) {
+                        setSiteDetails({ ...siteDetails, address });
+                      }
+                    }}
+                    height="350px"
+                  />
+                  {siteLocation && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Location selected. You can adjust the marker by clicking on the map.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </motion.div>
         )}
 
@@ -356,6 +416,19 @@ const Booking = () => {
                     <span className="text-muted-foreground">Location</span>
                     <span className="font-medium">{siteDetails.postcode}</span>
                   </div>
+                  {scheduledDate && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Scheduled Date</span>
+                      <span className="font-medium">
+                        {scheduledDate.toLocaleDateString("en-GB", {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total Assets</span>
                     <span className="font-medium">{totalAssets} units</span>

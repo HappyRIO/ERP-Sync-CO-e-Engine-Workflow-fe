@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
 import Jobs from "./pages/Jobs";
 import JobDetail from "./pages/JobDetail";
+import DriverJobView from "./pages/DriverJobView";
 import Booking from "./pages/Booking";
 import CO2eDashboard from "./pages/CO2eDashboard";
 import Documents from "./pages/Documents";
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/jobs/:id" element={<JobDetail />} />
+            <Route path="/driver/jobs/:id" element={<DriverJobView />} />
             <Route path="/booking" element={<Booking />} />
             <Route path="/co2e" element={<CO2eDashboard />} />
             <Route path="/documents" element={<Documents />} />
