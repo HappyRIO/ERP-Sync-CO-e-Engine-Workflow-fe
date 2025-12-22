@@ -39,3 +39,37 @@ export function useCreateSite() {
   });
 }
 
+export function useUpdateSite() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Omit<Site, 'id'>> }) =>
+      siteService.updateSite(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+    },
+  });
+}
+
+export function useDeleteSite() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => siteService.deleteSite(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+    },
+  });
+}
+
+export function useSetDefaultSite() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => siteService.setDefaultSite(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+    },
+  });
+}
+

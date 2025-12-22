@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantThemeProvider } from "@/contexts/TenantThemeContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/app/Index";
@@ -28,6 +29,12 @@ import BookingDetail from "./pages/app/BookingDetail";
 import BookingTimeline from "./pages/app/BookingTimeline";
 import BookingCertificates from "./pages/app/BookingCertificates";
 import BookingGradingReport from "./pages/app/BookingGradingReport";
+import Sites from "./pages/app/Sites";
+import JobHistory from "./pages/app/JobHistory";
+import Approval from "./pages/app/admin/Approval";
+import BookingSummary from "./pages/app/BookingSummary";
+import DriverSchedule from "./pages/app/DriverSchedule";
+import Notifications from "./pages/app/Notifications";
 import Login from "./pages/app/Login";
 import Signup from "./pages/app/Signup";
 import AcceptInvite from "./pages/app/AcceptInvite";
@@ -43,7 +50,8 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <TenantThemeProvider>
-            <Routes>
+            <NotificationProvider>
+              <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
@@ -61,10 +69,26 @@ const App = () => (
                 <Route path="/jobs" element={<Jobs />} />
                 <Route path="/jobs/:id" element={<JobDetail />} />
                 <Route
+                  path="/jobs/history"
+                  element={
+                    <ProtectedRoute allowedRoles={['driver', 'admin']}>
+                      <JobHistory />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/driver/jobs/:id"
                   element={
                     <ProtectedRoute allowedRoles={['driver', 'admin']}>
                       <DriverJobView />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/driver/schedule"
+                  element={
+                    <ProtectedRoute allowedRoles={['driver', 'admin']}>
+                      <DriverSchedule />
                     </ProtectedRoute>
                   }
                 />
@@ -141,6 +165,14 @@ const App = () => (
                   }
                 />
                 <Route
+                  path="/sites"
+                  element={
+                    <ProtectedRoute allowedRoles={['client', 'reseller']}>
+                      <Sites />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/admin/bookings"
                   element={
                     <ProtectedRoute allowedRoles={['admin']}>
@@ -173,6 +205,14 @@ const App = () => (
                   }
                 />
                 <Route
+                  path="/admin/approval/:id"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <Approval />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/bookings/:id/timeline"
                   element={
                     <ProtectedRoute allowedRoles={['admin', 'client', 'reseller']}>
@@ -196,10 +236,20 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/bookings/:id/summary"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'client', 'reseller']}>
+                      <BookingSummary />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/notifications" element={<Notifications />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </NotificationProvider>
           </TenantThemeProvider>
         </AuthProvider>
       </BrowserRouter>

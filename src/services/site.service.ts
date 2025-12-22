@@ -209,6 +209,71 @@ class SiteService {
     mockSites.push(newSite);
     return newSite;
   }
+
+  async updateSite(id: string, updates: Partial<Omit<Site, 'id'>>): Promise<Site> {
+    await delay(1000);
+
+    // Simulate errors
+    if (shouldSimulateError(SERVICE_NAME)) {
+      const config = JSON.parse(localStorage.getItem(`error_sim_${SERVICE_NAME}`) || '{}');
+      throw new ApiError(
+        config.errorType || ApiErrorType.SERVER_ERROR,
+        'Failed to update site. Please try again.',
+        config.errorType === ApiErrorType.NETWORK_ERROR ? 0 : 500
+      );
+    }
+
+    const siteIndex = mockSites.findIndex(s => s.id === id);
+    if (siteIndex === -1) {
+      throw new ApiError(
+        ApiErrorType.NOT_FOUND,
+        'Site not found.',
+        404
+      );
+    }
+
+    // If updating default site, unset other defaults
+    if (updates.isDefault === true) {
+      mockSites.forEach(s => {
+        if (s.id !== id) {
+          s.isDefault = false;
+        }
+      });
+    }
+
+    const updatedSite = { ...mockSites[siteIndex], ...updates };
+    mockSites[siteIndex] = updatedSite;
+    return updatedSite;
+  }
+
+  async deleteSite(id: string): Promise<void> {
+    await delay(800);
+
+    // Simulate errors
+    if (shouldSimulateError(SERVICE_NAME)) {
+      const config = JSON.parse(localStorage.getItem(`error_sim_${SERVICE_NAME}`) || '{}');
+      throw new ApiError(
+        config.errorType || ApiErrorType.SERVER_ERROR,
+        'Failed to delete site. Please try again.',
+        config.errorType === ApiErrorType.NETWORK_ERROR ? 0 : 500
+      );
+    }
+
+    const siteIndex = mockSites.findIndex(s => s.id === id);
+    if (siteIndex === -1) {
+      throw new ApiError(
+        ApiErrorType.NOT_FOUND,
+        'Site not found.',
+        404
+      );
+    }
+
+    mockSites.splice(siteIndex, 1);
+  }
+
+  async setDefaultSite(id: string): Promise<Site> {
+    return this.updateSite(id, { isDefault: true });
+  }
 }
 
 export const siteService = new SiteService();

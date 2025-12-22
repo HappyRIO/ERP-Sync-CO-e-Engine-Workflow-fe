@@ -14,6 +14,8 @@ const statusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "booked", label: "Booked" },
   { value: "en-route", label: "En Route" },
+  { value: "arrived", label: "Arrived" },
+  { value: "collected", label: "Collected" },
   { value: "warehouse", label: "Warehouse" },
   { value: "graded", label: "Graded" },
   { value: "finalised", label: "Finalised" },

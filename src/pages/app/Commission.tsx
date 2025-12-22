@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, DollarSign, Calendar, Package, Loader2, CheckCircle2, Clock, FileText } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Search, DollarSign, Calendar, Package, Loader2, CheckCircle2, Clock, FileText, TrendingUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -187,7 +188,12 @@ const Commission = () => {
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                         <span className="font-mono text-xs">{comm.jobNumber}</span>
                         <span>•</span>
-                        <span className="font-mono text-xs">{comm.bookingNumber}</span>
+                        <Link 
+                          to={`/bookings/${comm.bookingId}`}
+                          className="font-mono text-xs hover:text-primary transition-colors"
+                        >
+                          {comm.bookingNumber}
+                        </Link>
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
@@ -200,13 +206,32 @@ const Commission = () => {
                           </>
                         )}
                       </div>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <TrendingUp className="h-3 w-3" />
+                          Resale Value: £{comm.jobValue.toLocaleString()}
+                        </span>
+                        <span>•</span>
+                        <span>Commission Rate: {comm.commissionPercent}%</span>
+                      </div>
                     </div>
                     <div className="text-right hidden sm:block">
                       <p className="text-sm text-muted-foreground">Commission</p>
                       <p className="text-2xl font-bold">£{comm.commissionAmount.toLocaleString()}</p>
                       <p className="text-xs text-muted-foreground">
-                        {comm.commissionPercent}% of £{comm.jobValue.toLocaleString()}
+                        {comm.commissionPercent}% of £{comm.jobValue.toLocaleString()} resale value
                       </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 h-7 text-xs"
+                        asChild
+                      >
+                        <Link to={`/bookings/${comm.bookingId}`}>
+                          <FileText className="h-3 w-3 mr-1" />
+                          View Booking
+                        </Link>
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

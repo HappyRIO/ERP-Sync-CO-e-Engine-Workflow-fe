@@ -26,6 +26,7 @@ const workflowSteps: {
   { status: "booked", label: "Booked", icon: Calendar, description: "Job booking confirmed" },
   { status: "routed", label: "Routed", icon: MapPin, description: "Route assigned to driver" },
   { status: "en-route", label: "En Route", icon: Truck, description: "Driver traveling to site" },
+  { status: "arrived", label: "Arrived", icon: MapPin, description: "Driver arrived at collection site" },
   { status: "collected", label: "Collected", icon: Package, description: "Assets collected from site" },
   { status: "warehouse", label: "Warehouse", icon: Package, description: "Assets at processing facility" },
   { status: "sanitised", label: "Sanitised", icon: Shield, description: "Data sanitisation completed" },

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -17,7 +17,10 @@ import {
   Calendar,
   MapPin,
   Search,
-  Loader2
+  Loader2,
+  Zap,
+  Fuel,
+  PoundSterling
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +39,7 @@ import { useSites } from "@/hooks/useSites";
 import { useAssetCategories } from "@/hooks/useAssets";
 import { useCO2Calculation } from "@/hooks/useCO2";
 import { useCreateBooking } from "@/hooks/useBooking";
+import { geocodePostcode } from "@/lib/calculations";
 import type { Site } from "@/services/site.service";
 
 const steps = [
@@ -68,6 +72,7 @@ const Booking = () => {
   });
   const [selectedAssets, setSelectedAssets] = useState<AssetSelection[]>([]);
   const [charityPercent, setCharityPercent] = useState(10);
+  const [selectedVehicleType, setSelectedVehicleType] = useState<'petrol' | 'diesel' | 'electric'>('petrol');
 
   // Load sites (for client/reseller roles)
   const { data: sites = [], isLoading: isLoadingSites } = useSites();
@@ -75,15 +80,22 @@ const Booking = () => {
   const createBooking = useCreateBooking();
   
   // Calculate CO2e when assets change
-  const { data: co2Calculation } = useCO2Calculation(
-    selectedAssets.length > 0
-      ? {
-          assets: selectedAssets,
-          distanceKm: 80,
-          vehicleType: 'van',
-        }
-      : null
-  );
+  // Use memoized request object to prevent unnecessary query key changes
+  // If location isn't set yet, use a default location for calculations
+  const co2CalculationRequest = useMemo(() => {
+    if (selectedAssets.length === 0) return null;
+    
+    // Use actual coordinates if available, otherwise use default (will show as estimated)
+    const coordinates = siteLocation || { lat: 51.5074, lng: -0.1278 }; // Default London coordinates
+    
+    return {
+      assets: selectedAssets,
+      collectionCoordinates: coordinates,
+      vehicleType: selectedVehicleType,
+    };
+  }, [selectedAssets, siteLocation, selectedVehicleType]);
+
+  const { data: co2Calculation, isLoading: isCalculatingCO2, isFetching: isFetchingCO2 } = useCO2Calculation(co2CalculationRequest);
 
   // Set default site on mount (only if sites exist and we're still on 'new')
   useEffect(() => {
@@ -117,20 +129,28 @@ const Booking = () => {
     const site = sites.find(s => s.id === siteId);
     if (site) {
       setSelectedSiteId(siteId);
-      // Parse existing address or use as-is
-      const addressParts = site.address.split(',').map(s => s.trim());
+      // Use site fields directly - Site interface has separate address, city, and postcode fields
       setSiteDetails({
         siteName: site.name,
-        street: addressParts[0] || "",
-        city: addressParts[1] || "",
-        county: addressParts[2] || "",
-        postcode: site.postcode,
+        street: site.address || "", // Use address as street
+        city: site.city || "", // Use city field directly
+        county: "", // County not stored in Site, leave empty
+        postcode: site.postcode || "",
         country: "United Kingdom",
         contactName: site.contactName || "",
         contactPhone: site.contactPhone || "",
       });
       if (site.coordinates) {
         setSiteLocation(site.coordinates);
+      } else if (site.postcode) {
+        // Geocode postcode if coordinates not available
+        geocodePostcode(site.postcode).then(coords => {
+          if (coords) {
+            setSiteLocation(coords);
+          }
+        }).catch(() => {
+          // Silently fail if geocoding fails
+        });
       }
     }
   };
@@ -166,11 +186,37 @@ const Booking = () => {
         return total + (category?.avgBuybackValue || 0) * asset.quantity;
       }, 0)
     : 0;
-  
+
   // Use CO2 calculation from service (useCO2Calculation hook)
-  const co2eSaved = co2Calculation?.reuseSavings || 0;
-  const travelEmissions = co2Calculation?.travelEmissions || 0;
-  const netCO2e = co2Calculation?.netImpact || 0;
+  // Use nullish coalescing to keep previous values during refetch (placeholderData handles this)
+  const co2eSaved = co2Calculation?.reuseSavings ?? 0;
+  const travelEmissions = co2Calculation?.travelEmissions ?? 0;
+  const netCO2e = co2Calculation?.netImpact ?? 0;
+  const distanceKm = co2Calculation?.distanceKm ?? 0;
+  const distanceMiles = co2Calculation?.distanceMiles ?? 0;
+  const vehicleEmissions = co2Calculation?.vehicleEmissions ?? {
+    petrol: 0,
+    diesel: 0,
+    electric: 0,
+  };
+
+  // Calculate estimated cost of collection and processing
+  // TODO: Replace with actual calculation formula when provided by client
+  // This is a placeholder calculation based on distance and asset count
+  const calculateEstimatedCost = (): number => {
+    if (distanceKm === 0 || totalAssets === 0) return 0;
+    
+    // Placeholder calculation:
+    // Base cost + distance-based cost + processing cost per asset
+    const baseCost = 50; // Base collection fee
+    const distanceCost = distanceKm * 0.5; // £0.50 per km (round trip)
+    const processingCostPerAsset = 2; // £2 per asset for processing
+    const totalProcessingCost = totalAssets * processingCostPerAsset;
+    
+    return baseCost + distanceCost + totalProcessingCost;
+  };
+  
+  const estimatedCost = calculateEstimatedCost();
 
   const canProceed = () => {
     if (currentStep === 1) {
@@ -215,9 +261,10 @@ const Booking = () => {
       {
         onSuccess: (booking) => {
           toast.success("Booking submitted successfully!", {
-            description: `Job ${booking.erpJobNumber} has been created.`,
+            description: `Booking ${booking.erpJobNumber} has been created.`,
           });
-          navigate(`/jobs/${booking.id}`);
+          // Redirect to bookings page instead of jobs page since booking and job are separate
+          navigate(`/bookings`);
         },
         onError: (error) => {
           toast.error("Failed to create booking", {
@@ -580,13 +627,22 @@ const Booking = () => {
                 {/* CO2e Preview */}
                 {totalAssets > 0 && (
                   <motion.div
+                    key="co2-preview"
+                    layoutId="co2-preview"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-6 p-4 rounded-xl bg-gradient-eco border border-primary/20"
+                    transition={{ duration: 0.2 }}
+                    className={cn(
+                      "mt-6 p-4 rounded-xl bg-gradient-eco border border-primary/20 transition-opacity duration-200",
+                      isFetchingCO2 && "opacity-75"
+                    )}
                   >
                     <div className="flex items-center gap-2 mb-3">
                       <Leaf className="h-5 w-5 text-primary" />
                       <span className="font-semibold">Environmental Impact Preview</span>
+                      {isFetchingCO2 && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div>
@@ -597,20 +653,162 @@ const Booking = () => {
                       </div>
                       <div>
                         <p className="text-2xl font-bold text-destructive">
-                          -{travelEmissions}kg
+                          -{travelEmissions.toFixed(1)}kg
                         </p>
-                        <p className="text-xs text-muted-foreground">Travel Emissions</p>
+                        <p className="text-xs text-muted-foreground">Travel Emissions ({selectedVehicleType.charAt(0).toUpperCase() + selectedVehicleType.slice(1)})</p>
                       </div>
-                      <div>
-                        <p className="text-2xl font-bold text-primary">
+                      <div className={cn(
+                        netCO2e > 0 && "relative"
+                      )}>
+                        <p className={cn(
+                          "text-2xl font-bold transition-colors",
+                          netCO2e > 0 ? "text-success text-3xl" : netCO2e < 0 ? "text-destructive" : "text-primary"
+                        )}>
+                          {netCO2e > 0 && "+"}
                           {(netCO2e / 1000).toFixed(1)}t
                         </p>
-                        <p className="text-xs text-muted-foreground">Net Benefit</p>
+                        <p className={cn(
+                          "text-xs font-medium",
+                          netCO2e > 0 ? "text-success/80" : "text-muted-foreground"
+                        )}>
+                          Net Benefit
+                          {netCO2e > 0 && " ✓"}
+                        </p>
                       </div>
                     </div>
-                    <p className="text-sm text-center text-muted-foreground mt-3">
+                    <p className={cn(
+                      "text-sm text-center mt-3 font-medium",
+                      netCO2e > 0 ? "text-success" : "text-muted-foreground"
+                    )}>
+                      {netCO2e > 0 && "✓ "}
                       ≈ {co2eEquivalencies.treesPlanted(netCO2e)} trees planted equivalent
+                      {netCO2e > 0 && " - Great environmental impact!"}
                     </p>
+                  </motion.div>
+                )}
+
+                {/* Travel Distance & Emissions Box */}
+                {totalAssets > 0 && (distanceKm > 0 || isCalculatingCO2) && (
+                  <motion.div
+                    key="travel-emissions"
+                    layoutId="travel-emissions"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={cn(
+                      "mt-6 p-4 rounded-xl border bg-card transition-opacity duration-200",
+                      isFetchingCO2 && "opacity-75"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 mb-4">
+                      <Truck className="h-5 w-5 text-primary" />
+                      <span className="font-semibold">Travel Distance & Emissions</span>
+                      {isFetchingCO2 && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">Total Mileage (Round Trip)</span>
+                        </div>
+                        <span className="text-lg font-bold">
+                          {distanceMiles > 0 ? `${distanceMiles.toFixed(1)} miles (${distanceKm.toFixed(1)} km)` : 'Calculating...'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mb-3">
+                        From collection site to warehouse (RM13 8BT) and return
+                        {!siteLocation && (
+                          <span className="ml-2 text-warning">(Estimated - Location not set)</span>
+                        )}
+                      </div>
+                      <div className="text-sm font-medium mb-2">
+                        Select vehicle type to see emissions:
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedVehicleType('petrol')}
+                          className={cn(
+                            "p-3 rounded-lg border bg-background transition-all cursor-pointer text-left",
+                            selectedVehicleType === 'petrol' 
+                              ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                              : "hover:border-primary/50 hover:bg-muted/50"
+                          )}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <Fuel className="h-4 w-4 text-orange-500" />
+                            <span className="text-xs font-semibold text-muted-foreground">Petrol</span>
+                            {selectedVehicleType === 'petrol' && (
+                              <CheckCircle2 className="h-3 w-3 text-primary ml-auto" />
+                            )}
+                          </div>
+                          <p className={cn(
+                            "text-xl font-bold",
+                            selectedVehicleType === 'petrol' ? "text-primary" : "text-foreground"
+                          )}>
+                            {distanceKm > 0 ? `${vehicleEmissions.petrol.toFixed(2)}kg` : '—'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">CO₂e</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedVehicleType('diesel')}
+                          className={cn(
+                            "p-3 rounded-lg border bg-background transition-all cursor-pointer text-left",
+                            selectedVehicleType === 'diesel' 
+                              ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                              : "hover:border-primary/50 hover:bg-muted/50"
+                          )}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <Fuel className="h-4 w-4 text-blue-500" />
+                            <span className="text-xs font-semibold text-muted-foreground">Diesel</span>
+                            {selectedVehicleType === 'diesel' && (
+                              <CheckCircle2 className="h-3 w-3 text-primary ml-auto" />
+                            )}
+                          </div>
+                          <p className={cn(
+                            "text-xl font-bold",
+                            selectedVehicleType === 'diesel' ? "text-primary" : "text-foreground"
+                          )}>
+                            {distanceKm > 0 ? `${vehicleEmissions.diesel.toFixed(2)}kg` : '—'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">CO₂e</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedVehicleType('electric')}
+                          className={cn(
+                            "p-3 rounded-lg border bg-background transition-all cursor-pointer text-left",
+                            selectedVehicleType === 'electric' 
+                              ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
+                              : "hover:border-primary/50 hover:bg-muted/50"
+                          )}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <Zap className="h-4 w-4 text-green-500" />
+                            <span className="text-xs font-semibold text-muted-foreground">Electric</span>
+                            {selectedVehicleType === 'electric' && (
+                              <CheckCircle2 className="h-3 w-3 text-primary ml-auto" />
+                            )}
+                          </div>
+                          <p className={cn(
+                            "text-xl font-bold",
+                            selectedVehicleType === 'electric' ? "text-success" : "text-foreground"
+                          )}>
+                            {distanceKm > 0 ? `${vehicleEmissions.electric.toFixed(2)}kg` : '—'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">CO₂e</p>
+                        </button>
+                      </div>
+                      {selectedVehicleType && distanceKm > 0 && vehicleEmissions && (
+                        <div className="mt-3 p-2 rounded-lg bg-muted/50 text-sm text-center">
+                          Selected: <span className="font-semibold capitalize">{selectedVehicleType}</span> vehicle ({(vehicleEmissions[selectedVehicleType as keyof typeof vehicleEmissions] || 0).toFixed(2)}kg CO₂e)
+                        </div>
+                      )}
+                    </div>
                   </motion.div>
                 )}
               </CardContent>
@@ -686,8 +884,15 @@ const Booking = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Net CO₂e Benefit</span>
-                    <span className="text-xl font-bold text-success">
+                    <span className={cn(
+                      "text-xl font-bold transition-colors",
+                      netCO2e > 0 ? "text-success text-2xl" : netCO2e < 0 ? "text-destructive" : "text-foreground"
+                    )}>
+                      {netCO2e > 0 && "+"}
                       {(netCO2e / 1000).toFixed(1)}t
+                      {netCO2e > 0 && (
+                        <span className="ml-2 text-lg">✓</span>
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground pt-2 border-t">
@@ -738,6 +943,34 @@ const Booking = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Estimated Cost */}
+            {estimatedCost > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <PoundSterling className="h-4 w-4 text-accent" />
+                    Estimated Collection & Processing Cost
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">
+                        Total Estimated Cost
+                      </span>
+                      <span className="text-2xl font-bold text-foreground">
+                        £{estimatedCost.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground pt-2 border-t">
+                      This includes collection from your site to our warehouse (RM13 8BT) and processing fees.
+                      Final cost may vary based on actual distance and processing requirements.
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -764,18 +997,18 @@ const Booking = () => {
           </Button>
         ) : (
           <Button
-            variant="outline"
+            variant="header"
             onClick={handleSubmit}
             disabled={createBooking.isPending}
           >
             {createBooking.isPending ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="animate-spin" />
                 Submitting...
               </>
             ) : (
               <>
-                <CheckCircle2 className="h-4 w-4 mr-2" />
+                <CheckCircle2 />
                 Submit Booking
               </>
             )}

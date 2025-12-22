@@ -1,13 +1,17 @@
 import { motion } from "framer-motion";
-import { Leaf, TreeDeciduous, Home, Car, Loader2 } from "lucide-react";
+import { Leaf, TreeDeciduous, Home, Car, Loader2, CheckCircle2, Calendar } from "lucide-react";
 import { co2eEquivalencies } from "@/lib/constants";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useDashboardStats } from "@/hooks/useJobs";
+import { useAuth } from "@/contexts/AuthContext";
+import { Badge } from "@/components/ui/badge";
 
 export function CO2eOverview() {
   const { data: stats, isLoading } = useDashboardStats();
+  const { user } = useAuth();
+  const isClient = user?.role === 'client';
   
   if (isLoading || !stats) {
     return (
@@ -19,7 +23,13 @@ export function CO2eOverview() {
     );
   }
 
+  // For clients: show actual vs estimated
   const totalCO2e = stats.totalCO2eSaved;
+  const completedCO2e = stats.completedCO2eSaved ?? 0;
+  const estimatedCO2e = stats.estimatedCO2eSaved ?? 0;
+  const completedCount = stats.completedJobsCount ?? 0;
+  const bookedCount = stats.bookedJobsCount ?? 0;
+  
   const trees = co2eEquivalencies.treesPlanted(totalCO2e);
   const householdDays = co2eEquivalencies.householdDays(totalCO2e);
   const carMiles = co2eEquivalencies.carMiles(totalCO2e);
@@ -52,6 +62,24 @@ export function CO2eOverview() {
             </div>
             <p className="text-4xl font-bold">{(totalCO2e / 1000).toFixed(1)}t</p>
             <p className="text-sm text-primary-foreground/70">CO₂e saved through reuse</p>
+            {isClient && (completedCount > 0 || bookedCount > 0) && (
+              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-primary-foreground/20">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary-foreground/70" />
+                  <span className="text-xs text-primary-foreground/80">
+                    {completedCount} completed ({(completedCO2e / 1000).toFixed(1)}t actual)
+                  </span>
+                </div>
+                {bookedCount > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-primary-foreground/70" />
+                    <span className="text-xs text-primary-foreground/80">
+                      {bookedCount} booked ({(estimatedCO2e / 1000).toFixed(1)}t estimated)
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <Button variant="glass" size="sm" asChild className="text-primary-foreground border-primary-foreground/20 hover:bg-primary-foreground/10">
             <Link to="/co2e" className="gap-1 group relative bg-white/10 backdrop-blur-sm text-foreground hover:bg-white/20 hover:border-white/50 hover:shadow-lg hover:shadow-accent/20 transition-all duration-300 ease-out active:scale-[0.98]">

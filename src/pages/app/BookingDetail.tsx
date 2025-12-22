@@ -270,6 +270,13 @@ const BookingDetail = () => {
                   </Link>
                 </Button>
               )}
+              {booking.status === 'completed' && (
+                <Button variant="default" asChild className="w-full">
+                  <Link to={`/bookings/${id}/summary`} className="text-inherit no-underline">
+                    View Completion Summary
+                  </Link>
+                </Button>
+              )}
               {booking.jobId && (
                 <Button variant="outline" asChild className="w-full">
                   <Link to={`/jobs/${booking.jobId}`} className="text-inherit no-underline">

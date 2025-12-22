@@ -74,6 +74,7 @@ const DriverJobView = () => {
   // Check if driver can access this job (only before/at collection stage)
   const canAccess = job.status === 'booked' ||
     job.status === 'en-route' ||
+    job.status === 'arrived' ||
     job.status === 'collected';
 
   // Access restriction: Drivers can only access jobs before/at collection
@@ -145,8 +146,9 @@ const DriverJobView = () => {
     if (!job) return null;
     const statusTransitions: Record<string, WorkflowStatus> = {
       'booked': 'en-route',      // Accept job
-      'en-route': 'collected',   // Mark as arrived and collected
-      'collected': 'warehouse',   // Mark as delivered to warehouse
+      'en-route': 'arrived',     // Mark as arrived at site
+      'arrived': 'collected',    // Mark as collected
+      'collected': 'warehouse',  // Mark as delivered to warehouse
     };
     return statusTransitions[job.status] || null;
   };
@@ -354,12 +356,12 @@ const DriverJobView = () => {
                 >
                   {updateStatus.isPending ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <Loader2 className="animate-spin" />
                       Updating...
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      <CheckCircle2 />
                       Mark as {nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1)}
                     </>
                   )}
@@ -379,12 +381,12 @@ const DriverJobView = () => {
           >
             {updateEvidence.isPending ? (
               <>
-                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                <Loader2 className="animate-spin" />
                 Saving...
               </>
             ) : (
               <>
-                <Save className="h-5 w-5 mr-2" />
+                <Save />
                 Save Evidence
               </>
             )}

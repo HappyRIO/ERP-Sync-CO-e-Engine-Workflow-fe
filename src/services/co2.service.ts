@@ -1,6 +1,13 @@
 // Mock CO₂ Calculation Service
 import { assetCategories } from '@/mocks/mock-data';
-import { calculateReuseCO2e, calculateTravelEmissions } from '@/lib/calculations';
+import { 
+  calculateReuseCO2e, 
+  calculateTravelEmissions,
+  calculateRoundTripDistance,
+  calculateAllVehicleEmissions,
+  kmToMiles,
+  WAREHOUSE_POSTCODE
+} from '@/lib/calculations';
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
 
 const SERVICE_NAME = 'co2';
@@ -11,13 +18,24 @@ export interface CO2CalculationRequest {
     quantity: number;
   }>;
   distanceKm?: number;
-  vehicleType?: 'car' | 'van' | 'truck';
+  vehicleType?: 'car' | 'van' | 'truck' | 'petrol' | 'diesel' | 'electric';
+  collectionCoordinates?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface CO2CalculationResponse {
   reuseSavings: number; // kg CO2e
-  travelEmissions: number; // kg CO2e
+  travelEmissions: number; // kg CO2e (for selected/default vehicle type)
   netImpact: number; // kg CO2e
+  distanceKm: number; // Total round trip distance
+  distanceMiles: number; // Total round trip distance in miles
+  vehicleEmissions: {
+    petrol: number; // kg CO2e
+    diesel: number; // kg CO2e
+    electric: number; // kg CO2e
+  };
   equivalencies: {
     treesPlanted: number;
     householdDays: number;
@@ -89,11 +107,12 @@ class CO2Service {
       );
     }
 
-    // Validate vehicle type if provided
-    if (request.vehicleType && !['car', 'van', 'truck'].includes(request.vehicleType)) {
+    // Validate vehicle type if provided (support both old and new types)
+    const validVehicleTypes = ['car', 'van', 'truck', 'petrol', 'diesel', 'electric'];
+    if (request.vehicleType && !validVehicleTypes.includes(request.vehicleType)) {
       throw new ApiError(
         ApiErrorType.VALIDATION_ERROR,
-        `Invalid vehicle type "${request.vehicleType}". Must be one of: car, van, truck.`,
+        `Invalid vehicle type "${request.vehicleType}". Must be one of: ${validVehicleTypes.join(', ')}.`,
         400,
         { vehicleType: request.vehicleType }
       );
@@ -102,12 +121,30 @@ class CO2Service {
     // Calculate reuse savings
     const reuseSavings = calculateReuseCO2e(request.assets, assetCategories);
 
-    // Calculate travel emissions (default to 80km van if not provided)
-    const distance = request.distanceKm || 80;
-    const vehicleType = request.vehicleType || 'van';
-    const travelEmissions = calculateTravelEmissions(distance, vehicleType);
+    // Calculate distance
+    let distance: number;
+    if (request.distanceKm !== undefined) {
+      // Use provided distance
+      distance = request.distanceKm;
+    } else if (request.collectionCoordinates) {
+      // Calculate distance from collection site to warehouse (round trip)
+      distance = calculateRoundTripDistance(
+        request.collectionCoordinates.lat,
+        request.collectionCoordinates.lng
+      );
+    } else {
+      // Default fallback
+      distance = 80;
+    }
 
-    // Calculate net impact
+    // Calculate emissions for all vehicle types
+    const vehicleEmissions = calculateAllVehicleEmissions(distance);
+    
+    // Use selected vehicle type or default to petrol
+    const vehicleType = request.vehicleType || 'petrol';
+    const travelEmissions = vehicleEmissions[vehicleType as keyof typeof vehicleEmissions] || vehicleEmissions.petrol;
+
+    // Calculate net impact using selected vehicle type
     const netImpact = reuseSavings - travelEmissions;
 
     // Calculate equivalencies
@@ -122,6 +159,9 @@ class CO2Service {
       reuseSavings,
       travelEmissions,
       netImpact,
+      distanceKm: distance,
+      distanceMiles: kmToMiles(distance),
+      vehicleEmissions,
       equivalencies,
     };
   }

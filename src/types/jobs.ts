@@ -4,6 +4,7 @@ export type WorkflowStatus =
   | 'booked' 
   | 'routed' 
   | 'en-route' 
+  | 'arrived'    // Driver has arrived at collection site
   | 'collected' 
   | 'warehouse' 
   | 'sanitised' 
@@ -80,6 +81,19 @@ export interface DashboardStats {
   totalBuyback: number;
   totalAssets: number;
   avgCharityPercent: number;
+  // Travel emissions breakdown by vehicle type
+  travelEmissions?: {
+    petrol: number; // kg CO2e
+    diesel: number; // kg CO2e
+    electric: number; // kg CO2e
+    totalDistanceKm: number; // Total round trip distance
+    totalDistanceMiles: number; // Total round trip distance in miles
+  };
+  // For client dashboard: actual vs estimated
+  completedJobsCount?: number;
+  bookedJobsCount?: number;
+  completedCO2eSaved?: number;
+  estimatedCO2eSaved?: number;
 }
 
 export interface JobsFilter {

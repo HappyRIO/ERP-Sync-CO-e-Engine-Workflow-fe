@@ -59,6 +59,9 @@ const Invoices = () => {
         <div>
           <h2 className="text-2xl font-bold text-foreground">Invoices</h2>
           <p className="text-muted-foreground">View and download your invoices</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Invoices represent the buyback amount we pay you for your assets, not collection or processing costs.
+          </p>
         </div>
       </motion.div>
 

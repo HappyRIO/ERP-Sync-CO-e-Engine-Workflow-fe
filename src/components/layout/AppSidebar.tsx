@@ -11,7 +11,10 @@ import {
   DollarSign,
   Receipt,
   ClipboardList,
-  UserPlus
+  UserPlus,
+  MapPin,
+  Clock,
+  Route as RouteIcon
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -49,10 +52,13 @@ const getMainNavItems = (role: string) => {
     { title: "Dashboard", url: "/", icon: LayoutDashboard, roles: ['admin', 'client', 'reseller', 'driver'] },
     { title: "New Booking", url: "/booking", icon: Plus, roles: ['admin', 'client', 'reseller'] },
     { title: "Jobs", url: "/jobs", icon: Truck, roles: ['admin', 'client', 'reseller', 'driver'] },
+    { title: "Route & Schedule", url: "/driver/schedule", icon: RouteIcon, roles: ['driver'] },
+    { title: "Job History", url: "/jobs/history", icon: Clock, roles: ['driver'] },
     { title: "Bookings", url: "/bookings", icon: FileText, roles: ['admin', 'client', 'reseller'] },
     { title: "Booking Queue", url: "/admin/bookings", icon: ClipboardList, roles: ['admin'] },
     { title: "Users", url: "/users", icon: Users, roles: ['admin'] },
     { title: "Clients", url: "/clients", icon: Building2, roles: ['admin', 'reseller'] },
+    { title: "Sites", url: "/sites", icon: MapPin, roles: ['client'] },
     { title: "Invoices", url: "/invoices", icon: Receipt, roles: ['client'] },
     { title: "Commission", url: "/commission", icon: DollarSign, roles: ['reseller'] },
     { title: "CO₂e Dashboard", url: "/co2e", icon: Leaf, roles: ['admin', 'client', 'reseller'] },

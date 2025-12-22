@@ -4,6 +4,10 @@ import { mockJobs } from '@/mocks/mock-data';
 import type { User } from '@/types/auth';
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
 import { USE_MOCK_API, API_BASE_URL } from '@/lib/config';
+import { 
+  calculateAllVehicleEmissions,
+  kmToMiles,
+} from '@/lib/calculations';
 
 const SERVICE_NAME = 'jobs';
 
@@ -49,11 +53,18 @@ class JobsService {
         jobs = jobs.filter(job => job.clientName === user.tenantName);
       } else if (user.role === 'driver') {
         // Drivers only see jobs assigned to them (by name match)
-        jobs = jobs.filter(job => 
-          job.driver && 
-          job.driver.name === user.name && 
-          job.status !== 'finalised'
-        );
+        // Only exclude finalised jobs if not explicitly requested in filter
+        jobs = jobs.filter(job => {
+          if (!job.driver || job.driver.name !== user.name) {
+            return false;
+          }
+          // If filter explicitly requests finalised jobs, don't exclude them
+          if (filter?.status === 'finalised') {
+            return true;
+          }
+          // Otherwise exclude finalised jobs (for schedule view)
+          return job.status !== 'finalised';
+        });
       }
     }
 
@@ -160,6 +171,31 @@ class JobsService {
     
     const jobs = await this.getJobs(undefined, user);
     
+    // Calculate travel emissions based on job locations
+    // For dashboard, we estimate total distance based on existing travelEmissions values
+    // (which are calculated for a van/truck, averaging around 0.24-0.89 kg/km)
+    // We'll estimate based on average emissions per km (using 0.24 for van as baseline)
+    // Since travelEmissions is already round trip, we can estimate one-way distance
+    const avgEmissionsPerKm = 0.24; // kg CO2e per km for van (conservative estimate)
+    let totalDistanceKm = 0;
+    
+    for (const job of jobs) {
+      // Estimate one-way distance from travelEmissions, then multiply by 2 for round trip
+      // travelEmissions = distance_round_trip * emissions_per_km
+      // So: distance_round_trip = travelEmissions / emissions_per_km
+      const roundTripDistance = job.travelEmissions / avgEmissionsPerKm;
+      totalDistanceKm += roundTripDistance;
+    }
+    
+    // Calculate emissions for all vehicle types based on total distance
+    const vehicleEmissions = calculateAllVehicleEmissions(totalDistanceKm);
+    
+    // Separate completed and booked (not yet completed) jobs for client dashboard
+    // Completed = finalised jobs (actual figures)
+    // Booked = all non-finalised jobs (estimated figures)
+    const completedJobs = jobs.filter(j => j.status === 'finalised');
+    const bookedJobs = jobs.filter(j => j.status !== 'finalised'); // All jobs that are not yet completed
+    
     return {
       totalJobs: jobs.length,
       activeJobs: jobs.filter(j => !['finalised'].includes(j.status)).length,
@@ -169,6 +205,17 @@ class JobsService {
       avgCharityPercent: jobs.length > 0 
         ? Math.round(jobs.reduce((sum, j) => sum + j.charityPercent, 0) / jobs.length)
         : 0,
+      travelEmissions: {
+        petrol: vehicleEmissions.petrol,
+        diesel: vehicleEmissions.diesel,
+        electric: vehicleEmissions.electric,
+        totalDistanceKm,
+        totalDistanceMiles: kmToMiles(totalDistanceKm),
+      },
+      completedJobsCount: completedJobs.length,
+      bookedJobsCount: bookedJobs.length,
+      completedCO2eSaved: completedJobs.reduce((sum, j) => sum + j.co2eSaved, 0),
+      estimatedCO2eSaved: bookedJobs.reduce((sum, j) => sum + j.co2eSaved, 0),
     };
   }
 
@@ -224,7 +271,8 @@ class JobsService {
     const validTransitions: Record<string, string[]> = {
       booked: ['routed'],
       routed: ['en-route'],
-      'en-route': ['collected'],
+      'en-route': ['arrived'],
+      arrived: ['collected'],
       collected: ['warehouse'],
       warehouse: ['sanitised'],
       sanitised: ['graded'],

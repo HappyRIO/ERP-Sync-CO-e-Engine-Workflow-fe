@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Award, Loader2, Plus, PoundSterling, CheckCircle2 } from "lucide-react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, Award, Loader2, Plus, PoundSterling, CheckCircle2, FileCheck, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useBooking } from "@/hooks/useBookings";
+import { useBooking, useUpdateBookingStatus } from "@/hooks/useBookings";
 import { useGradingRecords, useCreateGradingRecord, useCalculateResaleValue } from "@/hooks/useGrading";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -26,11 +26,13 @@ const grades: { value: 'A' | 'B' | 'C' | 'D' | 'Recycled'; label: string; color:
 
 const Grading = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: booking, isLoading: isLoadingBooking } = useBooking(id || null);
   const { data: records = [], isLoading: isLoadingRecords } = useGradingRecords(id);
   const createRecord = useCreateGradingRecord();
   const calculateResaleValue = useCalculateResaleValue();
+  const updateBookingStatus = useUpdateBookingStatus();
 
   const [selectedAssetId, setSelectedAssetId] = useState<string>("");
   const [grade, setGrade] = useState<string>("");
@@ -129,6 +131,11 @@ const Grading = () => {
 
   const totalResaleValue = records.reduce((sum, r) => sum + (r.resaleValue * (booking.assets.find(a => a.categoryId === r.assetId)?.quantity || 1)), 0);
 
+  // Check if all assets are graded
+  const allAssetsGraded = booking?.assets.every(asset => {
+    return records.some(record => record.assetId === asset.categoryId);
+  });
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -147,7 +154,7 @@ const Grading = () => {
           <p className="text-muted-foreground">{booking.bookingNumber} - {booking.clientName}</p>
         </div>
         {!showForm && (
-          <Button onClick={() => setShowForm(true)}>
+          <Button variant="header" onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Grade Asset
           </Button>
@@ -164,6 +171,55 @@ const Grading = () => {
             </div>
             <PoundSterling className="h-8 w-8 text-accent" />
           </div>
+          {allAssetsGraded && booking.status === 'graded' && (
+            <div className="mt-4 pt-4 border-t border-accent/20">
+              <Button variant="header" className="w-full" onClick={() => navigate(`/admin/approval/${id}`)}>
+                <FileCheck className="h-4 w-4 mr-2" />
+                Proceed to Final Approval
+              </Button>
+            </div>
+          )}
+          {allAssetsGraded && booking.status === 'sanitised' && (
+            <div className="mt-4 pt-4 border-t border-accent/20">
+              <Button 
+                variant="header" 
+                size="lg"
+                className="w-full" 
+                onClick={() => {
+                  if (!id) return;
+                  updateBookingStatus.mutate(
+                    { bookingId: id, status: 'graded' },
+                    {
+                      onSuccess: () => {
+                        toast.success("Booking moved to graded status", {
+                          description: "All assets have been graded.",
+                        });
+                        navigate(`/admin/approval/${id}`);
+                      },
+                      onError: (error) => {
+                        toast.error("Failed to update booking status", {
+                          description: error instanceof Error ? error.message : "Please try again.",
+                        });
+                      },
+                    }
+                  );
+                }}
+                disabled={updateBookingStatus.isPending}
+              >
+                {updateBookingStatus.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Approve & Move to Graded
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -246,17 +302,18 @@ const Grading = () => {
 
               <div className="flex gap-2">
                 <Button
+                  variant="header"
                   onClick={handleCreateRecord}
                   disabled={!selectedAssetId || !grade || createRecord.isPending}
                 >
                   {createRecord.isPending ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <Loader2 className="animate-spin" />
                       Creating...
                     </>
                   ) : (
                     <>
-                      <Award className="h-4 w-4 mr-2" />
+                      <Award />
                       Create Grade
                     </>
                   )}

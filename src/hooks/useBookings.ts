@@ -33,3 +33,30 @@ export function useAssignDriver() {
   });
 }
 
+export function useCompleteBooking() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: (bookingId: string) =>
+      bookingService.completeBooking(bookingId, user?.id || ''),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+    },
+  });
+}
+
+export function useUpdateBookingStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ bookingId, status }: { bookingId: string; status: string }) =>
+      bookingService.updateBookingStatus(bookingId, status as any),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+    },
+  });
+}
+

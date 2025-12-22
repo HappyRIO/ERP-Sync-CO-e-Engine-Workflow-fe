@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, UserPlus, Truck, Calendar, MapPin, Package, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, UserPlus, Truck, Calendar, MapPin, Package, Loader2, CheckCircle2, Car } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,6 +12,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
 
+// Driver vehicle information mapping (in a real app, this would come from the backend)
+const driverVehicleInfo: Record<string, { vehicleReg: string; vehicleType: 'van' | 'truck' | 'car' }> = {
+  'user-4': { vehicleReg: 'AB12 CDE', vehicleType: 'van' }, // James Wilson
+  'user-6': { vehicleReg: 'XY34 FGH', vehicleType: 'truck' }, // Sarah Chen
+};
+
 const Assignment = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -21,6 +27,10 @@ const Assignment = () => {
   const { data: drivers = [] } = useUsers({ role: "driver", isActive: true });
   const [selectedDriverId, setSelectedDriverId] = useState<string>("");
   const assignMutation = useAssignDriver();
+  
+  const selectedDriver = drivers.find(d => d.id === selectedDriverId);
+  const selectedDriverVehicle = selectedDriverId ? driverVehicleInfo[selectedDriverId] : null;
+  const assignedDriverVehicle = booking?.driverId ? driverVehicleInfo[booking.driverId] : null;
 
   // Set selected driver if booking already has one
   useEffect(() => {
@@ -171,11 +181,22 @@ const Assignment = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               {booking.driverName ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">Currently Assigned</p>
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
-                    <Truck className="h-4 w-4" />
-                    <span className="font-medium">{booking.driverName}</span>
+                  <div className="p-3 rounded-lg bg-muted space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Truck className="h-4 w-4" />
+                      <span className="font-medium">{booking.driverName}</span>
+                    </div>
+                    {assignedDriverVehicle && (
+                      <div className="flex items-center gap-2 pt-2 border-t border-muted-foreground/20">
+                        <Car className="h-4 w-4 text-muted-foreground" />
+                        <div className="text-sm">
+                          <p className="font-medium">{assignedDriverVehicle.vehicleType.charAt(0).toUpperCase() + assignedDriverVehicle.vehicleType.slice(1)}</p>
+                          <p className="text-muted-foreground font-mono">{assignedDriverVehicle.vehicleReg}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Booking is already scheduled. To change driver, contact support.
@@ -193,11 +214,15 @@ const Assignment = () => {
                         {drivers.length === 0 ? (
                           <SelectItem value="none" disabled>No drivers available</SelectItem>
                         ) : (
-                          drivers.map((driver) => (
-                            <SelectItem key={driver.id} value={driver.id}>
-                              {driver.name}
-                            </SelectItem>
-                          ))
+                          drivers.map((driver) => {
+                            const vehicleInfo = driverVehicleInfo[driver.id];
+                            return (
+                              <SelectItem key={driver.id} value={driver.id}>
+                                {driver.name}
+                                {vehicleInfo && ` (${vehicleInfo.vehicleReg})`}
+                              </SelectItem>
+                            );
+                          })
                         )}
                       </SelectContent>
                     </Select>
@@ -207,20 +232,38 @@ const Assignment = () => {
                       </p>
                     )}
                   </div>
+                  
+                  {selectedDriver && selectedDriverVehicle && (
+                    <div className="p-3 rounded-lg bg-muted/50 border border-muted space-y-2">
+                      <p className="text-sm font-medium">Driver Information</p>
+                      <div className="flex items-center gap-2">
+                        <Truck className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{selectedDriver.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 pt-2 border-t border-muted-foreground/20">
+                        <Car className="h-4 w-4 text-muted-foreground" />
+                        <div className="text-sm">
+                          <p className="font-medium">{selectedDriverVehicle.vehicleType.charAt(0).toUpperCase() + selectedDriverVehicle.vehicleType.slice(1)}</p>
+                          <p className="text-muted-foreground font-mono">{selectedDriverVehicle.vehicleReg}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <Button
+                    variant="header"
                     onClick={handleAssign}
                     disabled={!selectedDriverId || assignMutation.isPending}
                     className="w-full"
                   >
                     {assignMutation.isPending ? (
                       <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        <Loader2 className="animate-spin" />
                         Assigning...
                       </>
                     ) : (
                       <>
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        <CheckCircle2 />
                         Assign & Schedule
                       </>
                     )}

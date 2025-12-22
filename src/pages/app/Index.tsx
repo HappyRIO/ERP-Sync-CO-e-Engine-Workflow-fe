@@ -3,6 +3,7 @@ import { Truck, Package, PoundSterling, Leaf, Loader2 } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RecentJobsTable } from "@/components/dashboard/RecentJobsTable";
 import { CO2eOverview } from "@/components/dashboard/CO2eOverview";
+import { TravelEmissionsBox } from "@/components/dashboard/TravelEmissionsBox";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -48,9 +49,9 @@ const Index = () => {
           </p>
         </div>
         {canCreateBooking && (
-          <Button variant="hero" size="lg" asChild>
+          <Button variant="header" size="lg" asChild>
             <Link to="/booking" className="text-inherit no-underline">
-              <Plus className="h-5 w-5" />
+              <Plus />
               New Booking
             </Link>
           </Button>
@@ -116,8 +117,9 @@ const Index = () => {
           <RecentJobsTable />
         </div>
         {user?.role !== 'driver' && (
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-6">
             <CO2eOverview />
+            <TravelEmissionsBox />
           </div>
         )}
       </div>

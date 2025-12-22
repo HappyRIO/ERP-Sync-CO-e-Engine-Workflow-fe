@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Shield, CheckCircle2, Clock, Loader2, Plus, Download } from "lucide-react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Shield, CheckCircle2, Clock, Loader2, Plus, Download, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useBooking } from "@/hooks/useBookings";
+import { useBooking, useUpdateBookingStatus } from "@/hooks/useBookings";
 import { useSanitisationRecords, useCreateSanitisationRecord, useVerifySanitisation } from "@/hooks/useSanitisation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -26,11 +27,14 @@ const sanitisationMethods = [
 
 const Sanitisation = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { data: booking, isLoading: isLoadingBooking } = useBooking(id || null);
   const { data: records = [], isLoading: isLoadingRecords } = useSanitisationRecords(id);
   const createRecord = useCreateSanitisationRecord();
   const verifyRecord = useVerifySanitisation();
+  const updateBookingStatus = useUpdateBookingStatus();
 
   const [selectedAssetId, setSelectedAssetId] = useState<string>("");
   const [method, setMethod] = useState<string>("");
@@ -137,6 +141,52 @@ const Sanitisation = () => {
     return acc;
   }, {} as Record<string, typeof records>);
 
+  // Check if all assets are sanitised and verified
+  const allAssetsSanitised = booking?.assets.every(asset => {
+    const assetRecords = recordsByAsset[asset.categoryId] || [];
+    return assetRecords.length > 0 && assetRecords.every(r => r.verified);
+  });
+
+  const handleMoveToNextStatus = () => {
+    if (!id || !booking) return;
+    
+    // Determine the target status based on current status
+    // Workflow: collected → sanitised → graded (one step at a time)
+    const targetStatus = booking.status === 'collected' ? 'sanitised' : 'graded';
+    
+    updateBookingStatus.mutate(
+      { bookingId: id, status: targetStatus },
+      {
+        onSuccess: () => {
+          // Invalidate booking queries to refresh data
+          if (id) {
+            queryClient.invalidateQueries({ queryKey: ['bookings', id] });
+          }
+          queryClient.invalidateQueries({ queryKey: ['bookings'] });
+          
+          if (targetStatus === 'sanitised') {
+            // Moved from 'collected' to 'sanitised' - navigate to grading page
+            toast.success("Booking moved to sanitised status", {
+              description: "All assets have been sanitised and verified. Proceeding to grading.",
+            });
+            navigate(`/admin/grading/${id}`);
+          } else {
+            // Moved from 'sanitised' to 'graded' - navigate to grading page
+            toast.success("Booking moved to grading", {
+              description: "All assets have been sanitised and verified.",
+            });
+            navigate(`/admin/grading/${id}`);
+          }
+        },
+        onError: (error) => {
+          toast.error("Failed to update booking status", {
+            description: error instanceof Error ? error.message : "Please try again.",
+          });
+        },
+      }
+    );
+  };
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -155,7 +205,7 @@ const Sanitisation = () => {
           <p className="text-muted-foreground">{booking.bookingNumber} - {booking.clientName}</p>
         </div>
         {!showForm && (
-          <Button onClick={() => setShowForm(true)}>
+          <Button variant="header" onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Record Sanitisation
           </Button>
@@ -230,17 +280,18 @@ const Sanitisation = () => {
 
               <div className="flex gap-2">
                 <Button
+                  variant="header"
                   onClick={handleCreateRecord}
                   disabled={!selectedAssetId || !method || createRecord.isPending}
                 >
                   {createRecord.isPending ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <Loader2 className="animate-spin" />
                       Creating...
                     </>
                   ) : (
                     <>
-                      <Shield className="h-4 w-4 mr-2" />
+                      <Shield />
                       Create Record
                     </>
                   )}
@@ -337,6 +388,72 @@ const Sanitisation = () => {
           );
         })}
       </div>
+
+      {/* Approval Button */}
+      {allAssetsSanitised && booking.status === 'collected' && (
+        <Card className="bg-success/5 border-success/20 border-2">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium mb-1">All assets sanitised and verified</p>
+                <p className="text-sm text-muted-foreground">
+                  Ready to move to sanitised status
+                </p>
+              </div>
+              <Button 
+                variant="header" 
+                size="lg"
+                onClick={handleMoveToNextStatus}
+                disabled={updateBookingStatus.isPending}
+              >
+                {updateBookingStatus.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Approve & Move to Sanitised
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {allAssetsSanitised && booking.status === 'sanitised' && (
+        <Card className="bg-success/5 border-success/20 border-2">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium mb-1">All assets sanitised and verified</p>
+                <p className="text-sm text-muted-foreground">
+                  Ready to proceed to grading stage
+                </p>
+              </div>
+              <Button 
+                variant="header" 
+                size="lg"
+                onClick={handleMoveToNextStatus}
+                disabled={updateBookingStatus.isPending}
+              >
+                {updateBookingStatus.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Approve & Move to Grading
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

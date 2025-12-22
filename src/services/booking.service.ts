@@ -299,6 +299,110 @@ class BookingService {
 
     return booking;
   }
+
+  async completeBooking(bookingId: string, completedBy: string): Promise<Booking> {
+    if (USE_MOCK_API) {
+      return this.completeBookingMock(bookingId, completedBy);
+    }
+    throw new Error('Real API not implemented yet');
+  }
+
+  private async completeBookingMock(bookingId: string, completedBy: string): Promise<Booking> {
+    await delay(800);
+
+    if (shouldSimulateError(SERVICE_NAME)) {
+      const config = JSON.parse(localStorage.getItem(`error_sim_${SERVICE_NAME}`) || '{}');
+      throw new ApiError(
+        config.errorType || ApiErrorType.SERVER_ERROR,
+        'Failed to complete booking. Please try again.',
+        config.errorType === ApiErrorType.NETWORK_ERROR ? 0 : 500
+      );
+    }
+
+    const booking = mockBookings.find(b => b.id === bookingId);
+    if (!booking) {
+      throw new ApiError(
+        ApiErrorType.NOT_FOUND,
+        `Booking with ID "${bookingId}" was not found.`,
+        404,
+        { bookingId }
+      );
+    }
+
+    if (booking.status !== 'graded') {
+      throw new ApiError(
+        ApiErrorType.VALIDATION_ERROR,
+        `Cannot complete booking in "${booking.status}" status. Only "graded" bookings can be completed.`,
+        400,
+        { bookingId, currentStatus: booking.status }
+      );
+    }
+
+    booking.status = 'completed';
+    booking.completedAt = new Date().toISOString();
+
+    return booking;
+  }
+
+  async updateBookingStatus(bookingId: string, status: Booking['status']): Promise<Booking> {
+    if (USE_MOCK_API) {
+      return this.updateBookingStatusMock(bookingId, status);
+    }
+    throw new Error('Real API not implemented yet');
+  }
+
+  private async updateBookingStatusMock(bookingId: string, status: Booking['status']): Promise<Booking> {
+    await delay(600);
+
+    if (shouldSimulateError(SERVICE_NAME)) {
+      const config = JSON.parse(localStorage.getItem(`error_sim_${SERVICE_NAME}`) || '{}');
+      throw new ApiError(
+        config.errorType || ApiErrorType.SERVER_ERROR,
+        'Failed to update booking status. Please try again.',
+        config.errorType === ApiErrorType.NETWORK_ERROR ? 0 : 500
+      );
+    }
+
+    const booking = mockBookings.find(b => b.id === bookingId);
+    if (!booking) {
+      throw new ApiError(
+        ApiErrorType.NOT_FOUND,
+        `Booking with ID "${bookingId}" was not found.`,
+        404,
+        { bookingId }
+      );
+    }
+
+    // Validate status transition
+    const validTransitions: Record<string, string[]> = {
+      'created': ['scheduled'],
+      'scheduled': ['collected'],
+      'collected': ['sanitised'],
+      'sanitised': ['graded'],
+      'graded': ['completed'],
+    };
+
+    const currentStatus = booking.status;
+    const allowedNextStatuses = validTransitions[currentStatus] || [];
+    
+    if (status !== currentStatus && allowedNextStatuses.length > 0 && !allowedNextStatuses.includes(status)) {
+      throw new ApiError(
+        ApiErrorType.VALIDATION_ERROR,
+        `Invalid status transition from "${currentStatus}" to "${status}". Allowed next statuses: ${allowedNextStatuses.join(', ')}`,
+        400,
+        { bookingId, currentStatus, requestedStatus: status }
+      );
+    }
+
+    booking.status = status;
+    
+    // Set completion date if moving to completed
+    if (status === 'completed' && !booking.completedAt) {
+      booking.completedAt = new Date().toISOString();
+    }
+
+    return booking;
+  }
 }
 
 export const bookingService = new BookingService();

@@ -52,6 +52,7 @@ export function PhotoCapture({ photos, onPhotosChange, maxPhotos = 10 }: PhotoCa
     <div className="space-y-4">
       <div className="flex gap-2">
         <Button
+          variant="header"
           type="button"
           onClick={openCamera}
           disabled={photos.length >= maxPhotos}

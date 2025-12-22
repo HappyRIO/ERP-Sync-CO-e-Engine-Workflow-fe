@@ -1,0 +1,331 @@
+import { useParams, Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { 
+  ArrowLeft, 
+  Download, 
+  Loader2, 
+  Package,
+  PoundSterling,
+  Leaf,
+  Award,
+  Shield,
+  FileText,
+  Calendar,
+  CheckCircle2
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useBooking } from "@/hooks/useBookings";
+import { useGradingRecords } from "@/hooks/useGrading";
+import { useSanitisationRecords } from "@/hooks/useSanitisation";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
+
+const BookingSummary = () => {
+  const { id } = useParams();
+  const { data: booking, isLoading: isLoadingBooking } = useBooking(id || null);
+  const { data: gradingRecords = [] } = useGradingRecords(id);
+  const { data: sanitisationRecords = [] } = useSanitisationRecords(id);
+
+  if (isLoadingBooking) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!booking) {
+    return (
+      <div className="space-y-6">
+        <Alert variant="destructive">
+          <AlertDescription>Booking not found</AlertDescription>
+        </Alert>
+        <Button asChild>
+          <Link to="/bookings" className="text-inherit no-underline">Back to Bookings</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  if (booking.status !== 'completed') {
+    return (
+      <div className="space-y-6">
+        <Alert>
+          <AlertDescription>
+            Completion summary is only available for completed bookings. Current status: {booking.status}
+          </AlertDescription>
+        </Alert>
+        <Button asChild>
+          <Link to={`/bookings/${id}`} className="text-inherit no-underline">Back to Booking</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  // Calculate totals
+  const totalResaleValue = gradingRecords.reduce((sum, record) => {
+    const asset = booking.assets.find(a => a.categoryId === record.assetId);
+    return sum + (record.resaleValue * (asset?.quantity || 1));
+  }, 0);
+
+  const totalAssets = booking.assets.reduce((sum, a) => sum + a.quantity, 0);
+  const totalCO2e = booking.estimatedCO2e || 0;
+
+  // Get certificate links (from sanitisation records)
+  const certificates = sanitisationRecords.map(record => ({
+    id: record.certificateId,
+    url: record.certificateUrl,
+    asset: booking.assets.find(a => a.categoryId === record.assetId)?.categoryName || 'Unknown',
+    method: record.method,
+  }));
+
+  // Group grades by asset
+  const gradesByAsset = booking.assets.map(asset => {
+    const record = gradingRecords.find(r => r.assetId === asset.categoryId);
+    return {
+      asset,
+      grade: record?.grade || null,
+      resaleValue: record ? record.resaleValue * asset.quantity : 0,
+    };
+  });
+
+  return (
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between"
+      >
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to={`/bookings/${id}`} className="text-inherit no-underline">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <div>
+            <h2 className="text-2xl font-bold text-foreground">Booking Completion Summary</h2>
+            <p className="text-muted-foreground">{booking.bookingNumber} - {booking.clientName}</p>
+          </div>
+        </div>
+        <Button variant="outline" asChild>
+          <a href="#" download onClick={(e) => {
+            e.preventDefault();
+            // TODO: Implement PDF download
+            alert("PDF download functionality will be implemented");
+          }}>
+            <Download className="h-4 w-4 mr-2" />
+            Download Report
+          </a>
+        </Button>
+      </motion.div>
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Assets</p>
+                <p className="text-2xl font-bold">{totalAssets}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {booking.assets.length} categories
+                </p>
+              </div>
+              <Package className="h-8 w-8 text-primary/50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Resale Value</p>
+                <p className="text-2xl font-bold">£{totalResaleValue.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Final buyback value
+                </p>
+              </div>
+              <PoundSterling className="h-8 w-8 text-success/50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">CO₂e Saved</p>
+                <p className="text-2xl font-bold">{(totalCO2e / 1000).toFixed(1)}t</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Environmental impact
+                </p>
+              </div>
+              <Leaf className="h-8 w-8 text-success/50" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Asset Grades Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Award className="h-5 w-5" />
+            Asset Grades & Values
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {gradesByAsset.map(({ asset, grade, resaleValue }) => {
+              const gradeColors: Record<string, string> = {
+                'A': 'bg-success/10 text-success border-success/20',
+                'B': 'bg-info/10 text-info border-info/20',
+                'C': 'bg-warning/10 text-warning border-warning/20',
+                'D': 'bg-destructive/10 text-destructive border-destructive/20',
+                'Recycled': 'bg-muted text-muted-foreground border-muted',
+              };
+
+              return (
+                <div
+                  key={asset.categoryId}
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                >
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <p className="font-medium">{asset.categoryName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {asset.quantity} units
+                      </p>
+                    </div>
+                    {grade && (
+                      <Badge className={cn("text-sm border", gradeColors[grade])}>
+                        Grade {grade}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">£{resaleValue.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Resale value</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Certificates */}
+      {certificates.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Data Sanitisation Certificates
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {certificates.map((cert, index) => (
+                <div
+                  key={cert.id}
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <FileText className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{cert.asset}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Certificate ID: {cert.id} • Method: {cert.method.replace('-', ' ')}
+                      </p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={cert.url} target="_blank" rel="noopener noreferrer">
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </a>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Completion Date */}
+      {booking.completedAt && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-success/10">
+                  <CheckCircle2 className="h-5 w-5 text-success" />
+                </div>
+                <div>
+                  <p className="font-medium">Booking Completed</p>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(booking.completedAt).toLocaleString("en-GB", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+              </div>
+              <Badge className="bg-success/10 text-success border-success/20">
+                Completed
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Quick Links */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Related Documents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button variant="outline" asChild>
+              <Link to={`/bookings/${id}/grading`} className="text-inherit no-underline">
+                <Award className="h-4 w-4 mr-2" />
+                View Grading Report
+              </Link>
+            </Button>
+            {certificates.length > 0 && (
+              <Button variant="outline" asChild>
+                <Link to={`/bookings/${id}/certificates`} className="text-inherit no-underline">
+                  <Shield className="h-4 w-4 mr-2" />
+                  View All Certificates
+                </Link>
+              </Button>
+            )}
+            <Button variant="outline" asChild>
+              <Link to={`/bookings/${id}/timeline`} className="text-inherit no-underline">
+                <Calendar className="h-4 w-4 mr-2" />
+                View Timeline
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to={`/bookings/${id}`} className="text-inherit no-underline">
+                <FileText className="h-4 w-4 mr-2" />
+                View Full Details
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default BookingSummary;
+

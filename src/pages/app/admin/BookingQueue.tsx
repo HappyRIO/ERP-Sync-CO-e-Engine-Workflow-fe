@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, UserPlus, Truck } from "lucide-react";
+import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, Truck, UserPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useBookings } from "@/hooks/useBookings";
+import { useBookings, useUpdateBookingStatus } from "@/hooks/useBookings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getStatusLabelExtended, getStatusColor } from "@/types/booking-lifecycle";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
+import { toast } from "sonner";
 
 const statusGroups: { label: string; statuses: (BookingLifecycleStatus | 'cancelled')[] }[] = [
   { label: "Created", statuses: ['created'] },
@@ -25,6 +26,25 @@ const BookingQueue = () => {
   const [statusGroup, setStatusGroup] = useState<string>("all");
 
   const { data: bookings = [], isLoading, error } = useBookings();
+  const updateBookingStatus = useUpdateBookingStatus();
+
+  const handleMoveToSanitisation = (bookingId: string) => {
+    updateBookingStatus.mutate(
+      { bookingId, status: 'sanitised' },
+      {
+        onSuccess: () => {
+          toast.success("Booking moved to sanitisation", {
+            description: "Booking status updated to sanitised.",
+          });
+        },
+        onError: (error) => {
+          toast.error("Failed to update booking status", {
+            description: error instanceof Error ? error.message : "Please try again.",
+          });
+        },
+      }
+    );
+  };
 
   const filteredBookings = bookings.filter((booking) => {
     const matchesSearch =
@@ -63,18 +83,11 @@ const BookingQueue = () => {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
           <h2 className="text-2xl font-bold text-foreground">Booking Queue</h2>
           <p className="text-muted-foreground">Manage and assign bookings by status</p>
         </div>
-        <Button asChild>
-          <Link to="/admin/assign" className="text-inherit no-underline">
-            <UserPlus className="h-4 w-4 mr-2" />
-            Assign Driver
-          </Link>
-        </Button>
       </motion.div>
 
       {/* Search and Filters */}
@@ -177,9 +190,9 @@ const BookingQueue = () => {
                               </div>
                             )}
                             {booking.status === 'created' && (
-                              <Button asChild className="w-full mt-2" size="sm">
+                              <Button variant="header" asChild className="w-full mt-2" size="sm">
                                 <Link to={`/admin/assign?booking=${booking.id}`} className="text-inherit no-underline">
-                                  <UserPlus className="h-4 w-4 mr-2" />
+                                  <UserPlus />
                                   Assign Driver
                                 </Link>
                               </Button>
@@ -195,6 +208,13 @@ const BookingQueue = () => {
                               <Button asChild className="w-full mt-2" size="sm" variant="outline">
                                 <Link to={`/admin/grading/${booking.id}`} className="text-inherit no-underline">
                                   Grade Assets
+                                </Link>
+                              </Button>
+                            )}
+                            {booking.status === 'graded' && (
+                              <Button asChild className="w-full mt-2" size="sm" variant="header">
+                                <Link to={`/admin/approval/${booking.id}`} className="text-inherit no-underline">
+                                  Final Approval
                                 </Link>
                               </Button>
                             )}
