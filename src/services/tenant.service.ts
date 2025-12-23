@@ -15,8 +15,8 @@ const mockTenants: Tenant[] = [
     slug: 'admin', // Admin subdomain
     logo: '/logo.avif',
     favicon: '/favicon.ico',
-    primaryColor: 'hsl(168, 70%, 35%)',
-    accentColor: 'hsl(168, 60%, 45%)',
+    primaryColor: '168, 70%, 35%',
+    accentColor: '168, 60%, 45%',
     theme: 'auto',
     createdAt: '2024-01-01',
   },
@@ -26,8 +26,8 @@ const mockTenants: Tenant[] = [
     slug: 'techcorp', // Reseller subdomain
     logo: '/logo.avif', // Would be custom logo in production
     favicon: '/favicon.ico', // Would be custom favicon in production
-    primaryColor: 'hsl(221, 83%, 53%)',
-    accentColor: 'hsl(221, 73%, 63%)',
+    primaryColor: '221, 83%, 53%',
+    accentColor: '221, 73%, 63%',
     theme: 'light',
     createdAt: '2024-01-15',
   },
@@ -37,8 +37,8 @@ const mockTenants: Tenant[] = [
     slug: 'partner', // Reseller subdomain
     logo: '/logo.avif', // Would be custom logo in production
     favicon: '/favicon.ico', // Would be custom favicon in production
-    primaryColor: 'hsl(280, 70%, 50%)',
-    accentColor: 'hsl(280, 60%, 60%)',
+    primaryColor: '280, 70%, 50%',
+    accentColor: '280, 60%, 60%',
     theme: 'light',
     createdAt: '2024-02-01',
   },
@@ -83,8 +83,8 @@ class TenantService {
         slug: resellerSlug,
         logo: '/logo.avif',
         favicon: '/favicon.ico',
-        primaryColor: 'hsl(168, 70%, 35%)',
-        accentColor: 'hsl(168, 60%, 45%)',
+        primaryColor: '168, 70%, 35%',
+        accentColor: '168, 60%, 45%',
         theme: 'auto',
         createdAt: new Date().toISOString(),
       };

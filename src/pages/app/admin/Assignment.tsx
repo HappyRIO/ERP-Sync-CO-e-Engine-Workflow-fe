@@ -252,20 +252,20 @@ const Assignment = () => {
                   
                   {selectedDriver && selectedDriverVehicle && (
                     <div className="space-y-3">
-                      <div className="p-3 rounded-lg bg-muted/50 border border-muted space-y-2">
-                        <p className="text-sm font-medium">Driver Information</p>
-                        <div className="flex items-center gap-2">
-                          <Truck className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">{selectedDriver.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 pt-2 border-t border-muted-foreground/20">
-                          <Car className="h-4 w-4 text-muted-foreground" />
-                          <div className="text-sm">
-                            <p className="font-medium">{selectedDriverVehicle.vehicleType.charAt(0).toUpperCase() + selectedDriverVehicle.vehicleType.slice(1)}</p>
-                            <p className="text-muted-foreground font-mono">{selectedDriverVehicle.vehicleReg}</p>
+                    <div className="p-3 rounded-lg bg-muted/50 border border-muted space-y-2">
+                      <p className="text-sm font-medium">Driver Information</p>
+                      <div className="flex items-center gap-2">
+                        <Truck className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{selectedDriver.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 pt-2 border-t border-muted-foreground/20">
+                        <Car className="h-4 w-4 text-muted-foreground" />
+                        <div className="text-sm">
+                          <p className="font-medium">{selectedDriverVehicle.vehicleType.charAt(0).toUpperCase() + selectedDriverVehicle.vehicleType.slice(1)}</p>
+                          <p className="text-muted-foreground font-mono">{selectedDriverVehicle.vehicleReg}</p>
                             <p className="text-xs text-muted-foreground capitalize">{selectedDriverVehicle.vehicleFuelType}</p>
-                          </div>
                         </div>
+                      </div>
                       </div>
                       
                       {/* Vehicle Mismatch Warning */}

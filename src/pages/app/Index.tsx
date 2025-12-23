@@ -43,7 +43,7 @@ const Index = () => {
           <p className="text-muted-foreground">
             {user?.role === 'admin' && "Here's what's happening with your ITAD operations"}
             {user?.role === 'client' && "Track your asset collections and environmental impact"}
-            {user?.role === 'reseller' && "Manage your partner bookings and client relationships"}
+            {user?.role === 'reseller' && "Track ITAD process status for your clients and monitor outcomes"}
             {user?.role === 'driver' && "View your assigned routes and collection jobs"}
             {!user && "Welcome to the ITAD Platform"}
           </p>

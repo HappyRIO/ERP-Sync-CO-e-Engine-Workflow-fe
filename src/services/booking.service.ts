@@ -420,13 +420,13 @@ class BookingService {
     // Final fallback
     if (!driver) {
       driver = { 
-        id: driverId, 
-        name: 'Driver Name', 
-        vehicleReg: 'XX00 XXX', 
-        vehicleType: 'van' as const,
+      id: driverId, 
+      name: 'Driver Name', 
+      vehicleReg: 'XX00 XXX', 
+      vehicleType: 'van' as const, 
         vehicleFuelType: 'diesel' as const,
-        phone: '+44 7700 900000' 
-      };
+      phone: '+44 7700 900000' 
+    };
     }
 
     booking.status = 'scheduled';

@@ -113,7 +113,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { user, logout } = useAuth();
-  const { tenantName, logo } = useTenantTheme();
+  const { logo } = useTenantTheme();
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -128,7 +128,7 @@ export function AppSidebar() {
         <div className="flex items-center gap-3">
           <img 
             src={logo || '/logo.avif'} 
-            alt={tenantName}
+            alt="Reuse ITAD Platform"
             className={cn(
               "object-contain transition-all duration-200",
               isCollapsed ? "h-8 w-8" : "h-10 w-auto max-w-[140px]"
@@ -138,7 +138,7 @@ export function AppSidebar() {
               e.currentTarget.style.display = 'none';
               const placeholder = document.createElement('div');
               placeholder.className = `flex items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground font-bold ${isCollapsed ? 'h-8 w-8 text-base' : 'h-10 w-10 text-lg'}`;
-              placeholder.textContent = tenantName.charAt(0).toUpperCase();
+              placeholder.textContent = 'R';
               e.currentTarget.parentNode?.insertBefore(placeholder, e.currentTarget);
             }}
           />

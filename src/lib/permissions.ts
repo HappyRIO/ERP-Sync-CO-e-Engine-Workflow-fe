@@ -44,7 +44,6 @@ export type Permission =
   
   // Settings
   | 'settings.organisation'
-  | 'settings.branding'
   | 'settings.integrations'
   | 'settings.users'
   | 'settings.security';
@@ -82,7 +81,6 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     
     // Settings
     'settings.organisation',
-    'settings.branding',
     'settings.integrations',
     'settings.users',
     'settings.security',
@@ -134,7 +132,6 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     
     // Settings
     'settings.organisation',
-    'settings.branding',
     'settings.integrations',
     'settings.security',
   ],
