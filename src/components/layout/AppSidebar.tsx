@@ -145,7 +145,7 @@ export function AppSidebar() {
           {!isCollapsed && (
             <div className="flex flex-col">
               <span className="font-semibold text-sidebar-foreground text-lg">
-                {tenantName.split(' ')[0] || 'Reuse'}
+                Reuse
               </span>
               <span className="text-xs text-sidebar-foreground/60">ITAD Platform</span>
             </div>
