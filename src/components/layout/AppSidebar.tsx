@@ -217,7 +217,7 @@ export function AppSidebar() {
                   {!isCollapsed && (
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-sidebar-foreground truncate">
-                        {tenantName}
+                        Reuse ITAD Platform
                       </p>
                       <p className="text-xs text-sidebar-foreground/60 truncate capitalize">
                         {user.name} • {user.role}
