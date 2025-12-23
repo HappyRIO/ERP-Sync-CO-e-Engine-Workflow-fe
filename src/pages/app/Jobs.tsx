@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import type { WorkflowStatus } from "@/types/jobs";
 import { useJobs } from "@/hooks/useJobs";
+import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const statusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
@@ -22,6 +23,7 @@ const statusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
 ];
 
 const Jobs = () => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<WorkflowStatus | "all">("all");
 
@@ -29,9 +31,20 @@ const Jobs = () => {
     status: activeFilter === "all" ? undefined : activeFilter,
     searchQuery: searchQuery || undefined,
   });
+  
+  const isReseller = user?.role === 'reseller';
 
   return (
     <div className="space-y-6">
+      {/* Header for Resellers */}
+      {isReseller && (
+        <div className="mb-4 p-4 rounded-lg bg-info/10 border border-info/20">
+          <p className="text-sm text-foreground">
+            <strong>Note:</strong> You are viewing jobs for your clients. All ITAD operations (collection, sanitisation, grading, and disposal) are handled exclusively by Reuse. You can track the status and view reports here.
+          </p>
+        </div>
+      )}
+      
       {/* Search and Filters */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}

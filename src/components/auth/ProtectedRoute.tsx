@@ -25,10 +25,20 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Allow pending users to VIEW pages but show banner and disable controls
+  const isPending = user && user.status === 'pending' && user.role !== 'admin';
+  const isSettingsPage = location.pathname === '/settings';
+  // Don't disable sidebar and settings page
+  const shouldDisableContent = isPending && !isSettingsPage;
+
   if (allowedRoles && user && !hasRole(allowedRoles)) {
     return <Navigate to="/" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <div className={shouldDisableContent ? '[&_aside]:pointer-events-auto [&_aside]:opacity-100 [&_[data-sidebar]]:pointer-events-auto [&_[data-sidebar]]:opacity-100 [&_[data-main-content]]:pointer-events-none [&_[data-main-content]]:opacity-60' : ''}>
+      {children}
+    </div>
+  );
 }
 

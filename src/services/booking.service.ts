@@ -12,6 +12,7 @@ import type { User } from '@/types/auth';
 const SERVICE_NAME = 'booking';
 
 export interface BookingRequest {
+  clientId?: string; // For resellers: specify which client this booking is for
   siteId?: string;
   siteName: string;
   address: string;
@@ -289,13 +290,62 @@ class BookingService {
     }
 
     // Get driver info (would come from users service in real app)
-    const driver = { id: driverId, name: 'Driver Name' }; // Simplified for mock
+    // For now, use a simple lookup from mockJobs or default
+    const existingJobWithDriver = mockJobs.find(j => j.driver?.id === driverId);
+    const driver = existingJobWithDriver?.driver || { 
+      id: driverId, 
+      name: 'Driver Name', 
+      vehicleReg: 'XX00 XXX', 
+      vehicleType: 'van' as const, 
+      phone: '+44 7700 900000' 
+    };
 
     booking.status = 'scheduled';
     booking.driverId = driverId;
     booking.driverName = driver.name;
     booking.scheduledBy = scheduledBy;
     booking.scheduledAt = new Date().toISOString();
+
+    // Create a job for this booking (if not already created)
+    // Job is created with status 'routed' (driver can then move to 'en-route')
+    if (!booking.jobId) {
+      const jobId = `job-${Date.now()}`;
+      const erpJobNumber = `ERP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}`;
+      
+      // Convert booking assets to job assets format
+      const jobAssets = booking.assets.map((asset, idx) => ({
+        id: `asset-${jobId}-${idx}`,
+        category: asset.categoryId,
+        quantity: asset.quantity,
+      }));
+
+      const newJob: Job = {
+        id: jobId,
+        erpJobNumber,
+        bookingId: booking.id, // Link job to booking
+        clientName: booking.clientName,
+        siteName: booking.siteName,
+        siteAddress: booking.siteAddress,
+        status: 'routed', // Job starts as 'routed' when driver assigned
+        scheduledDate: booking.scheduledDate,
+        assets: jobAssets,
+        driver: {
+          name: driver.name,
+          vehicleReg: driver.vehicleReg,
+          vehicleType: driver.vehicleType,
+          phone: driver.phone,
+        },
+        co2eSaved: booking.estimatedCO2e,
+        travelEmissions: 0, // Will be calculated when driver completes
+        buybackValue: booking.estimatedBuyback,
+        charityPercent: booking.charityPercent,
+        certificates: [],
+      };
+
+      // Add job to mockJobs array
+      mockJobs.push(newJob);
+      booking.jobId = jobId;
+    }
 
     return booking;
   }
@@ -340,6 +390,92 @@ class BookingService {
 
     booking.status = 'completed';
     booking.completedAt = new Date().toISOString();
+
+    // Update linked job status to 'finalised'
+    if (booking.jobId) {
+      const job = mockJobs.find(j => j.id === booking.jobId);
+      if (job && job.status === 'graded') {
+        job.status = 'finalised';
+        job.completedDate = new Date().toISOString();
+      }
+    }
+
+    // Auto-create commission if reseller exists
+    if (booking.resellerId && booking.resellerName) {
+      try {
+        const { mockCommissions } = await import('@/mocks/mock-entities');
+        const commissionPercent = 10; // Default commission percentage (would come from reseller config)
+        const commissionAmount = Math.round(booking.estimatedBuyback * (commissionPercent / 100));
+        const period = new Date().toISOString().slice(0, 7); // YYYY-MM
+        
+        const newCommission = {
+          id: `comm-${Date.now()}`,
+          resellerId: booking.resellerId,
+          resellerName: booking.resellerName,
+          clientId: booking.clientId,
+          clientName: booking.clientName,
+          jobId: booking.jobId || '',
+          jobNumber: booking.jobId ? `ERP-${booking.jobId}` : '',
+          bookingId: booking.id,
+          bookingNumber: booking.bookingNumber,
+          commissionPercent,
+          jobValue: booking.estimatedBuyback,
+          commissionAmount,
+          status: 'pending' as const,
+          period,
+          createdAt: new Date().toISOString(),
+        };
+        
+        mockCommissions.push(newCommission);
+      } catch (error) {
+        console.error('Failed to create commission:', error);
+      }
+    }
+
+    // Auto-create invoice
+    try {
+      const { mockInvoices } = await import('@/mocks/mock-entities');
+      const invoiceNumber = `INV-${new Date().getFullYear()}-${String(mockInvoices.length + 1).padStart(5, '0')}`;
+      const issueDate = new Date().toISOString().split('T')[0];
+      const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // 30 days from now
+      
+      // Create invoice items from booking assets
+      const items = booking.assets.map(asset => {
+        const unitPrice = Math.round(booking.estimatedBuyback / booking.assets.reduce((sum, a) => sum + a.quantity, 0));
+        return {
+          description: `${asset.categoryName} Collection & Processing (${asset.quantity} units)`,
+          quantity: asset.quantity,
+          unitPrice,
+          total: unitPrice * asset.quantity,
+        };
+      });
+      
+      const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+      const tax = Math.round(subtotal * 0.2); // 20% VAT
+      const total = subtotal + tax;
+      
+      const newInvoice = {
+        id: `inv-${Date.now()}`,
+        invoiceNumber,
+        clientId: booking.clientId,
+        clientName: booking.clientName,
+        jobId: booking.jobId || '',
+        jobNumber: booking.jobId ? `ERP-${booking.jobId}` : '',
+        issueDate,
+        dueDate,
+        amount: subtotal,
+        status: 'draft' as const,
+        items,
+        subtotal,
+        tax,
+        total,
+        downloadUrl: '#',
+      };
+      
+      mockInvoices.push(newInvoice);
+    } catch (error) {
+      console.error('Failed to create invoice:', error);
+    }
 
     return booking;
   }
@@ -396,11 +532,30 @@ class BookingService {
 
     booking.status = status;
     
-    // Set completion date if moving to completed
-    if (status === 'completed' && !booking.completedAt) {
+    // Set timestamps
+    if (status === 'sanitised' && !booking.sanitisedAt) {
+      booking.sanitisedAt = new Date().toISOString();
+    } else if (status === 'graded' && !booking.gradedAt) {
+      booking.gradedAt = new Date().toISOString();
+    } else if (status === 'completed' && !booking.completedAt) {
       booking.completedAt = new Date().toISOString();
     }
-
+    
+    // Sync job status when booking status changes
+    if (booking.jobId) {
+      const job = mockJobs.find(j => j.id === booking.jobId);
+      if (job) {
+        if (status === 'sanitised' && job.status === 'warehouse') {
+          job.status = 'sanitised';
+        } else if (status === 'graded' && job.status === 'sanitised') {
+          job.status = 'graded';
+        } else if (status === 'completed' && job.status === 'graded') {
+          job.status = 'finalised';
+          job.completedDate = new Date().toISOString();
+        }
+      }
+    }
+    
     return booking;
   }
 }

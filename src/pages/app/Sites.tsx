@@ -373,7 +373,18 @@ const Sites = () => {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" variant="default" disabled={createSite.isPending || updateSite.isPending}>
+                <Button 
+                  type="submit" 
+                  variant="default" 
+                  disabled={
+                    createSite.isPending || 
+                    updateSite.isPending || 
+                    !formData.name?.trim() || 
+                    !formData.address?.trim() || 
+                    !formData.city?.trim() || 
+                    !formData.postcode?.trim()
+                  }
+                >
                   {createSite.isPending || updateSite.isPending ? (
                     <>
                       <Loader2 className="animate-spin" />

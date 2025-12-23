@@ -59,8 +59,8 @@ const getMainNavItems = (role: string) => {
     { title: "Users", url: "/users", icon: Users, roles: ['admin'] },
     { title: "Clients", url: "/clients", icon: Building2, roles: ['admin', 'reseller'] },
     { title: "Sites", url: "/sites", icon: MapPin, roles: ['client'] },
-    { title: "Invoices", url: "/invoices", icon: Receipt, roles: ['client'] },
-    { title: "Commission", url: "/commission", icon: DollarSign, roles: ['reseller'] },
+    { title: "Invoices", url: "/invoices", icon: Receipt, roles: ['admin', 'client', 'reseller'] },
+    { title: "Commission", url: "/commission", icon: DollarSign, roles: ['admin', 'reseller'] },
     { title: "CO₂e Dashboard", url: "/co2e", icon: Leaf, roles: ['admin', 'client', 'reseller'] },
     { title: "Documents", url: "/documents", icon: FileText, roles: ['admin', 'client', 'reseller'] },
   ];

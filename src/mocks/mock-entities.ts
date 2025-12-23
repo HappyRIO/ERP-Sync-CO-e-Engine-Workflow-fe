@@ -6,7 +6,8 @@ import type { BookingLifecycleStatus } from '@/types/booking-lifecycle';
 
 // Extended User type for admin user management
 export interface ExtendedUser extends User {
-  isActive: boolean;
+  isActive: boolean; // Deprecated: use status field instead, but keeping for backwards compatibility
+  status?: 'pending' | 'active' | 'inactive'; // New signups are 'pending', approved users are 'active'
   lastLogin?: string;
   invitedBy?: string;
 }

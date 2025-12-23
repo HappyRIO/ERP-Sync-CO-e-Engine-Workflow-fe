@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersService } from '@/services/users.service';
 import type { ExtendedUser } from '@/mocks/mock-entities';
 
-export function useUsers(filter?: { role?: string; tenantId?: string; isActive?: boolean }) {
+export function useUsers(filter?: { role?: string; tenantId?: string; isActive?: boolean; status?: string }) {
   return useQuery({
     queryKey: ['users', filter],
     queryFn: () => usersService.getUsers(filter),
@@ -26,6 +26,19 @@ export function useUpdateUserStatus() {
       usersService.updateUserStatus(id, isActive),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['auth'] });
+    },
+  });
+}
+
+export function useApproveUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => usersService.approveUser(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['auth'] });
     },
   });
 }

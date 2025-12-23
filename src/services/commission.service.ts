@@ -94,6 +94,66 @@ class CommissionService {
 
     return summary;
   }
+
+  /**
+   * Update commission status (admin only)
+   * Valid transitions: pending → approved → paid
+   */
+  async updateCommissionStatus(commissionId: string, status: 'pending' | 'approved' | 'paid'): Promise<Commission> {
+    if (USE_MOCK_API) {
+      return this.updateCommissionStatusMock(commissionId, status);
+    }
+    throw new Error('Real API not implemented yet');
+  }
+
+  private async updateCommissionStatusMock(commissionId: string, status: 'pending' | 'approved' | 'paid'): Promise<Commission> {
+    await delay(600);
+
+    if (shouldSimulateError(SERVICE_NAME)) {
+      const config = JSON.parse(localStorage.getItem(`error_sim_${SERVICE_NAME}`) || '{}');
+      throw new ApiError(
+        config.errorType || ApiErrorType.SERVER_ERROR,
+        'Failed to update commission status. Please try again.',
+        config.errorType === ApiErrorType.NETWORK_ERROR ? 0 : 500
+      );
+    }
+
+    const commission = mockCommissions.find(c => c.id === commissionId);
+    if (!commission) {
+      throw new ApiError(
+        ApiErrorType.NOT_FOUND,
+        `Commission with ID "${commissionId}" was not found.`,
+        404
+      );
+    }
+
+    // Validate status transition
+    const validTransitions: Record<string, string[]> = {
+      'pending': ['approved'],
+      'approved': ['paid'],
+      'paid': [], // Paid is final status
+    };
+
+    const currentStatus = commission.status;
+    const allowedNextStatuses = validTransitions[currentStatus] || [];
+    
+    if (status !== currentStatus && allowedNextStatuses.length > 0 && !allowedNextStatuses.includes(status)) {
+      throw new ApiError(
+        ApiErrorType.VALIDATION_ERROR,
+        `Invalid status transition from "${currentStatus}" to "${status}". Allowed next status: ${allowedNextStatuses.join(', ')}`,
+        400
+      );
+    }
+
+    commission.status = status;
+    
+    // Set paid date if moving to paid
+    if (status === 'paid' && !commission.paidDate) {
+      commission.paidDate = new Date().toISOString();
+    }
+
+    return commission;
+  }
 }
 
 export const commissionService = new CommissionService();

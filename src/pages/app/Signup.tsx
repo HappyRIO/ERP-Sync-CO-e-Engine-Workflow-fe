@@ -31,6 +31,7 @@ const Signup = () => {
 
     try {
       await signup(formData);
+      // Show success message for pending approval
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed. Please try again.');
@@ -55,7 +56,7 @@ const Signup = () => {
             </div>
             <CardTitle className="text-2xl">Create your account</CardTitle>
             <CardDescription>
-              Get started with ITAD asset management
+              Sign up and your account will be reviewed by admin. You'll be notified once approved.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -153,6 +154,12 @@ const Signup = () => {
                     <SelectItem value="reseller">Reseller</SelectItem>
                   </SelectContent>
                 </Select>
+                <Alert className="bg-info/10 border-info/20">
+                  <AlertCircle className="h-4 w-4 text-info" />
+                  <AlertDescription className="text-sm">
+                    Your account will be created with <strong>pending</strong> status. Admin will review and approve your account. You'll be able to access all features once approved.
+                  </AlertDescription>
+                </Alert>
               </div>
 
               <Button
@@ -171,11 +178,19 @@ const Signup = () => {
                 )}
               </Button>
 
-              <div className="text-center text-sm text-muted-foreground">
-                Already have an account?{' '}
-                <Link to="/login" className="text-primary hover:underline font-medium">
-                  Sign in
-                </Link>
+              <div className="text-center text-sm text-muted-foreground space-y-2">
+                <p>
+                  Already have an account?{' '}
+                  <Link to="/login" className="text-primary hover:underline font-medium">
+                    Sign in
+                  </Link>
+                </p>
+                <p>
+                  Received an invite?{' '}
+                  <Link to="/invite" className="text-primary hover:underline font-medium">
+                    Accept invite
+                  </Link>
+                </p>
               </div>
             </form>
           </CardContent>

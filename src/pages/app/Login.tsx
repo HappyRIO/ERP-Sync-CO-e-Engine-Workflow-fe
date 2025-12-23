@@ -130,10 +130,10 @@ const Login = () => {
                     Sign up
                   </Link>
                 </p>
-                <p>
-                  Received an invite?{' '}
+                <p className="text-xs text-muted-foreground/80">
+                  Clients must be invited by a reseller or admin.{' '}
                   <Link to="/invite" className="text-primary hover:underline font-medium">
-                    Accept invite
+                    Accept your invitation
                   </Link>
                 </p>
               </div>

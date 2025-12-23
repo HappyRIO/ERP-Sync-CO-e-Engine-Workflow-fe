@@ -142,7 +142,10 @@ class CO2Service {
     
     // Use selected vehicle type or default to petrol
     const vehicleType = request.vehicleType || 'petrol';
-    const travelEmissions = vehicleEmissions[vehicleType as keyof typeof vehicleEmissions] || vehicleEmissions.petrol;
+    // Handle electric vehicles explicitly (0 is falsy, so we need to check the key exists)
+    const travelEmissions = vehicleType === 'electric' 
+      ? 0 
+      : (vehicleEmissions[vehicleType as keyof typeof vehicleEmissions] ?? vehicleEmissions.petrol);
 
     // Calculate net impact using selected vehicle type
     const netImpact = reuseSavings - travelEmissions;

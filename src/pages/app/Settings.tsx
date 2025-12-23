@@ -24,11 +24,64 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantTheme } from "@/contexts/TenantThemeContext";
+import { tenantService } from "@/services/tenant.service";
+import { hexToHsl, isValidHex } from "@/lib/color-utils";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 const Settings = () => {
   const { user } = useAuth();
-  const { tenantName } = useTenantTheme();
-  
+  const { tenantName, primaryColor, accentColor, logo, favicon } = useTenantTheme();
+  const queryClient = useQueryClient();
+  const isReseller = user?.role === 'reseller';
+  const isAdmin = user?.role === 'admin';
+  const isClient = user?.role === 'client';
+  const isDriver = user?.role === 'driver';
+
+  // Branding state
+  const [branding, setBranding] = useState({
+    primaryColor: primaryColor || '#0d9488',
+    accentColor: accentColor || '#14b8a6',
+    logo: logo || '',
+    favicon: favicon || '',
+  });
+
+  // Update branding mutation
+  const updateBranding = useMutation({
+    mutationFn: async (brandingData: typeof branding) => {
+      if (!user?.tenantId) throw new Error('No tenant ID found');
+      
+      // Convert hex to HSL for storage
+      const primaryHsl = isValidHex(brandingData.primaryColor) 
+        ? hexToHsl(brandingData.primaryColor) 
+        : brandingData.primaryColor;
+      const accentHsl = isValidHex(brandingData.accentColor) 
+        ? hexToHsl(brandingData.accentColor) 
+        : brandingData.accentColor;
+
+      return tenantService.updateTenantBranding(user.tenantId, {
+        primaryColor: primaryHsl,
+        accentColor: accentHsl,
+        logo: brandingData.logo,
+        favicon: brandingData.favicon,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Branding settings saved successfully!', {
+        description: 'Your branding will be applied to your subdomain.',
+      });
+      // Invalidate tenant query to refresh theme
+      queryClient.invalidateQueries({ queryKey: ['tenant'] });
+      // Reload page to apply theme changes
+      setTimeout(() => window.location.reload(), 1000);
+    },
+    onError: (error) => {
+      toast.error('Failed to save branding settings', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    },
+  });
+
   // Notification state management
   const [notifications, setNotifications] = useState({
     email: true,
@@ -63,11 +116,6 @@ const Settings = () => {
     // In a real app, this would save to the backend
     toast.success("Settings saved successfully");
   };
-
-  const isAdmin = user?.role === 'admin';
-  const isClient = user?.role === 'client';
-  const isReseller = user?.role === 'reseller';
-  const isDriver = user?.role === 'driver';
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -194,35 +242,162 @@ const Settings = () => {
                 Branding & White-Label
               </CardTitle>
               <CardDescription>
-                Customise the platform appearance for your clients. Changes will apply to all client portals.
+                Customise the platform appearance for your subdomain. Your branding will be applied to <strong>{window.location.hostname}</strong> and all client portals accessed through your subdomain.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="p-3 rounded-lg bg-info/10 border border-info/20 mb-4">
+                <p className="text-sm text-foreground">
+                  <strong>Subdomain-based branding:</strong> Your branding is automatically applied based on your subdomain (<strong>{window.location.hostname}</strong>). Changes here will update your subdomain's appearance.
+                </p>
+              </div>
+              
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Logo</Label>
                   <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 rounded-lg bg-foreground/50 flex items-center justify-center text-primary-foreground font-bold text-2xl">
-                      {tenantName?.charAt(0) || 'R'}
+                    {branding.logo ? (
+                      <img src={branding.logo} alt="Logo" className="h-16 w-16 rounded-lg object-contain border" />
+                    ) : (
+                      <div className="h-16 w-16 rounded-lg bg-foreground/50 flex items-center justify-center text-primary-foreground font-bold text-2xl">
+                        {tenantName?.charAt(0) || 'R'}
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                setBranding({ ...branding, logo: event.target?.result as string });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          };
+                          input.click();
+                        }}
+                      >
+                        Upload Logo
+                      </Button>
+                      {branding.logo && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setBranding({ ...branding, logo: '' })}
+                        >
+                          Remove
+                        </Button>
+                      )}
                     </div>
-                    <Button variant="outline" size="sm">Upload Logo</Button>
                   </div>
                   <p className="text-xs text-muted-foreground">Recommended: 200x200px, PNG or SVG</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="primaryColor">Primary Colour</Label>
                   <div className="flex items-center gap-2">
-                    <div className="h-10 w-10 rounded-lg bg-primary border" />
-                    <Input id="primaryColor" defaultValue="#0d9488" className="flex-1" />
+                    <div 
+                      className="h-10 w-10 rounded-lg border" 
+                      style={{ backgroundColor: branding.primaryColor }}
+                    />
+                    <Input 
+                      id="primaryColor" 
+                      value={branding.primaryColor}
+                      onChange={(e) => setBranding({ ...branding, primaryColor: e.target.value })}
+                      placeholder="#0d9488"
+                      className="flex-1" 
+                    />
                   </div>
                   <p className="text-xs text-muted-foreground">Hex color code (e.g., #0d9488)</p>
                 </div>
               </div>
-              <div className="p-3 rounded-lg bg-info/10 border border-info/20">
-                <p className="text-sm text-foreground">
-                  <strong>Note:</strong> Branding changes will apply to all your client portals. Your logo and colors will replace the default platform branding.
-                </p>
+              <div className="space-y-2">
+                <Label htmlFor="accentColor">Accent Colour</Label>
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="h-10 w-10 rounded-lg border" 
+                    style={{ backgroundColor: branding.accentColor }}
+                  />
+                  <Input 
+                    id="accentColor" 
+                    value={branding.accentColor}
+                    onChange={(e) => setBranding({ ...branding, accentColor: e.target.value })}
+                    placeholder="#14b8a6"
+                    className="flex-1" 
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Hex color code for secondary elements</p>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="favicon">Favicon</Label>
+                <div className="flex items-center gap-4">
+                  {branding.favicon ? (
+                    <img src={branding.favicon} alt="Favicon" className="h-8 w-8 rounded object-contain border" />
+                  ) : (
+                    <div className="h-8 w-8 rounded bg-foreground/50 flex items-center justify-center text-primary-foreground font-bold text-xs">
+                      {tenantName?.charAt(0) || 'R'}
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              setBranding({ ...branding, favicon: event.target?.result as string });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        };
+                        input.click();
+                      }}
+                    >
+                      Upload Favicon
+                    </Button>
+                    {branding.favicon && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setBranding({ ...branding, favicon: '' })}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Recommended: 32x32px, ICO or PNG</p>
+              </div>
+              <Button 
+                variant="default" 
+                className="w-full"
+                onClick={() => updateBranding.mutate(branding)}
+                disabled={updateBranding.isPending || (!isValidHex(branding.primaryColor) && branding.primaryColor) || (!isValidHex(branding.accentColor) && branding.accentColor)}
+              >
+                {updateBranding.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Branding Settings
+                  </>
+                )}
+              </Button>
             </CardContent>
           </Card>
         </motion.div>
@@ -591,6 +766,16 @@ const Settings = () => {
               <Button 
                 variant="default" 
                 size="lg"
+                disabled={
+                  !passwordForm.current?.trim() || 
+                  !passwordForm.new?.trim() || 
+                  !passwordForm.confirm?.trim() ||
+                  passwordForm.new !== passwordForm.confirm ||
+                  passwordForm.new.length < 8 || 
+                  !/[A-Z]/.test(passwordForm.new) || 
+                  !/[a-z]/.test(passwordForm.new) || 
+                  !/\d/.test(passwordForm.new)
+                }
                 onClick={() => {
                   if (!passwordForm.current) {
                     toast.error("Please enter your current password");
@@ -623,7 +808,9 @@ const Settings = () => {
         </Card>
       </motion.div>
 
-      {/* Save Button */}
+      {/* Save Button - Only show if there are changes to save */}
+      {/* Note: This button is currently a placeholder. In a real app, it would save organization details */}
+      {/* For now, we'll keep it enabled as it doesn't save specific form data that requires validation */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

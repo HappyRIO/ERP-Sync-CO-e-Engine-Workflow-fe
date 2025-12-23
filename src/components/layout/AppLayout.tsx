@@ -13,6 +13,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
@@ -37,6 +38,10 @@ export function AppLayout() {
   
   // Notification state from context
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  
+  // Check if user is pending approval
+  const { user } = useAuth();
+  const isPending = user && user.status === 'pending' && user.role !== 'admin';
 
   // Close search when clicking outside
   useEffect(() => {
@@ -126,8 +131,24 @@ export function AppLayout() {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
-        <AppSidebar />
-        <SidebarInset className="flex flex-col flex-1">
+        <AppSidebar data-sidebar />
+        <SidebarInset className="flex flex-col flex-1" data-main-content>
+          {/* Pending Approval Banner - Only show once at layout level */}
+          {isPending && (
+            <div className="bg-warning/10 border-b border-warning/20 px-4 py-3">
+              <div className="max-w-7xl mx-auto flex items-center gap-2">
+                <div className="text-2xl">⏳</div>
+                <div>
+                  <p className="font-medium text-warning-foreground">
+                    Account Pending Approval
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Your account is pending admin approval. You can view features but cannot interact with them until approved.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Top Header */}
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6">
             <SidebarTrigger className="-ml-2" />
@@ -287,7 +308,7 @@ export function AppLayout() {
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 p-6 overflow-auto">
+          <main className="flex-1 p-6 overflow-auto" data-main-content>
             <Outlet />
           </main>
         </SidebarInset>

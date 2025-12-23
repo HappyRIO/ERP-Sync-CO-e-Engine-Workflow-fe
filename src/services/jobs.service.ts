@@ -268,15 +268,16 @@ class JobsService {
     }
     
     // Validate status transition (basic validation)
+    // Note: 'routed' is set automatically when driver is assigned, driver can go from 'booked' or 'routed' to 'en-route'
     const validTransitions: Record<string, string[]> = {
-      booked: ['routed'],
-      routed: ['en-route'],
+      booked: ['routed', 'en-route'], // Driver can accept job directly (en-route) or it can be routed first
+      routed: ['en-route'], // After routing, driver moves to en-route
       'en-route': ['arrived'],
       arrived: ['collected'],
       collected: ['warehouse'],
-      warehouse: ['sanitised'],
-      sanitised: ['graded'],
-      graded: ['finalised'],
+      warehouse: ['sanitised'], // Auto-updated when all assets sanitised
+      sanitised: ['graded'], // Auto-updated when all assets graded
+      graded: ['finalised'], // Auto-updated when booking completed
     };
     
     const currentStatus = job.status;
@@ -291,6 +292,39 @@ class JobsService {
     }
 
     job.status = status;
+    
+    // Sync booking status when job status changes
+    if (job.bookingId) {
+      try {
+        // Import booking service dynamically to avoid circular dependency
+        const { bookingService } = await import('./booking.service');
+        const { mockBookings } = await import('@/mocks/mock-entities');
+        const booking = mockBookings.find(b => b.id === job.bookingId);
+        
+        if (booking) {
+          // Map job status to booking status
+          if (status === 'collected' && booking.status === 'scheduled') {
+            booking.status = 'collected';
+            booking.collectedAt = new Date().toISOString();
+          } else if (status === 'warehouse' && booking.status === 'collected') {
+            // Warehouse status doesn't change booking status (stays collected)
+          } else if (status === 'sanitised' && booking.status === 'collected') {
+            booking.status = 'sanitised';
+            booking.sanitisedAt = new Date().toISOString();
+          } else if (status === 'graded' && booking.status === 'sanitised') {
+            booking.status = 'graded';
+            booking.gradedAt = new Date().toISOString();
+          } else if (status === 'finalised' && booking.status === 'graded') {
+            booking.status = 'completed';
+            booking.completedAt = new Date().toISOString();
+          }
+        }
+      } catch (error) {
+        // If sync fails, log but don't fail the job update
+        console.error('Failed to sync booking status:', error);
+      }
+    }
+    
     return job;
   }
 

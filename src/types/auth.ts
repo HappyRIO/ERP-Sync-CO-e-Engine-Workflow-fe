@@ -1,12 +1,14 @@
 // Authentication and User Types
 
 export type UserRole = 'admin' | 'client' | 'reseller' | 'driver';
+export type UserStatus = 'pending' | 'active' | 'inactive';
 
 export interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  status?: UserStatus; // New signups start as 'pending', approved users are 'active'
   tenantId: string;
   tenantName: string;
   avatar?: string;
@@ -18,6 +20,7 @@ export interface Tenant {
   name: string;
   slug: string;
   logo?: string;
+  favicon?: string;
   primaryColor?: string;
   accentColor?: string;
   theme?: 'light' | 'dark' | 'auto';

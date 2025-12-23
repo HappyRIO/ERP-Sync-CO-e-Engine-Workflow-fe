@@ -190,6 +190,38 @@ class GradingService {
     };
 
     mockGradingRecords.push(newRecord);
+    
+    // Check if all assets are graded and auto-update booking status
+    try {
+      const { mockBookings } = await import('@/mocks/mock-entities');
+      const booking = mockBookings.find(b => b.id === bookingId);
+      
+      if (booking) {
+        // Get all grading records for this booking
+        const bookingRecords = mockGradingRecords.filter(r => r.bookingId === bookingId);
+        const gradedAssetIds = new Set(bookingRecords.map(r => r.assetId));
+        const allAssetsGraded = booking.assets.every(asset => gradedAssetIds.has(asset.categoryId));
+        
+        // If all assets are graded and booking is in 'sanitised' status, update to 'graded'
+        if (allAssetsGraded && booking.status === 'sanitised') {
+          booking.status = 'graded';
+          booking.gradedAt = new Date().toISOString();
+          
+          // Also update job status if linked
+          if (booking.jobId) {
+            const { mockJobs } = await import('@/mocks/mock-data');
+            const job = mockJobs.find(j => j.id === booking.jobId);
+            if (job && job.status === 'sanitised') {
+              job.status = 'graded';
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // If sync fails, log but don't fail the record creation
+      console.error('Failed to sync booking status:', error);
+    }
+    
     return newRecord;
   }
 

@@ -16,12 +16,10 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
-const grades: { value: 'A' | 'B' | 'C' | 'D' | 'Recycled'; label: string; color: string }[] = [
-  { value: 'A', label: 'Grade A - Excellent', color: 'bg-success/10 text-success' },
-  { value: 'B', label: 'Grade B - Good', color: 'bg-info/10 text-info' },
-  { value: 'C', label: 'Grade C - Fair', color: 'bg-warning/10 text-warning' },
-  { value: 'D', label: 'Grade D - Poor', color: 'bg-destructive/10 text-destructive' },
-  { value: 'Recycled', label: 'Recycled', color: 'bg-muted text-muted-foreground' },
+const grades: { value: 'A' | 'B' | 'C'; label: string; color: string }[] = [
+  { value: 'A', label: 'Grade A', color: 'bg-success/10 text-success' },
+  { value: 'B', label: 'Grade B', color: 'bg-info/10 text-info' },
+  { value: 'C', label: 'Grade C', color: 'bg-warning/10 text-warning' },
 ];
 
 const Grading = () => {

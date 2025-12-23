@@ -1,24 +1,34 @@
 // Tenant Theme Context for White-Label Branding
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
+import { tenantService } from '@/services/tenant.service';
 import type { Tenant } from '@/types/auth';
 
 interface TenantThemeContextType {
   primaryColor: string;
   accentColor: string;
   logo?: string;
+  favicon?: string;
   tenantName: string;
   applyTheme: () => void;
+  isLoading: boolean;
 }
 
 const TenantThemeContext = createContext<TenantThemeContextType | undefined>(undefined);
 
 export function TenantThemeProvider({ children }: { children: ReactNode }) {
-  const { tenant } = useAuth();
+  const { tenant: authTenant } = useAuth();
+  const [subdomainTenant, setSubdomainTenant] = useState<Tenant | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Use subdomain tenant if available, otherwise fall back to auth tenant
+  const tenant = subdomainTenant || authTenant;
+  
   const [theme, setTheme] = useState({
     primaryColor: 'hsl(168, 70%, 35%)',
     accentColor: 'hsl(168, 60%, 45%)',
     logo: '/logo.avif' as string | undefined, // Default platform logo
+    favicon: '/favicon.ico' as string | undefined, // Default favicon
     tenantName: 'Reuse ITAD Platform',
   });
 
@@ -94,6 +104,47 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateFavicon = (faviconUrl?: string) => {
+    // Remove existing favicon links
+    const existingLinks = document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"]');
+    existingLinks.forEach(link => link.remove());
+
+    // Add new favicon
+    if (faviconUrl) {
+      const link = document.createElement('link');
+      link.rel = 'icon';
+      link.type = 'image/x-icon';
+      link.href = faviconUrl;
+      document.head.appendChild(link);
+    } else {
+      // Default favicon
+      const link = document.createElement('link');
+      link.rel = 'icon';
+      link.type = 'image/x-icon';
+      link.href = '/favicon.ico';
+      document.head.appendChild(link);
+    }
+  };
+
+  // Load tenant from subdomain on mount (before auth)
+  useEffect(() => {
+    const loadSubdomainTenant = async () => {
+      try {
+        const subdomainTenantData = await tenantService.getTenantBySubdomain();
+        if (subdomainTenantData) {
+          setSubdomainTenant(subdomainTenantData);
+        }
+      } catch (error) {
+        console.error('Failed to load tenant from subdomain:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSubdomainTenant();
+  }, []);
+
+  // Apply theme when tenant changes
   useEffect(() => {
     // Always apply theme, even if no tenant (to ensure defaults are set)
     if (tenant) {
@@ -101,12 +152,15 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
         primaryColor: tenant.primaryColor || 'hsl(168, 70%, 35%)',
         accentColor: tenant.accentColor || 'hsl(168, 60%, 45%)',
         logo: tenant.logo || '/logo.avif', // Use tenant logo or fallback to default
+        favicon: tenant.favicon || '/favicon.ico', // Use tenant favicon or fallback to default
         tenantName: tenant.name,
       });
       applyTheme(tenant);
+      updateFavicon(tenant.favicon);
     } else {
       // Reset to defaults when no tenant
       applyTheme(undefined);
+      updateFavicon(undefined);
     }
   }, [tenant]);
 
@@ -116,8 +170,10 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
         primaryColor: theme.primaryColor,
         accentColor: theme.accentColor,
         logo: theme.logo,
+        favicon: theme.favicon,
         tenantName: theme.tenantName,
         applyTheme: () => applyTheme(tenant || undefined),
+        isLoading,
       }}
     >
       {children}

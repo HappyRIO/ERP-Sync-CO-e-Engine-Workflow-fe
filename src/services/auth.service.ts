@@ -16,6 +16,7 @@ const mockUsers: User[] = [
     email: 'admin@reuse.com',
     name: 'Admin User',
     role: 'admin',
+    status: 'active',
     tenantId: 'tenant-1',
     tenantName: 'Reuse ITAD Platform',
     createdAt: '2024-01-01',
@@ -25,6 +26,7 @@ const mockUsers: User[] = [
     email: 'client@techcorp.com',
     name: 'Client User',
     role: 'client',
+    status: 'active',
     tenantId: 'tenant-2',
     tenantName: 'TechCorp Industries',
     createdAt: '2024-01-15',
@@ -34,6 +36,7 @@ const mockUsers: User[] = [
     email: 'reseller@partner.com',
     name: 'Reseller User',
     role: 'reseller',
+    status: 'active',
     tenantId: 'tenant-3',
     tenantName: 'Partner Solutions',
     createdAt: '2024-02-01',
@@ -43,6 +46,7 @@ const mockUsers: User[] = [
     email: 'driver@reuse.com',
     name: 'James Wilson',
     role: 'driver',
+    status: 'active',
     tenantId: 'tenant-1',
     tenantName: 'Reuse ITAD Platform',
     createdAt: '2024-03-01',
@@ -216,6 +220,9 @@ class AuthService {
       );
     }
 
+    // New signups (both client and reseller) start with 'pending' status
+    // They will have limited access until admin approves them
+
     // Check if user already exists
     if (mockUsers.some(u => u.email === data.email)) {
       throw new ApiError(
@@ -236,12 +243,13 @@ class AuthService {
       createdAt: new Date().toISOString(),
     };
 
-    // Create new user
+    // Create new user with 'pending' status (requires admin approval)
     const newUser: User = {
       id: `user-${Date.now()}`,
       email: data.email,
       name: data.name,
       role: data.role || 'client',
+      status: 'pending', // New signups are pending until admin approves
       tenantId: newTenant.id,
       tenantName: newTenant.name,
       createdAt: new Date().toISOString(),
@@ -249,6 +257,14 @@ class AuthService {
 
     mockUsers.push(newUser);
     mockTenants.push(newTenant);
+
+    // Also add to ExtendedUsers for admin management
+    const { mockExtendedUsers } = await import('@/mocks/mock-entities');
+    mockExtendedUsers.push({
+      ...newUser,
+      isActive: false, // Pending users are inactive until approved
+      status: 'pending',
+    });
 
     this.currentUser = newUser;
     this.currentTenant = newTenant;
@@ -332,11 +348,13 @@ class AuthService {
       );
     }
 
+    // Users who accept invitations are automatically approved (active status)
     const newUser: User = {
       id: `user-${Date.now()}`,
       email: inviteData.email,
       name: inviteData.name,
       role: invite.role,
+      status: 'active', // Invited users are auto-approved
       tenantId: invite.tenantId,
       tenantName: invite.tenantName,
       createdAt: new Date().toISOString(),
@@ -344,6 +362,15 @@ class AuthService {
 
     mockUsers.push(newUser);
     invite.acceptedAt = new Date().toISOString();
+
+    // Also add to ExtendedUsers (invited users are auto-approved)
+    const { mockExtendedUsers } = await import('@/mocks/mock-entities');
+    mockExtendedUsers.push({
+      ...newUser,
+      isActive: true,
+      status: 'active',
+      invitedBy: invite.invitedBy,
+    });
 
     this.currentUser = newUser;
     this.currentTenant = tenant;
@@ -400,6 +427,71 @@ class AuthService {
     return invite;
   }
 
+  async createInvite(email: string, role: 'client' | 'reseller', invitedBy: string, tenantId: string, tenantName: string): Promise<Invite> {
+    await delay(800);
+
+    // Simulate errors
+    if (shouldSimulateError(SERVICE_NAME)) {
+      const config = JSON.parse(localStorage.getItem(`error_sim_${SERVICE_NAME}`) || '{}');
+      throw new ApiError(
+        config.errorType || ApiErrorType.SERVER_ERROR,
+        'Failed to create invite. Please try again.',
+        config.errorType === ApiErrorType.NETWORK_ERROR ? 0 : 500
+      );
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new ApiError(
+        ApiErrorType.VALIDATION_ERROR,
+        'Invalid email format.',
+        400
+      );
+    }
+
+    // Check if user already exists
+    const existingUser = mockUsers.find(u => u.email === email);
+    if (existingUser) {
+      throw new ApiError(
+        ApiErrorType.VALIDATION_ERROR,
+        'A user with this email already exists.',
+        400
+      );
+    }
+
+    // Check if invite already exists and is not expired
+    const existingInvite = mockInvites.find(
+      i => i.email === email && 
+      i.tenantId === tenantId && 
+      !i.acceptedAt && 
+      new Date(i.expiresAt) > new Date()
+    );
+    if (existingInvite) {
+      throw new ApiError(
+        ApiErrorType.VALIDATION_ERROR,
+        'An active invite already exists for this email.',
+        400
+      );
+    }
+
+    // Create new invite
+    const newInvite: Invite = {
+      id: `invite-${Date.now()}`,
+      email,
+      role,
+      tenantId,
+      tenantName,
+      invitedBy,
+      invitedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
+    };
+
+    mockInvites.push(newInvite);
+
+    return newInvite;
+  }
+
   async logout(): Promise<void> {
     await delay(300);
     this.currentUser = null;
@@ -429,9 +521,26 @@ class AuthService {
       return null;
     }
 
-    const user = mockUsers.find(u => u.id === userId);
+    let user = mockUsers.find(u => u.id === userId);
     if (!user) {
       return null;
+    }
+
+    // Sync status from ExtendedUsers if available (for pending users)
+    try {
+      const { mockExtendedUsers } = await import('@/mocks/mock-entities');
+      const extendedUser = mockExtendedUsers.find(u => u.id === userId);
+      if (extendedUser && extendedUser.status) {
+        // Update status in user object
+        user = { ...user, status: extendedUser.status };
+        // Also update in mockUsers array for consistency
+        const userIndex = mockUsers.findIndex(u => u.id === userId);
+        if (userIndex !== -1) {
+          mockUsers[userIndex] = user;
+        }
+      }
+    } catch (error) {
+      // If ExtendedUsers not available, continue with existing user
     }
 
     const tenant = mockTenants.find(t => t.id === user.tenantId);

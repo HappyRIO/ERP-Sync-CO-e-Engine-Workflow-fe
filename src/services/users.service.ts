@@ -8,14 +8,14 @@ import type { User } from '@/types/auth';
 const SERVICE_NAME = 'users';
 
 class UsersService {
-  async getUsers(filter?: { role?: string; tenantId?: string; isActive?: boolean }): Promise<ExtendedUser[]> {
+  async getUsers(filter?: { role?: string; tenantId?: string; isActive?: boolean; status?: string }): Promise<ExtendedUser[]> {
     if (USE_MOCK_API) {
       return this.getUsersMock(filter);
     }
     throw new Error('Real API not implemented yet');
   }
 
-  private async getUsersMock(filter?: { role?: string; tenantId?: string; isActive?: boolean }): Promise<ExtendedUser[]> {
+  private async getUsersMock(filter?: { role?: string; tenantId?: string; isActive?: boolean; status?: string }): Promise<ExtendedUser[]> {
     await delay(500);
 
     if (shouldSimulateError(SERVICE_NAME)) {
@@ -38,6 +38,9 @@ class UsersService {
       }
       if (filter.isActive !== undefined) {
         users = users.filter(u => u.isActive === filter.isActive);
+      }
+      if (filter.status) {
+        users = users.filter(u => (u.status || (u.isActive ? 'active' : 'inactive')) === filter.status);
       }
     }
 
@@ -112,6 +115,59 @@ class UsersService {
     }
 
     user.isActive = isActive;
+    // Update status based on isActive
+    if (isActive) {
+      user.status = 'active';
+    } else {
+      user.status = user.status === 'pending' ? 'pending' : 'inactive';
+    }
+    return user;
+  }
+
+  /**
+   * Approve pending user (change status from pending to active)
+   */
+  async approveUser(id: string): Promise<ExtendedUser> {
+    if (USE_MOCK_API) {
+      return this.approveUserMock(id);
+    }
+    throw new Error('Real API not implemented yet');
+  }
+
+  private async approveUserMock(id: string): Promise<ExtendedUser> {
+    await delay(600);
+
+    if (shouldSimulateError(SERVICE_NAME)) {
+      const config = JSON.parse(localStorage.getItem(`error_sim_${SERVICE_NAME}`) || '{}');
+      throw new ApiError(
+        config.errorType || ApiErrorType.SERVER_ERROR,
+        'Failed to approve user. Please try again.',
+        config.errorType === ApiErrorType.NETWORK_ERROR ? 0 : 500
+      );
+    }
+
+    const user = mockExtendedUsers.find(u => u.id === id);
+    if (!user) {
+      throw new ApiError(
+        ApiErrorType.NOT_FOUND,
+        `User with ID "${id}" was not found.`,
+        404,
+        { userId: id }
+      );
+    }
+
+    // Only approve if status is pending
+    if (user.status === 'pending') {
+      user.status = 'active';
+      user.isActive = true;
+    } else {
+      throw new ApiError(
+        ApiErrorType.VALIDATION_ERROR,
+        `User is not in pending status. Current status: ${user.status || 'unknown'}`,
+        400
+      );
+    }
+
     return user;
   }
 }

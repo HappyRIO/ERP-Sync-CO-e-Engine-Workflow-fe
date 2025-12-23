@@ -9,14 +9,13 @@ import type { Job, AssetCategory } from '@/types/jobs';
 export type { WorkflowStatus, Job, Asset, Driver, Evidence, Certificate, AssetCategory } from '@/types/jobs';
 
 export const assetCategories: AssetCategory[] = [
+  { id: 'networking', name: 'Networking', icon: '🌐', co2ePerUnit: 95, avgWeight: 3, avgBuybackValue: 35 },
+  { id: 'server', name: 'Servers', icon: '🗄️', co2ePerUnit: 1200, avgWeight: 25, avgBuybackValue: 250 },
+  { id: 'storage', name: 'Storage', icon: '💾', co2ePerUnit: 400, avgWeight: 5, avgBuybackValue: 120 },
   { id: 'laptop', name: 'Laptops', icon: '💻', co2ePerUnit: 350, avgWeight: 2.5, avgBuybackValue: 85 },
   { id: 'desktop', name: 'Desktops', icon: '🖥️', co2ePerUnit: 450, avgWeight: 8, avgBuybackValue: 45 },
-  { id: 'monitor', name: 'Monitors', icon: '📺', co2ePerUnit: 280, avgWeight: 5, avgBuybackValue: 25 },
-  { id: 'server', name: 'Servers', icon: '🗄️', co2ePerUnit: 1200, avgWeight: 25, avgBuybackValue: 250 },
-  { id: 'phone', name: 'Mobile Phones', icon: '📱', co2ePerUnit: 70, avgWeight: 0.2, avgBuybackValue: 40 },
+  { id: 'smartphone', name: 'Smartphones', icon: '📱', co2ePerUnit: 70, avgWeight: 0.2, avgBuybackValue: 40 },
   { id: 'tablet', name: 'Tablets', icon: '📋', co2ePerUnit: 120, avgWeight: 0.5, avgBuybackValue: 55 },
-  { id: 'printer', name: 'Printers', icon: '🖨️', co2ePerUnit: 180, avgWeight: 12, avgBuybackValue: 15 },
-  { id: 'network', name: 'Network Equipment', icon: '🌐', co2ePerUnit: 95, avgWeight: 3, avgBuybackValue: 35 },
 ];
 
 export const mockJobs: Job[] = [

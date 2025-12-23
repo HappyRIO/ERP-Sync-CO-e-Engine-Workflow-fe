@@ -1,15 +1,26 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, DollarSign, Calendar, Package, Loader2, CheckCircle2, Clock, FileText, TrendingUp } from "lucide-react";
+import { Search, DollarSign, Calendar, Package, Loader2, CheckCircle2, Clock, FileText, TrendingUp, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCommissions, useCommissionSummary } from "@/hooks/useCommission";
+import { useCommissions, useCommissionSummary, useUpdateCommissionStatus } from "@/hooks/useCommission";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreVertical } from "lucide-react";
 
 const statusConfig: Record<string, { label: string; icon: typeof CheckCircle2; color: string }> = {
   pending: { label: "Pending", icon: Clock, color: "bg-warning/10 text-warning" },
@@ -18,6 +29,8 @@ const statusConfig: Record<string, { label: string; icon: typeof CheckCircle2; c
 };
 
 const Commission = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
@@ -27,6 +40,11 @@ const Commission = () => {
     period: periodFilter !== "all" ? periodFilter : undefined,
   });
   const { data: summary, isLoading: isLoadingSummary } = useCommissionSummary();
+  const updateStatus = useUpdateCommissionStatus();
+
+  const handleStatusChange = (commissionId: string, currentStatus: string, newStatus: 'pending' | 'approved' | 'paid') => {
+    updateStatus.mutate({ commissionId, status: newStatus });
+  };
 
   const filteredCommissions = commissions.filter((comm) => {
     const matchesSearch =
@@ -55,10 +73,58 @@ const Commission = () => {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Commission & Earnings</h2>
-          <p className="text-muted-foreground">Track your commission and earnings</p>
+          <h2 className="text-2xl font-bold text-foreground">
+            {isAdmin ? "Commission Management" : "Commission & Earnings"}
+          </h2>
+          <p className="text-muted-foreground">
+            {isAdmin 
+              ? "Manage commission statuses for resellers" 
+              : "Track your commission and earnings"}
+          </p>
         </div>
       </motion.div>
+
+      {/* Admin Info Banner */}
+      {isAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <Alert className="bg-info/10 border-info/20 text-foreground">
+            <AlertCircle className="h-4 w-4 text-info" />
+            <AlertDescription className="flex flex-col gap-2">
+              <strong className="text-info">Commission Management Flow:</strong>
+              <ol className="list-decimal list-inside space-y-1 text-sm">
+                <li><strong>Pending:</strong> Commission is calculated after job completion. Review and verify the commission amount.</li>
+                <li><strong>Approved:</strong> Click the three-dot menu (⋮) next to a pending commission and select "Approve" to approve it for payment.</li>
+                <li><strong>Paid:</strong> After approval, mark it as "Paid" when the payment has been processed. This is the final status.</li>
+              </ol>
+              <p className="text-xs mt-2 text-muted-foreground">
+                💡 Use the three-dot menu (⋮) on the right side of each commission record to update the status.
+              </p>
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
+
+      {/* Reseller Info Banner */}
+      {!isAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <Alert className="bg-info/10 border-info/20 text-foreground">
+            <AlertCircle className="h-4 w-4 text-info" />
+            <AlertDescription>
+              <strong>Commission Status Flow:</strong> Commissions start as <strong>Pending</strong> after job completion, 
+              then move to <strong>Approved</strong> by Reuse admin, and finally to <strong>Paid</strong> when payment is processed. 
+              You can track all statuses here.
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
 
       {/* Summary Cards */}
       {!isLoadingSummary && summary && (
@@ -221,17 +287,56 @@ const Commission = () => {
                       <p className="text-xs text-muted-foreground">
                         {comm.commissionPercent}% of £{comm.jobValue.toLocaleString()} resale value
                       </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-2 h-7 text-xs"
-                        asChild
-                      >
-                        <Link to={`/bookings/${comm.bookingId}`}>
-                          <FileText className="h-3 w-3 mr-1" />
-                          View Booking
-                        </Link>
-                      </Button>
+                      <div className="flex items-center gap-2 mt-2 justify-end">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          asChild
+                        >
+                          <Link to={`/bookings/${comm.bookingId}`}>
+                            <FileText className="h-3 w-3 mr-1" />
+                            View Booking
+                          </Link>
+                        </Button>
+                        {isAdmin && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Update Status</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {comm.status === 'pending' && (
+                                <DropdownMenuItem
+                                  onClick={() => handleStatusChange(comm.id, comm.status, 'approved')}
+                                  disabled={updateStatus.isPending}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-2 text-info" />
+                                  Approve
+                                </DropdownMenuItem>
+                              )}
+                              {comm.status === 'approved' && (
+                                <DropdownMenuItem
+                                  onClick={() => handleStatusChange(comm.id, comm.status, 'paid')}
+                                  disabled={updateStatus.isPending}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-2 text-success" />
+                                  Mark as Paid
+                                </DropdownMenuItem>
+                              )}
+                              {comm.status === 'paid' && (
+                                <DropdownMenuItem disabled>
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                  Already Paid
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

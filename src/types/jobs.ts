@@ -14,6 +14,7 @@ export type WorkflowStatus =
 export interface Job {
   id: string;
   erpJobNumber: string;
+  bookingId?: string; // Link to booking
   clientName: string;
   siteName: string;
   siteAddress: string;

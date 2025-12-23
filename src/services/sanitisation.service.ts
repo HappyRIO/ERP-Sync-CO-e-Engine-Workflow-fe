@@ -167,6 +167,38 @@ class SanitisationService {
     };
 
     mockSanitisationRecords.push(newRecord);
+    
+    // Check if all assets are sanitised and auto-update booking status
+    try {
+      const { mockBookings } = await import('@/mocks/mock-entities');
+      const booking = mockBookings.find(b => b.id === bookingId);
+      
+      if (booking) {
+        // Get all sanitisation records for this booking
+        const bookingRecords = mockSanitisationRecords.filter(r => r.bookingId === bookingId);
+        const sanitisedAssetIds = new Set(bookingRecords.map(r => r.assetId));
+        const allAssetsSanitised = booking.assets.every(asset => sanitisedAssetIds.has(asset.categoryId));
+        
+        // If all assets are sanitised and booking is in 'collected' status, update to 'sanitised'
+        if (allAssetsSanitised && booking.status === 'collected') {
+          booking.status = 'sanitised';
+          booking.sanitisedAt = new Date().toISOString();
+          
+          // Also update job status if linked
+          if (booking.jobId) {
+            const { mockJobs } = await import('@/mocks/mock-data');
+            const job = mockJobs.find(j => j.id === booking.jobId);
+            if (job && job.status === 'warehouse') {
+              job.status = 'sanitised';
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // If sync fails, log but don't fail the record creation
+      console.error('Failed to sync booking status:', error);
+    }
+    
     return newRecord;
   }
 

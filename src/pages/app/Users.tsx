@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Users as UsersIcon, Mail, Building2, Shield, UserCheck, UserX, Loader2 } from "lucide-react";
+import { Search, Users as UsersIcon, Mail, Building2, Shield, UserCheck, UserX, Loader2, Clock, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useUsers } from "@/hooks/useUsers";
-import { useUpdateUserStatus } from "@/hooks/useUsers";
+import { useUsers, useUpdateUserStatus, useApproveUser } from "@/hooks/useUsers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -27,9 +26,10 @@ const Users = () => {
 
   const { data: users = [], isLoading, error } = useUsers({
     role: roleFilter !== "all" ? roleFilter : undefined,
-    isActive: statusFilter !== "all" ? statusFilter === "active" : undefined,
+    status: statusFilter !== "all" ? statusFilter : undefined,
   });
   const updateStatus = useUpdateUserStatus();
+  const approveUser = useApproveUser();
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -53,6 +53,23 @@ const Users = () => {
         },
       }
     );
+  };
+
+  const handleApproveUser = async (userId: string) => {
+    approveUser.mutate(userId, {
+      onSuccess: () => {
+        toast.success("User approved successfully");
+      },
+      onError: (error) => {
+        toast.error("Failed to approve user", {
+          description: error instanceof Error ? error.message : "Please try again.",
+        });
+      },
+    });
+  };
+
+  const getUserStatus = (user: typeof users[0]) => {
+    return user.status || (user.isActive ? 'active' : 'inactive');
   };
 
   if (error) {
@@ -113,6 +130,7 @@ const Users = () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
           </SelectContent>
@@ -149,7 +167,12 @@ const Users = () => {
                       <Badge className={cn("text-xs", roleColors[user.role])}>
                         {user.role}
                       </Badge>
-                      {user.isActive ? (
+                      {getUserStatus(user) === 'pending' ? (
+                        <Badge variant="secondary" className="bg-warning/10 text-warning">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Pending
+                        </Badge>
+                      ) : getUserStatus(user) === 'active' ? (
                         <Badge variant="secondary" className="bg-success/10 text-success">
                           <UserCheck className="h-3 w-3 mr-1" />
                           Active
@@ -177,14 +200,28 @@ const Users = () => {
                       )}
                     </div>
                   </div>
-                  <Button
-                    variant={user.isActive ? "destructive" : "success"}
-                    size="sm"
-                    onClick={() => handleToggleStatus(user.id, user.isActive)}
-                    disabled={updateStatus.isPending}
-                  >
-                    {user.isActive ? "Deactivate" : "Activate"}
-                  </Button>
+                  <div className="flex gap-2">
+                    {getUserStatus(user) === 'pending' ? (
+                      <Button
+                        variant="success"
+                        size="sm"
+                        onClick={() => handleApproveUser(user.id)}
+                        disabled={approveUser.isPending}
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Approve
+                      </Button>
+                    ) : (
+                      <Button
+                        variant={getUserStatus(user) === 'active' ? "destructive" : "success"}
+                        size="sm"
+                        onClick={() => handleToggleStatus(user.id, user.isActive)}
+                        disabled={updateStatus.isPending}
+                      >
+                        {getUserStatus(user) === 'active' ? "Deactivate" : "Activate"}
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>

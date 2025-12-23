@@ -151,7 +151,7 @@ const App = () => (
                 <Route
                   path="/invoices"
                   element={
-                    <ProtectedRoute allowedRoles={['client']}>
+                    <ProtectedRoute allowedRoles={['admin', 'client', 'reseller']}>
                       <Invoices />
                     </ProtectedRoute>
                   }
@@ -159,7 +159,7 @@ const App = () => (
                 <Route
                   path="/commission"
                   element={
-                    <ProtectedRoute allowedRoles={['reseller']}>
+                    <ProtectedRoute allowedRoles={['admin', 'reseller']}>
                       <Commission />
                     </ProtectedRoute>
                   }
@@ -167,7 +167,7 @@ const App = () => (
                 <Route
                   path="/sites"
                   element={
-                    <ProtectedRoute allowedRoles={['client', 'reseller']}>
+                    <ProtectedRoute allowedRoles={['client']}>
                       <Sites />
                     </ProtectedRoute>
                   }

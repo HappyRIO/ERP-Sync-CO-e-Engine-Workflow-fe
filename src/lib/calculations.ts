@@ -95,6 +95,10 @@ export function kmToMiles(km: number): number {
  * Returns emissions in kg CO2e
  */
 export function calculateTravelEmissions(distanceKm: number, vehicleType: string): number {
+  // Electric vehicles always have zero emissions
+  if (vehicleType === 'electric') {
+    return 0;
+  }
   const emissionsPerKm = vehicleEmissions[vehicleType] || vehicleEmissions.petrol;
   return Math.round(distanceKm * emissionsPerKm * 100) / 100; // Round to 2 decimal places
 }
@@ -110,7 +114,7 @@ export function calculateAllVehicleEmissions(distanceKm: number): {
   return {
     petrol: calculateTravelEmissions(distanceKm, 'petrol'),
     diesel: calculateTravelEmissions(distanceKm, 'diesel'),
-    electric: calculateTravelEmissions(distanceKm, 'electric'),
+    electric: 0, // Electric vehicles always have zero emissions
   };
 }
 

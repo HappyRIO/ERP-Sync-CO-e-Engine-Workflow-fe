@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSites } from "@/hooks/useSites";
+import { useClients } from "@/hooks/useClients";
 import { useAssetCategories } from "@/hooks/useAssets";
 import { useCO2Calculation } from "@/hooks/useCO2";
 import { useCreateBooking } from "@/hooks/useBooking";
@@ -57,6 +58,7 @@ const Booking = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
+  const [selectedClientId, setSelectedClientId] = useState<string>(""); // For resellers: selected client
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
   const [siteLocation, setSiteLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string>("new"); // Default to "Create New Site"
@@ -74,10 +76,17 @@ const Booking = () => {
   const [charityPercent, setCharityPercent] = useState(10);
   const [selectedVehicleType, setSelectedVehicleType] = useState<'petrol' | 'diesel' | 'electric'>('petrol');
 
-  // Load sites (for client/reseller roles)
+  // Load clients (for resellers and admin)
+  const { data: clients = [], isLoading: isLoadingClients } = useClients({ status: 'active' });
+  
+  // Load sites (for client role only - resellers create bookings for clients, so they enter site details manually)
   const { data: sites = [], isLoading: isLoadingSites } = useSites();
   const { data: assetCategories = [] } = useAssetCategories();
   const createBooking = useCreateBooking();
+  
+  const isReseller = user?.role === 'reseller';
+  const isClient = user?.role === 'client';
+  const isAdmin = user?.role === 'admin';
   
   // Calculate CO2e when assets change
   // Use memoized request object to prevent unnecessary query key changes
@@ -220,16 +229,39 @@ const Booking = () => {
 
   const canProceed = () => {
     if (currentStep === 1) {
-      return (
-        siteDetails.siteName &&
-        siteDetails.street &&
-        siteDetails.city &&
-        siteDetails.postcode &&
+      // For resellers and admin, require client selection
+      if ((isReseller || isAdmin) && !selectedClientId) {
+        return false;
+      }
+      // Check all required fields (contactName and contactPhone are optional)
+      const hasRequiredFields = (
+        siteDetails.siteName?.trim() &&
+        siteDetails.street?.trim() &&
+        siteDetails.city?.trim() &&
+        siteDetails.postcode?.trim() &&
         scheduledDate !== undefined
       );
+      return hasRequiredFields;
     }
     if (currentStep === 2) {
       return totalAssets > 0;
+    }
+    if (currentStep === 3) {
+      // For step 3, validate all previous steps are complete
+      // Check step 1 requirements
+      if ((isReseller || isAdmin) && !selectedClientId) {
+        return false;
+      }
+      const hasStep1Fields = (
+        siteDetails.siteName?.trim() &&
+        siteDetails.street?.trim() &&
+        siteDetails.city?.trim() &&
+        siteDetails.postcode?.trim() &&
+        scheduledDate !== undefined
+      );
+      // Check step 2 requirements
+      const hasStep2Fields = totalAssets > 0;
+      return hasStep1Fields && hasStep2Fields;
     }
     return true;
   };
@@ -247,7 +279,8 @@ const Booking = () => {
     
     createBooking.mutate(
       {
-        siteId: selectedSiteId || undefined,
+        siteId: selectedSiteId !== 'new' ? selectedSiteId : undefined,
+        clientId: (isReseller || isAdmin) ? selectedClientId : undefined, // For resellers and admin: specify which client
         siteName: siteDetails.siteName,
         address: fullAddress,
         postcode: siteDetails.postcode,
@@ -325,8 +358,43 @@ const Booking = () => {
                   <CardTitle>Collection Site Details</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Site Selection for Client/Reseller */}
-                  {user && (user.role === 'client' || user.role === 'reseller' || user.role === 'admin') && sites.length > 0 && (
+                  {/* Client Selection for Resellers and Admin */}
+                  {(isReseller || isAdmin) && (
+                    <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+                      <Label className="text-sm font-semibold">Client Selection *</Label>
+                      {isLoadingClients ? (
+                        <div className="flex items-center justify-center py-2">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <Select
+                          value={selectedClientId}
+                          onValueChange={setSelectedClientId}
+                        >
+                          <SelectTrigger className="bg-background h-9">
+                            <SelectValue placeholder="Select a client" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clients.length === 0 ? (
+                              <SelectItem value="" disabled>No clients available</SelectItem>
+                            ) : (
+                              clients.map((client) => (
+                                <SelectItem key={client.id} value={client.id}>
+                                  <div className="flex items-center gap-2">
+                                    <Building2 className="h-4 w-4" />
+                                    <span>{client.name}</span>
+                                  </div>
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Site Selection for Clients Only */}
+                  {isClient && sites.length > 0 && (
                     <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
                       <div className="flex items-center justify-between">
                         <Label className="text-sm font-semibold">Site Selection</Label>
@@ -608,7 +676,7 @@ const Booking = () => {
                                 return filtered;
                               });
                             }}
-                            className="w-16 text-center h-8"
+                            className="w-20 text-center h-8"
                           />
                           <Button
                             variant="outline"
@@ -647,13 +715,18 @@ const Booking = () => {
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div>
                         <p className="text-2xl font-bold text-success">
-                          {(co2eSaved / 1000).toFixed(1)}t
+                          {co2eSaved >= 1000 
+                            ? `${(co2eSaved / 1000).toFixed(1)}t` 
+                            : `${co2eSaved.toFixed(1)}kg`}
                         </p>
                         <p className="text-xs text-muted-foreground">CO₂e Saved</p>
                       </div>
                       <div>
-                        <p className="text-2xl font-bold text-destructive">
-                          -{travelEmissions.toFixed(1)}kg
+                        <p className={cn(
+                          "text-2xl font-bold",
+                          selectedVehicleType === 'electric' ? "text-success" : "text-destructive"
+                        )}>
+                          {selectedVehicleType === 'electric' ? '0kg' : `-${travelEmissions.toFixed(1)}kg`}
                         </p>
                         <p className="text-xs text-muted-foreground">Travel Emissions ({selectedVehicleType.charAt(0).toUpperCase() + selectedVehicleType.slice(1)})</p>
                       </div>
@@ -665,7 +738,9 @@ const Booking = () => {
                           netCO2e > 0 ? "text-success text-3xl" : netCO2e < 0 ? "text-destructive" : "text-primary"
                         )}>
                           {netCO2e > 0 && "+"}
-                          {(netCO2e / 1000).toFixed(1)}t
+                          {Math.abs(netCO2e) >= 1000 
+                            ? `${(netCO2e / 1000).toFixed(1)}t` 
+                            : `${netCO2e.toFixed(1)}kg`}
                         </p>
                         <p className={cn(
                           "text-xs font-medium",
@@ -798,14 +873,14 @@ const Booking = () => {
                             "text-xl font-bold",
                             selectedVehicleType === 'electric' ? "text-success" : "text-foreground"
                           )}>
-                            {distanceKm > 0 ? `${vehicleEmissions.electric.toFixed(2)}kg` : '—'}
+                            {distanceKm > 0 ? '0kg' : '—'}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">CO₂e</p>
                         </button>
                       </div>
                       {selectedVehicleType && distanceKm > 0 && vehicleEmissions && (
                         <div className="mt-3 p-2 rounded-lg bg-muted/50 text-sm text-center">
-                          Selected: <span className="font-semibold capitalize">{selectedVehicleType}</span> vehicle ({(vehicleEmissions[selectedVehicleType as keyof typeof vehicleEmissions] || 0).toFixed(2)}kg CO₂e)
+                          Selected: <span className="font-semibold capitalize">{selectedVehicleType}</span> vehicle ({selectedVehicleType === 'electric' ? '0kg' : (vehicleEmissions[selectedVehicleType as keyof typeof vehicleEmissions] || 0).toFixed(2) + 'kg'} CO₂e)
                         </div>
                       )}
                     </div>
@@ -977,14 +1052,16 @@ const Booking = () => {
 
       {/* Navigation Buttons */}
       <div className="flex justify-between">
-        <Button
-          variant="outline"
-          onClick={() => setCurrentStep((s) => s - 1)}
-          disabled={currentStep === 1}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
+        {currentStep > 1 && (
+          <Button
+            variant="outline"
+            onClick={() => setCurrentStep((s) => s - 1)}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+        )}
+        {currentStep === 1 && <div />}
 
         {currentStep < 3 ? (
           <Button
@@ -999,7 +1076,7 @@ const Booking = () => {
           <Button
             variant="default"
             onClick={handleSubmit}
-            disabled={createBooking.isPending}
+            disabled={createBooking.isPending || !canProceed()}
           >
             {createBooking.isPending ? (
               <>

@@ -145,7 +145,8 @@ const DriverJobView = () => {
   const getNextStatus = (): WorkflowStatus | null => {
     if (!job) return null;
     const statusTransitions: Record<string, WorkflowStatus> = {
-      'booked': 'en-route',      // Accept job
+      'booked': 'en-route',      // Accept job (can go directly from booked to en-route)
+      'routed': 'en-route',      // Accept routed job
       'en-route': 'arrived',     // Mark as arrived at site
       'arrived': 'collected',    // Mark as collected
       'collected': 'warehouse',  // Mark as delivered to warehouse
