@@ -13,6 +13,7 @@ const SERVICE_NAME = 'booking';
 
 export interface BookingRequest {
   clientId?: string; // For resellers: specify which client this booking is for
+  clientName?: string; // Client name (from user's tenant name or selected client)
   siteId?: string;
   siteName: string;
   address: string;
@@ -25,6 +26,7 @@ export interface BookingRequest {
     quantity: number;
   }>;
   charityPercent?: number;
+  preferredVehicleType?: 'petrol' | 'diesel' | 'electric'; // Vehicle type selected by client
   coordinates?: {
     lat: number;
     lng: number;
@@ -126,11 +128,86 @@ class BookingService {
     const estimatedCO2e = calculateReuseCO2e(request.assets, assetCategories);
     const estimatedBuyback = calculateBuybackEstimate(request.assets, assetCategories);
 
-    // Generate mock job
+    // Get client info (would come from client service in real app)
+    const { mockClients } = await import('@/mocks/mock-entities');
+    
+    // Use provided clientName if available, otherwise look it up
+    let clientName = request.clientName?.trim(); // Trim whitespace
+    let clientId = request.clientId;
+    
+    // Priority 1: If clientId is provided, always look up client name from mockClients (most reliable)
+    if (clientId) {
+      const client = mockClients.find(c => c.tenantId === clientId);
+      if (client) {
+        // Use the client name from mockClients (authoritative source)
+        clientName = client.name;
+      } else if (!clientName || clientName.length === 0) {
+        // If client not found and no clientName provided, use default
+        clientName = 'Client Name';
+      }
+      // If clientName was provided and client found, keep the provided name (but clientId takes precedence for lookup)
+    } else if (clientName && clientName.length > 0) {
+      // Priority 2: If clientName provided but no clientId, try to find matching client
+      const client = mockClients.find(c => c.name === clientName);
+      if (client) {
+        clientId = client.tenantId;
+        // Use the client name from mockClients for consistency
+        clientName = client.name;
+      } else {
+        // Client not found, use default clientId
+        clientId = 'tenant-2';
+      }
+    } else {
+      // Priority 3: Neither provided, use defaults
+      clientName = 'Client Name';
+      clientId = 'tenant-2';
+    }
+    
+    // Final validation - ensure clientName is never empty
+    if (!clientName || clientName.trim().length === 0) {
+      clientName = 'Client Name';
+    }
+
+    // Get asset category names
+    const assetCategoriesWithNames = request.assets.map(asset => {
+      const category = assetCategories.find(c => c.id === asset.categoryId);
+      return {
+        categoryId: asset.categoryId,
+        categoryName: category?.name || asset.categoryId,
+        quantity: asset.quantity,
+      };
+    });
+
+    // Create booking entity
+    const bookingId = `booking-${Date.now()}`;
+    const bookingNumber = `BK-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`;
+    
+    const newBooking: Booking = {
+      id: bookingId,
+      bookingNumber,
+      clientId,
+      clientName,
+      siteName: request.siteName,
+      siteAddress: request.address,
+      scheduledDate: request.scheduledDate,
+      status: 'created',
+      assets: assetCategoriesWithNames,
+      charityPercent: request.charityPercent || 0,
+      estimatedCO2e,
+      estimatedBuyback,
+      preferredVehicleType: request.preferredVehicleType, // Save client's vehicle preference
+      createdAt: new Date().toISOString(),
+      createdBy: clientId, // In real app would be actual user ID
+    };
+
+    // Add booking to mockBookings array
+    mockBookings.push(newBooking);
+
+    // Generate mock job response (for backward compatibility)
     const newJob: BookingResponse = {
-      id: `job-${Date.now()}`,
-      erpJobNumber: `ERP-2024-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`,
-      status: 'booked',
+      id: bookingId,
+      erpJobNumber: bookingNumber,
+      status: 'created',
       estimatedCO2e,
       estimatedBuyback,
       createdAt: new Date().toISOString(),
@@ -290,15 +367,67 @@ class BookingService {
     }
 
     // Get driver info (would come from users service in real app)
-    // For now, use a simple lookup from mockJobs or default
+    // For now, use a simple lookup from mockJobs or driverVehicleInfo mapping
     const existingJobWithDriver = mockJobs.find(j => j.driver?.id === driverId);
-    const driver = existingJobWithDriver?.driver || { 
-      id: driverId, 
-      name: 'Driver Name', 
-      vehicleReg: 'XX00 XXX', 
-      vehicleType: 'van' as const, 
-      phone: '+44 7700 900000' 
-    };
+    let driver = existingJobWithDriver?.driver;
+    
+    // If not found in jobs, try to get from driverVehicleInfo (from Assignment page)
+    if (!driver) {
+      // Driver vehicle information mapping (in a real app, this would come from the backend)
+      const driverVehicleInfo: Record<string, { 
+        vehicleReg: string; 
+        vehicleType: 'van' | 'truck' | 'car';
+        vehicleFuelType: 'petrol' | 'diesel' | 'electric';
+      }> = {
+        'user-4': { vehicleReg: 'AB12 CDE', vehicleType: 'van', vehicleFuelType: 'diesel' }, // James Wilson
+        'user-6': { vehicleReg: 'XY34 FGH', vehicleType: 'truck', vehicleFuelType: 'diesel' }, // Sarah Chen
+        'user-7': { vehicleReg: 'CD56 IJK', vehicleType: 'truck', vehicleFuelType: 'diesel' }, // Mike Thompson
+        'user-8': { vehicleReg: 'EF78 LMN', vehicleType: 'truck', vehicleFuelType: 'petrol' }, // Emma Davis
+        'user-9': { vehicleReg: 'GH90 OPQ', vehicleType: 'van', vehicleFuelType: 'electric' }, // David Martinez
+        'user-10': { vehicleReg: 'IJ12 RST', vehicleType: 'van', vehicleFuelType: 'petrol' }, // Lisa Anderson
+      };
+      
+      const vehicleInfo = driverVehicleInfo[driverId];
+      if (vehicleInfo) {
+        // Get driver name from users (would come from users service in real app)
+        try {
+          const { mockExtendedUsers } = await import('@/mocks/mock-entities');
+          const user = mockExtendedUsers && Array.isArray(mockExtendedUsers) 
+            ? mockExtendedUsers.find(u => u.id === driverId)
+            : null;
+          driver = {
+            id: driverId,
+            name: user?.name || 'Driver Name',
+            vehicleReg: vehicleInfo.vehicleReg,
+            vehicleType: vehicleInfo.vehicleType,
+            vehicleFuelType: vehicleInfo.vehicleFuelType,
+            phone: user?.email || '+44 7700 900000',
+          };
+        } catch (error) {
+          // Fallback if import fails
+          driver = {
+            id: driverId,
+            name: 'Driver Name',
+            vehicleReg: vehicleInfo.vehicleReg,
+            vehicleType: vehicleInfo.vehicleType,
+            vehicleFuelType: vehicleInfo.vehicleFuelType,
+            phone: '+44 7700 900000',
+          };
+        }
+      }
+    }
+    
+    // Final fallback
+    if (!driver) {
+      driver = { 
+        id: driverId, 
+        name: 'Driver Name', 
+        vehicleReg: 'XX00 XXX', 
+        vehicleType: 'van' as const,
+        vehicleFuelType: 'diesel' as const,
+        phone: '+44 7700 900000' 
+      };
+    }
 
     booking.status = 'scheduled';
     booking.driverId = driverId;
@@ -330,9 +459,11 @@ class BookingService {
         scheduledDate: booking.scheduledDate,
         assets: jobAssets,
         driver: {
+          id: driver.id,
           name: driver.name,
           vehicleReg: driver.vehicleReg,
           vehicleType: driver.vehicleType,
+          vehicleFuelType: driver.vehicleFuelType,
           phone: driver.phone,
         },
         co2eSaved: booking.estimatedCO2e,

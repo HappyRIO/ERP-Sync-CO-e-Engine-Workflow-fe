@@ -46,9 +46,11 @@ export interface Asset {
 }
 
 export interface Driver {
+  id?: string; // Optional user ID to link driver to user
   name: string;
   vehicleReg: string;
   vehicleType: 'van' | 'truck' | 'car';
+  vehicleFuelType?: 'petrol' | 'diesel' | 'electric'; // Fuel type of the vehicle
   eta?: string;
   phone: string;
 }

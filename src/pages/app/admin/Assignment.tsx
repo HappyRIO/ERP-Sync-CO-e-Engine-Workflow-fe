@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, UserPlus, Truck, Calendar, MapPin, Package, Loader2, CheckCircle2, Car } from "lucide-react";
+import { ArrowLeft, UserPlus, Truck, Calendar, MapPin, Package, Loader2, CheckCircle2, Car, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,9 +13,13 @@ import { toast } from "sonner";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
 
 // Driver vehicle information mapping (in a real app, this would come from the backend)
-const driverVehicleInfo: Record<string, { vehicleReg: string; vehicleType: 'van' | 'truck' | 'car' }> = {
-  'user-4': { vehicleReg: 'AB12 CDE', vehicleType: 'van' }, // James Wilson
-  'user-6': { vehicleReg: 'XY34 FGH', vehicleType: 'truck' }, // Sarah Chen
+const driverVehicleInfo: Record<string, { vehicleReg: string; vehicleType: 'van' | 'truck' | 'car'; vehicleFuelType: 'petrol' | 'diesel' | 'electric' }> = {
+  'user-4': { vehicleReg: 'AB12 CDE', vehicleType: 'van', vehicleFuelType: 'diesel' }, // James Wilson
+  'user-6': { vehicleReg: 'XY34 FGH', vehicleType: 'truck', vehicleFuelType: 'diesel' }, // Sarah Chen
+  'user-7': { vehicleReg: 'CD56 IJK', vehicleType: 'truck', vehicleFuelType: 'diesel' }, // Mike Thompson
+  'user-8': { vehicleReg: 'EF78 LMN', vehicleType: 'truck', vehicleFuelType: 'petrol' }, // Emma Davis
+  'user-9': { vehicleReg: 'GH90 OPQ', vehicleType: 'van', vehicleFuelType: 'electric' }, // David Martinez
+  'user-10': { vehicleReg: 'IJ12 RST', vehicleType: 'van', vehicleFuelType: 'petrol' }, // Lisa Anderson
 };
 
 const Assignment = () => {
@@ -166,6 +170,18 @@ const Assignment = () => {
                   </div>
                 </div>
               </div>
+              {booking.preferredVehicleType && (
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <Car className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Client Preferred Vehicle</p>
+                    <p className="font-semibold capitalize">{booking.preferredVehicleType}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Please assign a driver with a {booking.preferredVehicleType} vehicle if available
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -194,6 +210,7 @@ const Assignment = () => {
                         <div className="text-sm">
                           <p className="font-medium">{assignedDriverVehicle.vehicleType.charAt(0).toUpperCase() + assignedDriverVehicle.vehicleType.slice(1)}</p>
                           <p className="text-muted-foreground font-mono">{assignedDriverVehicle.vehicleReg}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{assignedDriverVehicle.vehicleFuelType}</p>
                         </div>
                       </div>
                     )}
@@ -219,7 +236,7 @@ const Assignment = () => {
                             return (
                               <SelectItem key={driver.id} value={driver.id}>
                                 {driver.name}
-                                {vehicleInfo && ` (${vehicleInfo.vehicleReg})`}
+                                {vehicleInfo && ` (${vehicleInfo.vehicleReg} - ${vehicleInfo.vehicleType} ${vehicleInfo.vehicleFuelType})`}
                               </SelectItem>
                             );
                           })
@@ -234,19 +251,35 @@ const Assignment = () => {
                   </div>
                   
                   {selectedDriver && selectedDriverVehicle && (
-                    <div className="p-3 rounded-lg bg-muted/50 border border-muted space-y-2">
-                      <p className="text-sm font-medium">Driver Information</p>
-                      <div className="flex items-center gap-2">
-                        <Truck className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{selectedDriver.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2 pt-2 border-t border-muted-foreground/20">
-                        <Car className="h-4 w-4 text-muted-foreground" />
-                        <div className="text-sm">
-                          <p className="font-medium">{selectedDriverVehicle.vehicleType.charAt(0).toUpperCase() + selectedDriverVehicle.vehicleType.slice(1)}</p>
-                          <p className="text-muted-foreground font-mono">{selectedDriverVehicle.vehicleReg}</p>
+                    <div className="space-y-3">
+                      <div className="p-3 rounded-lg bg-muted/50 border border-muted space-y-2">
+                        <p className="text-sm font-medium">Driver Information</p>
+                        <div className="flex items-center gap-2">
+                          <Truck className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{selectedDriver.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 pt-2 border-t border-muted-foreground/20">
+                          <Car className="h-4 w-4 text-muted-foreground" />
+                          <div className="text-sm">
+                            <p className="font-medium">{selectedDriverVehicle.vehicleType.charAt(0).toUpperCase() + selectedDriverVehicle.vehicleType.slice(1)}</p>
+                            <p className="text-muted-foreground font-mono">{selectedDriverVehicle.vehicleReg}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{selectedDriverVehicle.vehicleFuelType}</p>
+                          </div>
                         </div>
                       </div>
+                      
+                      {/* Vehicle Mismatch Warning */}
+                      {booking.preferredVehicleType && 
+                       booking.preferredVehicleType !== selectedDriverVehicle.vehicleFuelType && (
+                        <Alert className="bg-warning/10 border-warning/20">
+                          <AlertTriangle className="h-4 w-4 text-warning" />
+                          <AlertDescription className="text-sm">
+                            <strong>Vehicle Type Mismatch:</strong> Client preferred {booking.preferredVehicleType} vehicle, 
+                            but selected driver has {selectedDriverVehicle.vehicleFuelType} vehicle. 
+                            Consider assigning a driver with a {booking.preferredVehicleType} vehicle if available.
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </div>
                   )}
 

@@ -183,6 +183,12 @@ const BookingQueue = () => {
                               <Package className="h-4 w-4" />
                               <span>{booking.assets.reduce((sum, a) => sum + a.quantity, 0)} assets</span>
                             </div>
+                            {booking.preferredVehicleType && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Truck className="h-4 w-4" />
+                                <span>Preferred: {booking.preferredVehicleType.charAt(0).toUpperCase() + booking.preferredVehicleType.slice(1)}</span>
+                              </div>
+                            )}
                             {booking.driverName && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Truck className="h-4 w-4" />

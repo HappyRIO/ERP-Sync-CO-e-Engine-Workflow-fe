@@ -277,10 +277,34 @@ const Booking = () => {
       siteDetails.country
     ].filter(Boolean).join(', ');
     
+    // Determine client ID and name
+    let bookingClientId: string | undefined;
+    let bookingClientName: string | undefined;
+    
+    if (isReseller || isAdmin) {
+      // For resellers and admin: use selected client
+      if (selectedClientId) {
+        bookingClientId = selectedClientId;
+        const selectedClient = clients.find(c => c.tenantId === selectedClientId);
+        bookingClientName = selectedClient?.name || undefined;
+      }
+      // If no client selected, bookingClientName will be undefined (will be handled by service)
+    } else if (isClient && user) {
+      // For clients: use their own tenant info
+      bookingClientId = user.tenantId;
+      bookingClientName = user.tenantName || user.name || 'Client'; // Fallback to user name if tenantName not available
+    }
+    
+    // Ensure we have a client name - if still undefined, service will handle it
+    if (!bookingClientName && user) {
+      bookingClientName = user.tenantName || user.name || 'Client';
+    }
+    
     createBooking.mutate(
       {
         siteId: selectedSiteId !== 'new' ? selectedSiteId : undefined,
-        clientId: (isReseller || isAdmin) ? selectedClientId : undefined, // For resellers and admin: specify which client
+        clientId: bookingClientId,
+        clientName: bookingClientName, // Pass client name explicitly
         siteName: siteDetails.siteName,
         address: fullAddress,
         postcode: siteDetails.postcode,
@@ -289,6 +313,7 @@ const Booking = () => {
         scheduledDate: scheduledDate.toISOString(),
         assets: selectedAssets,
         charityPercent,
+        preferredVehicleType: selectedVehicleType, // Save client's vehicle preference
         coordinates: siteLocation || undefined,
       },
       {
@@ -296,8 +321,12 @@ const Booking = () => {
           toast.success("Booking submitted successfully!", {
             description: `Booking ${booking.erpJobNumber} has been created.`,
           });
-          // Redirect to bookings page instead of jobs page since booking and job are separate
-          navigate(`/bookings`);
+          // Redirect to Booking Queue page for admin, or bookings page for others
+          if (user?.role === 'admin') {
+            navigate(`/admin/bookings`);
+          } else {
+            navigate(`/bookings`);
+          }
         },
         onError: (error) => {
           toast.error("Failed to create booking", {

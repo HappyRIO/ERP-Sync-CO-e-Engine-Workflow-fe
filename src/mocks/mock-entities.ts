@@ -50,6 +50,7 @@ export interface Booking {
   charityPercent: number;
   estimatedCO2e: number;
   estimatedBuyback: number;
+  preferredVehicleType?: 'petrol' | 'diesel' | 'electric'; // Vehicle type selected by client
   jobId?: string; // Linked job if created
   driverId?: string; // Assigned driver
   driverName?: string;
@@ -243,6 +244,54 @@ export const mockExtendedUsers: ExtendedUser[] = [
     lastLogin: '2024-12-17T06:00:00Z',
     invitedBy: 'user-1',
   },
+  {
+    id: 'user-7',
+    email: 'driver3@reuse.com',
+    name: 'Mike Thompson',
+    role: 'driver',
+    tenantId: 'tenant-1',
+    tenantName: 'Reuse ITAD Platform',
+    createdAt: '2024-06-01',
+    isActive: true,
+    lastLogin: '2024-12-17T05:30:00Z',
+    invitedBy: 'user-1',
+  },
+  {
+    id: 'user-8',
+    email: 'driver4@reuse.com',
+    name: 'Emma Davis',
+    role: 'driver',
+    tenantId: 'tenant-1',
+    tenantName: 'Reuse ITAD Platform',
+    createdAt: '2024-07-01',
+    isActive: true,
+    lastLogin: '2024-12-16T18:00:00Z',
+    invitedBy: 'user-1',
+  },
+  {
+    id: 'user-9',
+    email: 'driver5@reuse.com',
+    name: 'David Martinez',
+    role: 'driver',
+    tenantId: 'tenant-1',
+    tenantName: 'Reuse ITAD Platform',
+    createdAt: '2024-08-01',
+    isActive: true,
+    lastLogin: '2024-12-17T08:00:00Z',
+    invitedBy: 'user-1',
+  },
+  {
+    id: 'user-10',
+    email: 'driver6@reuse.com',
+    name: 'Lisa Anderson',
+    role: 'driver',
+    tenantId: 'tenant-1',
+    tenantName: 'Reuse ITAD Platform',
+    createdAt: '2024-09-01',
+    isActive: true,
+    lastLogin: '2024-12-17T07:45:00Z',
+    invitedBy: 'user-1',
+  },
 ];
 
 // Mock Clients (for reseller and admin management)
@@ -331,6 +380,7 @@ export const mockBookings: Booking[] = [
     charityPercent: 10,
     estimatedCO2e: 18000,
     estimatedBuyback: 3500,
+    preferredVehicleType: 'diesel',
     jobId: 'job-001',
     createdAt: '2024-11-15',
     createdBy: 'user-2',
@@ -351,6 +401,7 @@ export const mockBookings: Booking[] = [
     charityPercent: 5,
     estimatedCO2e: 8500,
     estimatedBuyback: 900,
+    preferredVehicleType: 'electric',
     createdAt: '2024-12-10',
     createdBy: 'user-2',
   },
@@ -377,6 +428,7 @@ export const mockBookings: Booking[] = [
     charityPercent: 0,
     estimatedCO2e: 12000,
     estimatedBuyback: 2500,
+    preferredVehicleType: 'petrol',
     createdAt: '2024-12-05',
     createdBy: 'user-3',
     notes: 'Created on behalf of client',
@@ -399,6 +451,7 @@ export const mockBookings: Booking[] = [
     charityPercent: 15,
     estimatedCO2e: 15000,
     estimatedBuyback: 1200,
+    preferredVehicleType: 'electric',
     createdAt: '2024-12-12',
     createdBy: 'user-3',
   },
@@ -424,6 +477,7 @@ export const mockBookings: Booking[] = [
     charityPercent: 5,
     estimatedCO2e: 12000,
     estimatedBuyback: 2500,
+    preferredVehicleType: 'diesel',
     createdAt: '2024-12-01',
     createdBy: 'user-2',
   },
@@ -450,6 +504,7 @@ export const mockBookings: Booking[] = [
     charityPercent: 10,
     estimatedCO2e: 10440,
     estimatedBuyback: 1200,
+    preferredVehicleType: 'petrol',
     createdAt: '2024-11-25',
     createdBy: 'user-2',
   },
@@ -478,6 +533,7 @@ export const mockBookings: Booking[] = [
     charityPercent: 10,
     estimatedCO2e: 26150,
     estimatedBuyback: 5875,
+    preferredVehicleType: 'diesel',
     createdAt: '2024-11-15',
     createdBy: 'user-2',
   },
