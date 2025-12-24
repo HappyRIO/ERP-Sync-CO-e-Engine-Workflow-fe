@@ -1,10 +1,12 @@
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, Clock, Calendar, MapPin, Package, Truck, Shield, Award, FileCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, Calendar, MapPin, Package, Truck, Shield, Award, FileCheck, User, Phone, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useBooking } from "@/hooks/useBookings";
+import { useJob } from "@/hooks/useJobs";
+import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import { getStatusLabelExtended, getStatusColor } from "@/types/booking-lifecycle";
@@ -22,7 +24,9 @@ const timelineSteps: { status: BookingLifecycleStatus | 'cancelled'; label: stri
 
 const BookingTimeline = () => {
   const { id } = useParams();
+  const { user } = useAuth();
   const { data: booking, isLoading, error } = useBooking(id || null);
+  const { data: relatedJob } = useJob(booking?.jobId || null);
 
   if (isLoading) {
     return (
@@ -174,20 +178,96 @@ const BookingTimeline = () => {
         </CardContent>
       </Card>
 
-      {/* Additional Info */}
-      {booking.driverName && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <Truck className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Assigned Driver</p>
-                <p className="font-medium">{booking.driverName}</p>
+      {/* Booking Information */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Round Trip Mileage */}
+        {booking.roundTripDistanceKm && booking.roundTripDistanceKm > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Round Trip Mileage</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <Truck className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-2xl font-bold">
+                    {booking.roundTripDistanceMiles?.toFixed(1) || (booking.roundTripDistanceKm * 0.621371).toFixed(1)} miles
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    ({booking.roundTripDistanceKm.toFixed(1)} km)
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    From collection site to warehouse and return
+                  </p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Driver Information */}
+        {relatedJob?.driver && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Driver Assignment</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-muted-foreground">Driver Details</p>
+                  {(user?.role === 'admin' || user?.role === 'driver') && relatedJob.id && (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
+                        <Smartphone className="h-4 w-4 mr-2" />
+                        Driver View
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span>{relatedJob.driver.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-mono">{relatedJob.driver.vehicleReg}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span>{relatedJob.driver.phone}</span>
+                  </div>
+                  {relatedJob.driver.vehicleType && (
+                    <Badge variant="outline" className="text-xs">
+                      {relatedJob.driver.vehicleType}
+                      {relatedJob.driver.vehicleFuelType && ` • ${relatedJob.driver.vehicleFuelType}`}
+                    </Badge>
+                  )}
+                  {relatedJob.driver.eta && (
+                    <Badge variant="secondary" className="bg-warning/20 text-warning-foreground">
+                      ETA: {relatedJob.driver.eta}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {booking.driverName && !relatedJob?.driver && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <Truck className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Assigned Driver</p>
+                  <p className="font-medium">{booking.driverName}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 };

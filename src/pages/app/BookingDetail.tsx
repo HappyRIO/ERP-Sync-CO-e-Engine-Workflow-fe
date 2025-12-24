@@ -1,15 +1,28 @@
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Calendar, MapPin, Package, Truck, Loader2, CheckCircle2, Shield, Award, FileCheck } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Package, Truck, Loader2, CheckCircle2, Shield, Award, FileCheck, User, Phone, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useBooking } from "@/hooks/useBookings";
+import { useJob } from "@/hooks/useJobs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getStatusLabelExtended, getStatusColor } from "@/types/booking-lifecycle";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
+import type { Driver } from "@/types/jobs";
+
+// Driver vehicle information mapping (same as Assignment page)
+const driverVehicleInfo: Record<string, { vehicleReg: string; vehicleType: 'van' | 'truck' | 'car'; vehicleFuelType: 'petrol' | 'diesel' | 'electric' }> = {
+  'user-4': { vehicleReg: 'AB12 CDE', vehicleType: 'van', vehicleFuelType: 'diesel' }, // James Wilson
+  'user-6': { vehicleReg: 'XY34 FGH', vehicleType: 'truck', vehicleFuelType: 'diesel' }, // Sarah Chen
+  'user-7': { vehicleReg: 'CD56 IJK', vehicleType: 'truck', vehicleFuelType: 'diesel' }, // Mike Thompson
+  'user-8': { vehicleReg: 'EF78 LMN', vehicleType: 'truck', vehicleFuelType: 'petrol' }, // Emma Davis
+  'user-9': { vehicleReg: 'GH90 OPQ', vehicleType: 'van', vehicleFuelType: 'electric' }, // David Martinez
+  'user-10': { vehicleReg: 'IJ12 RST', vehicleType: 'van', vehicleFuelType: 'petrol' }, // Lisa Anderson
+};
 
 const timelineSteps: { 
   status: BookingLifecycleStatus; 
@@ -28,6 +41,62 @@ const BookingDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const { data: booking, isLoading, error } = useBooking(id || null);
+  const { data: relatedJob } = useJob(booking?.jobId || null);
+  const [driverDetails, setDriverDetails] = useState<Driver | null>(null);
+
+  // Fetch driver details if booking has driverId but no relatedJob driver
+  useEffect(() => {
+    const fetchDriverDetails = async () => {
+      // Only fetch if we have driverId but no relatedJob driver
+      if (booking?.driverId && !relatedJob?.driver) {
+        try {
+          const { mockExtendedUsers } = await import('@/mocks/mock-entities');
+          const user = mockExtendedUsers?.find(u => u.id === booking.driverId);
+          const vehicleInfo = driverVehicleInfo[booking.driverId];
+          
+          if (user && vehicleInfo) {
+            setDriverDetails({
+              id: booking.driverId,
+              name: user.name || booking.driverName || 'Driver Name',
+              vehicleReg: vehicleInfo.vehicleReg,
+              vehicleType: vehicleInfo.vehicleType,
+              vehicleFuelType: vehicleInfo.vehicleFuelType,
+              phone: user.email || '+44 7700 900000',
+            });
+          } else if (booking.driverName) {
+            // Fallback: create minimal driver info from booking data
+            setDriverDetails({
+              id: booking.driverId,
+              name: booking.driverName,
+              vehicleReg: vehicleInfo?.vehicleReg || 'XX00 XXX',
+              vehicleType: vehicleInfo?.vehicleType || 'van',
+              vehicleFuelType: vehicleInfo?.vehicleFuelType || 'diesel',
+              phone: '+44 7700 900000',
+            });
+          }
+        } catch (error) {
+          console.error('Failed to fetch driver details:', error);
+          // Fallback to minimal info
+          if (booking.driverName) {
+            setDriverDetails({
+              id: booking.driverId,
+              name: booking.driverName,
+              vehicleReg: 'XX00 XXX',
+              vehicleType: 'van',
+              vehicleFuelType: 'diesel',
+              phone: '+44 7700 900000',
+            });
+          }
+        }
+      } else {
+        setDriverDetails(null);
+      }
+    };
+
+    if (booking) {
+      fetchDriverDetails();
+    }
+  }, [booking, relatedJob]);
 
   if (isLoading) {
     return (
@@ -53,6 +122,10 @@ const BookingDetail = () => {
   const statusColor = getStatusColor(booking.status);
   const statusLabel = getStatusLabelExtended(booking.status);
   const totalAssets = booking.assets.reduce((sum, a) => sum + a.quantity, 0);
+  
+  // Use saved round trip distance from booking (calculated at creation)
+  const roundTripDistanceKm = booking.roundTripDistanceKm || 0;
+  const roundTripDistanceMiles = booking.roundTripDistanceMiles || 0;
   
   const isCancelled = booking.status === 'cancelled';
   const currentIndex = !isCancelled 
@@ -189,13 +262,66 @@ const BookingDetail = () => {
                   </p>
                 </div>
               </div>
-              {booking.driverName && (
+              {roundTripDistanceKm > 0 && (
                 <div className="flex items-center gap-3">
                   <Truck className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Assigned Driver</p>
-                    <p className="font-medium">{booking.driverName}</p>
+                    <p className="text-sm text-muted-foreground">Round Trip Mileage</p>
+                    <p className="font-medium">
+                      {roundTripDistanceMiles.toFixed(1)} miles ({roundTripDistanceKm.toFixed(1)} km)
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      From collection site to warehouse and return
+                    </p>
                   </div>
+                </div>
+              )}
+
+              {(relatedJob?.driver || driverDetails) && (
+                <div className="pt-4 border-t">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-muted-foreground">Driver Assignment</p>
+                    {/* Only show Driver View button to admin and driver roles */}
+                    {(user?.role === 'admin' || user?.role === 'driver') && relatedJob?.id && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
+                          <Smartphone className="h-4 w-4 mr-2" />
+                          Driver View
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                  {(() => {
+                    const driver = relatedJob?.driver || driverDetails;
+                    if (!driver) return null;
+                    return (
+                      <div className="flex flex-wrap gap-4">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span>{driver.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Truck className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-mono">{driver.vehicleReg}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <span>{driver.phone}</span>
+                        </div>
+                        {driver.vehicleType && (
+                          <Badge variant="outline" className="text-xs">
+                            {driver.vehicleType}
+                            {driver.vehicleFuelType && ` • ${driver.vehicleFuelType}`}
+                          </Badge>
+                        )}
+                        {driver.eta && (
+                          <Badge variant="secondary" className="bg-warning/20 text-warning-foreground">
+                            ETA: {driver.eta}
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </CardContent>
@@ -229,6 +355,61 @@ const BookingDetail = () => {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {/* Assigned Driver Card */}
+          {(relatedJob?.driver || driverDetails) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Driver Assignment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-muted-foreground">Driver Details</p>
+                    {(user?.role === 'admin' || user?.role === 'driver') && relatedJob?.id && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
+                          <Smartphone className="h-4 w-4 mr-2" />
+                          Driver View
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                  {(() => {
+                    const driver = relatedJob?.driver || driverDetails;
+                    if (!driver) return null;
+                    return (
+                      <div className="flex flex-wrap gap-4">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span>{driver.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Truck className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-mono">{driver.vehicleReg}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <span>{driver.phone}</span>
+                        </div>
+                        {driver.vehicleType && (
+                          <Badge variant="outline" className="text-xs">
+                            {driver.vehicleType}
+                            {driver.vehicleFuelType && ` • ${driver.vehicleFuelType}`}
+                          </Badge>
+                        )}
+                        {driver.eta && (
+                          <Badge variant="secondary" className="bg-warning/20 text-warning-foreground">
+                            ETA: {driver.eta}
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Summary</CardTitle>

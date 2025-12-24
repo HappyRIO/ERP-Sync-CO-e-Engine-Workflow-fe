@@ -289,14 +289,15 @@ const Booking = () => {
         bookingClientName = selectedClient?.name || undefined;
       }
       // If no client selected, bookingClientName will be undefined (will be handled by service)
+      // DO NOT fall back to admin/reseller's tenant name - they must select a client
     } else if (isClient && user) {
       // For clients: use their own tenant info
       bookingClientId = user.tenantId;
       bookingClientName = user.tenantName || user.name || 'Client'; // Fallback to user name if tenantName not available
     }
     
-    // Ensure we have a client name - if still undefined, service will handle it
-    if (!bookingClientName && user) {
+    // Only set fallback for clients, not for admin/reseller (they must select a client)
+    if (!bookingClientName && isClient && user) {
       bookingClientName = user.tenantName || user.name || 'Client';
     }
     
@@ -408,7 +409,7 @@ const Booking = () => {
                               <SelectItem value="" disabled>No clients available</SelectItem>
                             ) : (
                               clients.map((client) => (
-                                <SelectItem key={client.id} value={client.id}>
+                                <SelectItem key={client.id} value={client.tenantId}>
                                   <div className="flex items-center gap-2">
                                     <Building2 className="h-4 w-4" />
                                     <span>{client.name}</span>

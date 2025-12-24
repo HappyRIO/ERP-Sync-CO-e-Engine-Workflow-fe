@@ -56,6 +56,19 @@ const JobDetail = () => {
 
   const totalAssets = job.assets.reduce((sum, a) => sum + a.quantity, 0);
   const netCO2e = job.co2eSaved - job.travelEmissions;
+  
+  // Calculate round trip distance from travel emissions
+  // Using average emissions per km (0.24 kg/km for van, which is conservative)
+  // If we know the vehicle type, we can use more accurate emissions
+  const vehicleEmissionsPerKm = job.driver?.vehicleFuelType === 'electric' 
+    ? 0 
+    : job.driver?.vehicleFuelType === 'diesel' 
+    ? 0.27 
+    : 0.24; // Default to petrol/van
+  const roundTripDistanceKm = vehicleEmissionsPerKm > 0 
+    ? job.travelEmissions / vehicleEmissionsPerKm 
+    : 0;
+  const roundTripDistanceMiles = roundTripDistanceKm * 0.621371;
 
   return (
     <div className="space-y-6">
@@ -128,6 +141,23 @@ const JobDetail = () => {
                 </div>
               </div>
 
+              {roundTripDistanceKm > 0 && (
+                <div className="pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Truck className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm font-medium text-muted-foreground">Round Trip Mileage</p>
+                    </div>
+                    <p className="text-lg font-bold">
+                      {roundTripDistanceMiles.toFixed(1)} miles ({roundTripDistanceKm.toFixed(1)} km)
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    From collection site to warehouse and return
+                  </p>
+                </div>
+              )}
+
               {job.driver && (
                 <div className="pt-4 border-t">
                   <div className="flex items-center justify-between mb-3">
@@ -155,6 +185,12 @@ const JobDetail = () => {
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       <span>{job.driver.phone}</span>
                     </div>
+                    {job.driver.vehicleType && (
+                      <Badge variant="outline" className="text-xs">
+                        {job.driver.vehicleType}
+                        {job.driver.vehicleFuelType && ` • ${job.driver.vehicleFuelType}`}
+                      </Badge>
+                    )}
                     {job.driver.eta && (
                       <Badge variant="secondary" className="bg-warning/20 text-warning-foreground">
                         ETA: {job.driver.eta}

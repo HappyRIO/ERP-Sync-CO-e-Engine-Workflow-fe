@@ -11,6 +11,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
+import { calculateRoundTripDistance, geocodePostcode, kmToMiles } from "@/lib/calculations";
 
 // Driver vehicle information mapping (in a real app, this would come from the backend)
 const driverVehicleInfo: Record<string, { vehicleReg: string; vehicleType: 'van' | 'truck' | 'car'; vehicleFuelType: 'petrol' | 'diesel' | 'electric' }> = {
@@ -30,6 +31,8 @@ const Assignment = () => {
   const { data: booking, isLoading: isLoadingBooking } = useBooking(bookingId);
   const { data: drivers = [] } = useUsers({ role: "driver", isActive: true });
   const [selectedDriverId, setSelectedDriverId] = useState<string>("");
+  const [roundTripDistanceKm, setRoundTripDistanceKm] = useState<number | null>(null);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const assignMutation = useAssignDriver();
   
   const selectedDriver = drivers.find(d => d.id === selectedDriverId);
@@ -40,6 +43,46 @@ const Assignment = () => {
   useEffect(() => {
     if (booking?.driverId) {
       setSelectedDriverId(booking.driverId);
+    }
+  }, [booking]);
+
+  // Calculate round trip distance from booking site address
+  useEffect(() => {
+    const calculateDistance = async () => {
+      if (!booking?.siteAddress) {
+        setRoundTripDistanceKm(80); // Default fallback
+        return;
+      }
+      
+      setIsCalculatingDistance(true);
+      try {
+        // Extract postcode from address (UK postcode format: e.g., "SW1A 1AA", "M1 1AA", "B33 8TH")
+        // Pattern matches: 1-2 letters, 1-2 digits, optional letter, space, digit, 2 letters
+        const postcodeMatch = booking.siteAddress.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/i);
+        if (postcodeMatch) {
+          const postcode = postcodeMatch[0].replace(/\s+/g, ' ').trim().toUpperCase();
+          const coordinates = await geocodePostcode(postcode);
+          if (coordinates) {
+            const distanceKm = calculateRoundTripDistance(coordinates.lat, coordinates.lng);
+            setRoundTripDistanceKm(distanceKm);
+          } else {
+            // Fallback: use default distance estimate
+            setRoundTripDistanceKm(80); // Default 80km round trip
+          }
+        } else {
+          // No postcode found in address, use default
+          setRoundTripDistanceKm(80);
+        }
+      } catch (error) {
+        console.error('Failed to calculate distance:', error);
+        setRoundTripDistanceKm(80); // Fallback to default
+      } finally {
+        setIsCalculatingDistance(false);
+      }
+    };
+
+    if (booking) {
+      calculateDistance();
     }
   }, [booking]);
 
@@ -170,6 +213,24 @@ const Assignment = () => {
                   </div>
                 </div>
               </div>
+              {roundTripDistanceKm !== null && (
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <Truck className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Round Trip Mileage</p>
+                    {isCalculatingDistance ? (
+                      <p className="text-sm text-muted-foreground">Calculating...</p>
+                    ) : (
+                      <p className="font-semibold">
+                        {kmToMiles(roundTripDistanceKm).toFixed(1)} miles ({roundTripDistanceKm.toFixed(1)} km)
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      From collection site to warehouse and return
+                    </p>
+                  </div>
+                </div>
+              )}
               {booking.preferredVehicleType && (
                 <div className="flex items-center gap-2 pt-2 border-t">
                   <Car className="h-4 w-4 text-muted-foreground" />

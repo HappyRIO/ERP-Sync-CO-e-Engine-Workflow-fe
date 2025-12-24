@@ -51,6 +51,8 @@ export interface Booking {
   estimatedCO2e: number;
   estimatedBuyback: number;
   preferredVehicleType?: 'petrol' | 'diesel' | 'electric'; // Vehicle type selected by client
+  roundTripDistanceKm?: number; // Round trip distance in kilometers (calculated at booking creation)
+  roundTripDistanceMiles?: number; // Round trip distance in miles (calculated at booking creation)
   jobId?: string; // Linked job if created
   driverId?: string; // Assigned driver
   driverName?: string;
@@ -381,6 +383,8 @@ export const mockBookings: Booking[] = [
     estimatedCO2e: 18000,
     estimatedBuyback: 3500,
     preferredVehicleType: 'diesel',
+    roundTripDistanceKm: 45.2,
+    roundTripDistanceMiles: 28.1,
     jobId: 'job-001',
     createdAt: '2024-11-15',
     createdBy: 'user-2',
@@ -402,6 +406,8 @@ export const mockBookings: Booking[] = [
     estimatedCO2e: 8500,
     estimatedBuyback: 900,
     preferredVehicleType: 'electric',
+    roundTripDistanceKm: 380.4,
+    roundTripDistanceMiles: 236.4,
     createdAt: '2024-12-10',
     createdBy: 'user-2',
   },
@@ -429,6 +435,8 @@ export const mockBookings: Booking[] = [
     estimatedCO2e: 12000,
     estimatedBuyback: 2500,
     preferredVehicleType: 'petrol',
+    roundTripDistanceKm: 360.8,
+    roundTripDistanceMiles: 224.1,
     createdAt: '2024-12-05',
     createdBy: 'user-3',
     notes: 'Created on behalf of client',
@@ -452,6 +460,8 @@ export const mockBookings: Booking[] = [
     estimatedCO2e: 15000,
     estimatedBuyback: 1200,
     preferredVehicleType: 'electric',
+    roundTripDistanceKm: 380.4,
+    roundTripDistanceMiles: 236.4,
     createdAt: '2024-12-12',
     createdBy: 'user-3',
   },
@@ -478,6 +488,8 @@ export const mockBookings: Booking[] = [
     estimatedCO2e: 12000,
     estimatedBuyback: 2500,
     preferredVehicleType: 'diesel',
+    roundTripDistanceKm: 320.6,
+    roundTripDistanceMiles: 199.1,
     createdAt: '2024-12-01',
     createdBy: 'user-2',
   },
@@ -505,6 +517,8 @@ export const mockBookings: Booking[] = [
     estimatedCO2e: 10440,
     estimatedBuyback: 1200,
     preferredVehicleType: 'petrol',
+    roundTripDistanceKm: 360.8,
+    roundTripDistanceMiles: 224.1,
     createdAt: '2024-11-25',
     createdBy: 'user-2',
   },
@@ -534,6 +548,8 @@ export const mockBookings: Booking[] = [
     estimatedCO2e: 26150,
     estimatedBuyback: 5875,
     preferredVehicleType: 'diesel',
+    roundTripDistanceKm: 45.2,
+    roundTripDistanceMiles: 28.1,
     createdAt: '2024-11-15',
     createdBy: 'user-2',
   },

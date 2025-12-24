@@ -5,7 +5,7 @@ import { mockJobs } from '@/mocks/mock-data';
 import { mockBookings } from '@/mocks/mock-entities';
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
 import { assetCategories } from '@/mocks/mock-data';
-import { calculateReuseCO2e, calculateBuybackEstimate } from '@/lib/calculations';
+import { calculateReuseCO2e, calculateBuybackEstimate, calculateRoundTripDistance, geocodePostcode, kmToMiles } from '@/lib/calculations';
 import { USE_MOCK_API } from '@/lib/config';
 import type { User } from '@/types/auth';
 
@@ -178,6 +178,67 @@ class BookingService {
       };
     });
 
+    // Calculate round trip distance
+    let roundTripDistanceKm = 0;
+    let roundTripDistanceMiles = 0;
+    
+    if (request.coordinates) {
+      // Use provided coordinates
+      roundTripDistanceKm = calculateRoundTripDistance(
+        request.coordinates.lat,
+        request.coordinates.lng
+      );
+      roundTripDistanceMiles = kmToMiles(roundTripDistanceKm);
+    } else if (request.postcode) {
+      // Try to geocode postcode and calculate distance
+      try {
+        const coordinates = await geocodePostcode(request.postcode);
+        if (coordinates) {
+          roundTripDistanceKm = calculateRoundTripDistance(
+            coordinates.lat,
+            coordinates.lng
+          );
+          roundTripDistanceMiles = kmToMiles(roundTripDistanceKm);
+        } else {
+          // Fallback to default
+          roundTripDistanceKm = 80;
+          roundTripDistanceMiles = kmToMiles(80);
+        }
+      } catch (error) {
+        console.error('Failed to geocode postcode:', error);
+        // Fallback to default
+        roundTripDistanceKm = 80;
+        roundTripDistanceMiles = kmToMiles(80);
+      }
+    } else {
+      // Extract postcode from address if available
+      const postcodeMatch = request.address.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/i);
+      if (postcodeMatch) {
+        try {
+          const postcode = postcodeMatch[0].replace(/\s+/g, ' ').trim().toUpperCase();
+          const coordinates = await geocodePostcode(postcode);
+          if (coordinates) {
+            roundTripDistanceKm = calculateRoundTripDistance(
+              coordinates.lat,
+              coordinates.lng
+            );
+            roundTripDistanceMiles = kmToMiles(roundTripDistanceKm);
+          } else {
+            roundTripDistanceKm = 80;
+            roundTripDistanceMiles = kmToMiles(80);
+          }
+        } catch (error) {
+          console.error('Failed to geocode postcode from address:', error);
+          roundTripDistanceKm = 80;
+          roundTripDistanceMiles = kmToMiles(80);
+        }
+      } else {
+        // Default fallback
+        roundTripDistanceKm = 80;
+        roundTripDistanceMiles = kmToMiles(80);
+      }
+    }
+
     // Create booking entity
     const bookingId = `booking-${Date.now()}`;
     const bookingNumber = `BK-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`;
@@ -196,6 +257,8 @@ class BookingService {
       estimatedCO2e,
       estimatedBuyback,
       preferredVehicleType: request.preferredVehicleType, // Save client's vehicle preference
+      roundTripDistanceKm, // Save calculated round trip distance
+      roundTripDistanceMiles, // Save calculated round trip distance in miles
       createdAt: new Date().toISOString(),
       createdBy: clientId, // In real app would be actual user ID
     };
