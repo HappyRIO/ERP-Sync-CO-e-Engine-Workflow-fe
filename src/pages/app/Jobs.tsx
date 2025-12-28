@@ -19,7 +19,7 @@ const statusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
   { value: "collected", label: "Collected" },
   { value: "warehouse", label: "Warehouse" },
   { value: "graded", label: "Graded" },
-  { value: "finalised", label: "Finalised" },
+  { value: "completed", label: "Completed" },
 ];
 
 const Jobs = () => {

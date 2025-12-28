@@ -134,6 +134,8 @@ class BookingService {
     // Use provided clientName if available, otherwise look it up
     let clientName = request.clientName?.trim(); // Trim whitespace
     let clientId = request.clientId;
+    let resellerId: string | undefined;
+    let resellerName: string | undefined;
     
     // Priority 1: If clientId is provided, always look up client name from mockClients (most reliable)
     if (clientId) {
@@ -141,6 +143,11 @@ class BookingService {
       if (client) {
         // Use the client name from mockClients (authoritative source)
         clientName = client.name;
+        // If client has a reseller, set reseller info
+        if (client.resellerId && client.resellerName) {
+          resellerId = client.resellerId;
+          resellerName = client.resellerName;
+        }
       } else if (!clientName || clientName.length === 0) {
         // If client not found and no clientName provided, use default
         clientName = 'Client Name';
@@ -153,6 +160,11 @@ class BookingService {
         clientId = client.tenantId;
         // Use the client name from mockClients for consistency
         clientName = client.name;
+        // If client has a reseller, set reseller info
+        if (client.resellerId && client.resellerName) {
+          resellerId = client.resellerId;
+          resellerName = client.resellerName;
+        }
       } else {
         // Client not found, use default clientId
         clientId = 'tenant-2';
@@ -248,6 +260,8 @@ class BookingService {
       bookingNumber,
       clientId,
       clientName,
+      resellerId, // Set resellerId if client belongs to a reseller
+      resellerName, // Set resellerName if client belongs to a reseller
       siteName: request.siteName,
       siteAddress: request.address,
       scheduledDate: request.scheduledDate,
@@ -585,11 +599,11 @@ class BookingService {
     booking.status = 'completed';
     booking.completedAt = new Date().toISOString();
 
-    // Update linked job status to 'finalised'
+    // Update linked job status to 'completed'
     if (booking.jobId) {
       const job = mockJobs.find(j => j.id === booking.jobId);
       if (job && job.status === 'graded') {
-        job.status = 'finalised';
+        job.status = 'completed';
         job.completedDate = new Date().toISOString();
       }
     }
@@ -744,7 +758,7 @@ class BookingService {
         } else if (status === 'graded' && job.status === 'sanitised') {
           job.status = 'graded';
         } else if (status === 'completed' && job.status === 'graded') {
-          job.status = 'finalised';
+          job.status = 'completed';
           job.completedDate = new Date().toISOString();
         }
       }

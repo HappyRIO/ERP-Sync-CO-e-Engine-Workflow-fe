@@ -31,7 +31,7 @@ const workflowSteps: {
   { status: "warehouse", label: "Warehouse", icon: Package, description: "Assets at processing facility" },
   { status: "sanitised", label: "Sanitised", icon: Shield, description: "Data sanitisation completed" },
   { status: "graded", label: "Graded", icon: Award, description: "Assets graded for resale" },
-  { status: "finalised", label: "Finalised", icon: FileCheck, description: "Job completed" },
+  { status: "completed", label: "Completed", icon: FileCheck, description: "Job completed" },
 ];
 
 export function WorkflowTimeline({ currentStatus }: WorkflowTimelineProps) {

@@ -12,7 +12,7 @@ export const statusConfig: Record<WorkflowStatus, { label: string; color: string
   'warehouse': { label: 'At Warehouse', color: 'text-secondary-foreground', bgColor: 'bg-secondary' },
   'sanitised': { label: 'Sanitised', color: 'text-primary', bgColor: 'bg-primary/15' },
   'graded': { label: 'Graded', color: 'text-success', bgColor: 'bg-success/15' },
-  'finalised': { label: 'Finalised', color: 'text-success-foreground', bgColor: 'bg-success/20' },
+  'completed': { label: 'Completed', color: 'text-success-foreground', bgColor: 'bg-success/20' },
 };
 
 /**
@@ -28,7 +28,7 @@ export function getWorkflowStatusColor(status: WorkflowStatus): string {
     'warehouse': 'bg-secondary text-secondary-foreground',
     'sanitised': 'bg-accent/10 text-accent',
     'graded': 'bg-success/10 text-success',
-    'finalised': 'bg-success/20 text-success',
+    'completed': 'bg-success/20 text-success',
   };
   return colors[status];
 }

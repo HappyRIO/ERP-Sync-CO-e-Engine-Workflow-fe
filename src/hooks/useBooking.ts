@@ -8,6 +8,7 @@ export function useCreateBooking() {
   return useMutation({
     mutationFn: (request: BookingRequest) => bookingService.createBooking(request),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
     },

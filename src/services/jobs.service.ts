@@ -49,21 +49,28 @@ class JobsService {
     if (user) {
       if (user.role === 'admin') {
         // Admin sees all jobs
-      } else if (user.role === 'client' || user.role === 'reseller') {
+      } else if (user.role === 'client') {
+        // Client sees only their own jobs
         jobs = jobs.filter(job => job.clientName === user.tenantName);
+      } else if (user.role === 'reseller') {
+        // Reseller sees jobs for all their clients
+        const { mockClients } = await import('@/mocks/mock-entities');
+        const resellerClients = mockClients.filter(c => c.resellerId === user.tenantId);
+        const clientNames = resellerClients.map(c => c.name);
+        jobs = jobs.filter(job => clientNames.includes(job.clientName));
       } else if (user.role === 'driver') {
         // Drivers only see jobs assigned to them (by name match)
-        // Only exclude finalised jobs if not explicitly requested in filter
+        // Only exclude completed jobs if not explicitly requested in filter
         jobs = jobs.filter(job => {
           if (!job.driver || job.driver.name !== user.name) {
             return false;
           }
-          // If filter explicitly requests finalised jobs, don't exclude them
-          if (filter?.status === 'finalised') {
+          // If filter explicitly requests completed jobs, don't exclude them
+          if (filter?.status === 'completed') {
             return true;
           }
-          // Otherwise exclude finalised jobs (for schedule view)
-          return job.status !== 'finalised';
+          // Otherwise exclude completed jobs (for schedule view)
+          return job.status !== 'completed';
         });
       }
     }
@@ -191,14 +198,14 @@ class JobsService {
     const vehicleEmissions = calculateAllVehicleEmissions(totalDistanceKm);
     
     // Separate completed and booked (not yet completed) jobs for client dashboard
-    // Completed = finalised jobs (actual figures)
-    // Booked = all non-finalised jobs (estimated figures)
-    const completedJobs = jobs.filter(j => j.status === 'finalised');
-    const bookedJobs = jobs.filter(j => j.status !== 'finalised'); // All jobs that are not yet completed
+    // Completed = completed jobs (actual figures)
+    // Booked = all non-completed jobs (estimated figures)
+    const completedJobs = jobs.filter(j => j.status === 'completed');
+    const bookedJobs = jobs.filter(j => j.status !== 'completed'); // All jobs that are not yet completed
     
     return {
       totalJobs: jobs.length,
-      activeJobs: jobs.filter(j => !['finalised'].includes(j.status)).length,
+      activeJobs: jobs.filter(j => !['completed'].includes(j.status)).length,
       totalCO2eSaved: jobs.reduce((sum, j) => sum + j.co2eSaved, 0),
       totalBuyback: jobs.reduce((sum, j) => sum + j.buybackValue, 0),
       totalAssets: jobs.reduce((sum, j) => sum + j.assets.reduce((a, asset) => a + asset.quantity, 0), 0),
@@ -277,7 +284,7 @@ class JobsService {
       collected: ['warehouse'],
       warehouse: ['sanitised'], // Auto-updated when all assets sanitised
       sanitised: ['graded'], // Auto-updated when all assets graded
-      graded: ['finalised'], // Auto-updated when booking completed
+      graded: ['completed'], // Auto-updated when booking completed
     };
     
     const currentStatus = job.status;
@@ -314,7 +321,7 @@ class JobsService {
           } else if (status === 'graded' && booking.status === 'sanitised') {
             booking.status = 'graded';
             booking.gradedAt = new Date().toISOString();
-          } else if (status === 'finalised' && booking.status === 'graded') {
+          } else if (status === 'completed' && booking.status === 'graded') {
             booking.status = 'completed';
             booking.completedAt = new Date().toISOString();
           }

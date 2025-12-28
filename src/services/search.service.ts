@@ -54,7 +54,7 @@ class SearchService {
       if (user.role === 'client' || user.role === 'reseller') {
         jobs = jobs.filter(j => j.clientId === user.tenantId);
       } else if (user.role === 'driver') {
-        jobs = jobs.filter(j => j.driver?.id === user.id && j.status !== 'finalised');
+        jobs = jobs.filter(j => j.driver?.id === user.id && j.status !== 'completed');
       }
     }
 

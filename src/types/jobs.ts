@@ -9,7 +9,7 @@ export type WorkflowStatus =
   | 'warehouse' 
   | 'sanitised' 
   | 'graded' 
-  | 'finalised';
+  | 'completed';
 
 export interface Job {
   id: string;

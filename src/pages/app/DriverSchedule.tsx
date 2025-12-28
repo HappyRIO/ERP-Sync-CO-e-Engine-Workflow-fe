@@ -24,13 +24,13 @@ const DriverSchedule = () => {
   const { user } = useAuth();
   const { data: allJobs = [], isLoading, error } = useJobs();
 
-  // Filter jobs for current driver (assigned to this driver and not finalised)
-  // Note: Service already filters by driver name and excludes finalised, but we also check by ID
+  // Filter jobs for current driver (assigned to this driver and not completed)
+  // Note: Service already filters by driver name and excludes completed, but we also check by ID
   const driverJobs = useMemo(() => {
     return allJobs.filter(job => 
       job.driver && 
       (job.driver.id === user?.id || job.driver.name === user?.name) && 
-      job.status !== 'finalised'
+      job.status !== 'completed'
     );
   }, [allJobs, user?.id, user?.name]);
 
