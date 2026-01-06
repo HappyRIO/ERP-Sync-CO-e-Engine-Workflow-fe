@@ -98,6 +98,8 @@ const mockInvites: Invite[] = [
 
 // Simulate API delay
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
+import { USE_MOCK_API } from '@/lib/config';
+import { apiClient } from './api-client';
 
 const SERVICE_NAME = 'auth';
 
@@ -107,6 +109,11 @@ class AuthService {
   private token: string | null = null;
 
   async login(credentials: LoginCredentials): Promise<AuthState> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.loginAPI(credentials);
+    }
+
     await delay(1000);
 
     // Simulate errors
@@ -180,6 +187,11 @@ class AuthService {
   }
 
   async signup(data: SignupData): Promise<AuthState> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.signupAPI(data);
+    }
+
     await delay(1500);
 
     // Simulate errors
@@ -282,6 +294,33 @@ class AuthService {
   }
 
   async acceptInvite(inviteData: InviteData): Promise<AuthState> {
+    if (!USE_MOCK_API) {
+      const result = await apiClient.post<{
+        user: User;
+        token: string;
+        tenant: Tenant;
+      }>('/invites/accept', {
+        inviteToken: inviteData.inviteToken,
+        email: inviteData.email,
+        name: inviteData.name,
+        password: inviteData.password,
+      });
+
+      this.currentUser = result.user;
+      this.currentTenant = result.tenant;
+      this.token = result.token;
+
+      localStorage.setItem('auth_token', this.token);
+      localStorage.setItem('user_id', result.user.id);
+
+      return {
+        user: result.user,
+        tenant: result.tenant,
+        token: this.token,
+        isAuthenticated: true,
+      };
+    }
+
     await delay(1500);
 
     // Simulate errors
@@ -388,6 +427,18 @@ class AuthService {
   }
 
   async getInvite(token: string): Promise<Invite | null> {
+    if (!USE_MOCK_API) {
+      try {
+        const invite = await apiClient.get<Invite>(`/invites/token/${token}`);
+        return invite;
+      } catch (error) {
+        if (error instanceof ApiError && error.type === ApiErrorType.NOT_FOUND) {
+          return null;
+        }
+        throw error;
+      }
+    }
+
     await delay(500);
 
     // Simulate errors
@@ -427,7 +478,15 @@ class AuthService {
     return invite;
   }
 
-  async createInvite(email: string, role: 'client' | 'reseller', invitedBy: string, tenantId: string, tenantName: string): Promise<Invite> {
+  async createInvite(email: string, role: 'client' | 'reseller' | 'driver', invitedBy: string, tenantId: string, tenantName: string): Promise<Invite> {
+    if (!USE_MOCK_API) {
+      const invite = await apiClient.post<Invite>('/invites', {
+        email,
+        role,
+      });
+      return invite;
+    }
+
     await delay(800);
 
     // Simulate errors
@@ -492,6 +551,50 @@ class AuthService {
     return newInvite;
   }
 
+  async listInvites(status?: 'pending' | 'accepted' | 'expired', role?: 'client' | 'reseller' | 'driver'): Promise<Invite[]> {
+    if (!USE_MOCK_API) {
+      const params = new URLSearchParams();
+      if (status) params.append('status', status);
+      if (role) params.append('role', role);
+      const queryString = params.toString();
+      const invites = await apiClient.get<Invite[]>(`/invites${queryString ? `?${queryString}` : ''}`);
+      return invites;
+    }
+
+    // Mock implementation
+    await delay(500);
+    let filtered = [...mockInvites];
+    
+    // Filter by role if provided
+    if (role) {
+      filtered = filtered.filter(i => i.role === role);
+    }
+    
+    if (status === 'pending') {
+      filtered = filtered.filter(i => !i.acceptedAt && new Date(i.expiresAt) > new Date());
+    } else if (status === 'accepted') {
+      filtered = filtered.filter(i => !!i.acceptedAt);
+    } else if (status === 'expired') {
+      filtered = filtered.filter(i => !i.acceptedAt && new Date(i.expiresAt) < new Date());
+    }
+
+    return filtered;
+  }
+
+  async cancelInvite(inviteId: string): Promise<void> {
+    if (!USE_MOCK_API) {
+      await apiClient.delete(`/invites/${inviteId}`);
+      return;
+    }
+
+    // Mock implementation
+    await delay(300);
+    const index = mockInvites.findIndex(i => i.id === inviteId);
+    if (index !== -1) {
+      mockInvites.splice(index, 1);
+    }
+  }
+
   async logout(): Promise<void> {
     await delay(300);
     this.currentUser = null;
@@ -502,6 +605,11 @@ class AuthService {
   }
 
   async getCurrentAuth(): Promise<AuthState | null> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getCurrentAuthAPI();
+    }
+
     await delay(300);
 
     // Simulate errors (less common for auth check)
@@ -556,12 +664,137 @@ class AuthService {
     };
   }
 
+  private async getCurrentAuthAPI(): Promise<AuthState | null> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      return null;
+    }
+
+    try {
+      const response = await apiClient.get<{ user: User }>('/auth/me');
+      const user = response.user;
+      
+      // Get tenant info (would be included in response in real implementation)
+      // For now, we'll need to get it from the user object or make another call
+      const tenant: Tenant = {
+        id: user.tenantId,
+        name: user.tenantName,
+        slug: user.tenantId, // Would come from backend
+        createdAt: user.createdAt,
+      };
+
+      this.currentUser = user;
+      this.currentTenant = tenant;
+      this.token = token;
+
+      return {
+        user,
+        tenant,
+        token,
+        isAuthenticated: true,
+      };
+    } catch (error) {
+      // If unauthorized, clear stored auth
+      if (error instanceof ApiError && error.statusCode === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_id');
+        this.currentUser = null;
+        this.currentTenant = null;
+        this.token = null;
+      }
+      return null;
+    }
+  }
+
   getCurrentUser(): User | null {
     return this.currentUser;
   }
 
   getCurrentTenant(): Tenant | null {
     return this.currentTenant;
+  }
+
+  // Real API implementations
+  private async loginAPI(credentials: LoginCredentials): Promise<AuthState> {
+    const response = await apiClient.post<{
+      user: User;
+      tenant: Tenant;
+      token: string;
+    }>('/auth/login', credentials);
+
+    this.currentUser = response.user;
+    this.currentTenant = response.tenant;
+    this.token = response.token;
+
+    localStorage.setItem('auth_token', response.token);
+    localStorage.setItem('user_id', response.user.id);
+
+    return {
+      user: response.user,
+      tenant: response.tenant,
+      token: response.token,
+      isAuthenticated: true,
+    };
+  }
+
+  private async signupAPI(data: SignupData): Promise<AuthState> {
+    const response = await apiClient.post<{
+      user: User;
+      tenant: Tenant;
+      token: string;
+    }>('/auth/signup', data);
+
+    this.currentUser = response.user;
+    this.currentTenant = response.tenant;
+    this.token = response.token;
+
+    localStorage.setItem('auth_token', response.token);
+    localStorage.setItem('user_id', response.user.id);
+
+    return {
+      user: response.user,
+      tenant: response.tenant,
+      token: response.token,
+      isAuthenticated: true,
+    };
+  }
+
+  private async getCurrentAuthAPI(): Promise<AuthState | null> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      return null;
+    }
+
+    try {
+      const response = await apiClient.get<{ user: User }>('/auth/me');
+      
+      // Get tenant from user data or fetch separately
+      const user = response.user;
+      const tenant = this.currentTenant || {
+        id: user.tenantId,
+        name: user.tenantName,
+        slug: user.tenantName.toLowerCase().replace(/\s+/g, '-'),
+        createdAt: user.createdAt,
+      } as Tenant;
+
+      this.currentUser = user;
+      this.currentTenant = tenant;
+      this.token = token;
+
+      return {
+        user,
+        tenant,
+        token,
+        isAuthenticated: true,
+      };
+    } catch (error) {
+      // If token is invalid, clear it
+      if (error instanceof ApiError && error.statusCode === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_id');
+      }
+      return null;
+    }
   }
 }
 

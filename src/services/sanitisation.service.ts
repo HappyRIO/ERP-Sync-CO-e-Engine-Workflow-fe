@@ -1,7 +1,8 @@
 // Sanitisation Service (for admin sanitisation management)
 import type { SanitisationRecord } from '@/mocks/mock-entities';
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
-import { USE_MOCK_API } from '@/lib/config';
+import { USE_MOCK_API, API_BASE_URL } from '@/lib/config';
+import { apiClient } from './api-client';
 import type { User } from '@/types/auth';
 
 const SERVICE_NAME = 'sanitisation';
@@ -92,10 +93,23 @@ const mockSanitisationRecords: SanitisationRecord[] = [
 
 class SanitisationService {
   async getSanitisationRecords(bookingId?: string): Promise<SanitisationRecord[]> {
-    if (USE_MOCK_API) {
-      return this.getSanitisationRecordsMock(bookingId);
+    if (!USE_MOCK_API) {
+      return this.getSanitisationRecordsAPI(bookingId);
     }
-    throw new Error('Real API not implemented yet');
+    return this.getSanitisationRecordsMock(bookingId);
+  }
+
+  private async getSanitisationRecordsAPI(bookingId?: string): Promise<SanitisationRecord[]> {
+    try {
+      const params = bookingId ? `?bookingId=${bookingId}` : '';
+      const records = await apiClient.get<SanitisationRecord[]>(`/sanitisation${params}`);
+      return records;
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        return [];
+      }
+      throw error;
+    }
   }
 
   private async getSanitisationRecordsMock(bookingId?: string): Promise<SanitisationRecord[]> {
@@ -127,10 +141,28 @@ class SanitisationService {
     methodDetails?: string,
     notes?: string
   ): Promise<SanitisationRecord> {
-    if (USE_MOCK_API) {
-      return this.createSanitisationRecordMock(bookingId, assetId, method, performedBy, methodDetails, notes);
+    if (!USE_MOCK_API) {
+      return this.createSanitisationRecordAPI(bookingId, assetId, method, performedBy, methodDetails, notes);
     }
-    throw new Error('Real API not implemented yet');
+    return this.createSanitisationRecordMock(bookingId, assetId, method, performedBy, methodDetails, notes);
+  }
+
+  private async createSanitisationRecordAPI(
+    bookingId: string,
+    assetId: string,
+    method: SanitisationRecord['method'],
+    performedBy: string,
+    methodDetails?: string,
+    notes?: string
+  ): Promise<SanitisationRecord> {
+    const record = await apiClient.post<SanitisationRecord>('/sanitisation', {
+      bookingId,
+      assetId,
+      method,
+      methodDetails,
+      notes,
+    });
+    return record;
   }
 
   private async createSanitisationRecordMock(
@@ -203,10 +235,15 @@ class SanitisationService {
   }
 
   async verifySanitisation(recordId: string): Promise<SanitisationRecord> {
-    if (USE_MOCK_API) {
-      return this.verifySanitisationMock(recordId);
+    if (!USE_MOCK_API) {
+      return this.verifySanitisationAPI(recordId);
     }
-    throw new Error('Real API not implemented yet');
+    return this.verifySanitisationMock(recordId);
+  }
+
+  private async verifySanitisationAPI(recordId: string): Promise<SanitisationRecord> {
+    const record = await apiClient.post<SanitisationRecord>(`/sanitisation/${recordId}/verify`, {});
+    return record;
   }
 
   private async verifySanitisationMock(recordId: string): Promise<SanitisationRecord> {

@@ -44,7 +44,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
 const CO2eDashboard = () => {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const isReseller = user?.role === 'reseller';
   const { data: clients = [], isLoading: isLoadingClients } = useClients();
   const { data: jobs = [], isLoading: isLoadingJobs } = useJobs();
@@ -141,7 +141,8 @@ const CO2eDashboard = () => {
   const totalTravel = clientStats.totalTravel;
   const netBenefit = clientStats.netBenefit;
 
-  if (isLoadingJobs || isLoadingStats || (isReseller && isLoadingClients)) {
+  // Wait for auth to load before checking role
+  if (isAuthLoading || isLoadingJobs || isLoadingStats || (isReseller && isLoadingClients)) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -178,8 +179,17 @@ const CO2eDashboard = () => {
     },
   ];
 
+  // Debug: Log user info to help diagnose
+  console.log('[CO2eDashboard Debug]', {
+    user: user ? { id: user.id, role: user.role, email: user.email } : null,
+    isReseller,
+    clientsCount: clients.length,
+    clientCO2StatsCount: clientCO2Stats.length,
+  });
+
   // For resellers: show split layout with client list on left
-  if (isReseller && clients.length > 0) {
+  // Check both user?.role and isReseller to ensure we catch the reseller role
+  if (user && (user.role === 'reseller' || isReseller)) {
     return (
       <div className="flex gap-6 h-[calc(100vh-8rem)]">
         {/* Left Sidebar - Client List */}

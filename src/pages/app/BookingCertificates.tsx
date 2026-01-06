@@ -8,6 +8,7 @@ import { useBooking } from "@/hooks/useBookings";
 import { useJob } from "@/hooks/useJobs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSanitisationRecords } from "@/hooks/useSanitisation";
+import { canDriverEditJob } from "@/utils/job-helpers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +64,40 @@ const BookingCertificates = () => {
     );
   }
 
+  // Check if job exists
+  if (!booking.jobId && !relatedJob) {
+    return (
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-4"
+        >
+          <Button variant="ghost" size="icon" asChild>
+            <Link to={`/bookings/${id}`} className="text-inherit no-underline">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-foreground">Sanitisation Certificates</h2>
+            <p className="text-muted-foreground">{booking.bookingNumber} - {booking.clientName}</p>
+          </div>
+        </motion.div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-12">
+              <Shield className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+              <p className="text-muted-foreground">No job assigned yet</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                A driver must be assigned to this booking before certificates can be generated.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Group records by asset
   const recordsByAsset = records.reduce((acc, record) => {
     if (!acc[record.assetId]) {
@@ -99,8 +134,17 @@ const BookingCertificates = () => {
               <Shield className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">No sanitisation certificates available yet</p>
               <p className="text-sm text-muted-foreground mt-2">
-                Certificates will appear here once assets are sanitised
+                {booking.status === 'collected' || booking.status === 'sanitised' || booking.status === 'graded' || booking.status === 'completed'
+                  ? "Assets need to be sanitised through the Sanitisation Management page."
+                  : "Certificates will appear here once assets are collected and sanitised."}
               </p>
+              {(booking.status === 'collected' || booking.status === 'sanitised') && user?.role === 'admin' && (
+                <Button className="mt-4" asChild>
+                  <Link to={`/admin/sanitisation/${id}`} className="text-inherit no-underline">
+                    Go to Sanitisation Management
+                  </Link>
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -215,14 +259,14 @@ const BookingCertificates = () => {
               <div className="space-y-3">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-medium text-muted-foreground">Driver Details</p>
-                  {(user?.role === 'admin' || user?.role === 'driver') && relatedJob.id && (
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
-                        <Smartphone className="h-4 w-4 mr-2" />
-                        Driver View
-                      </Link>
-                    </Button>
-                  )}
+                  {user?.role === 'driver' && canDriverEditJob(relatedJob) && relatedJob.id && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
+                          <Smartphone className="h-4 w-4 mr-2" />
+                          Driver View
+                        </Link>
+                      </Button>
+                    )}
                 </div>
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-2">

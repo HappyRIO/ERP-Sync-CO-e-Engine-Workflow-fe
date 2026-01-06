@@ -5,8 +5,9 @@ import { mockJobs } from '@/mocks/mock-data';
 import { mockBookings } from '@/mocks/mock-entities';
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
 import { assetCategories } from '@/mocks/mock-data';
-import { calculateReuseCO2e, calculateBuybackEstimate, calculateRoundTripDistance, geocodePostcode, kmToMiles } from '@/lib/calculations';
+import { calculateReuseCO2e, calculateBuybackEstimate, calculateRoundTripDistance, geocodePostcode, kmToMiles, calculateTravelEmissions } from '@/lib/calculations';
 import { USE_MOCK_API } from '@/lib/config';
+import { apiClient } from './api-client';
 import type { User } from '@/types/auth';
 
 const SERVICE_NAME = 'booking';
@@ -44,6 +45,11 @@ export interface BookingResponse {
 
 class BookingService {
   async createBooking(request: BookingRequest): Promise<BookingResponse> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.createBookingAPI(request);
+    }
+
     await delay(1500);
 
     // Simulate errors
@@ -170,8 +176,8 @@ class BookingService {
         clientId = 'tenant-2';
       }
     } else {
-      // Priority 3: Neither provided, use defaults
-      clientName = 'Client Name';
+      // Priority 3: Neither provided, use safe defaults (never fall back to contact full name)
+      clientName = 'Client Organisation';
       clientId = 'tenant-2';
     }
     
@@ -251,49 +257,82 @@ class BookingService {
       }
     }
 
-    // Create booking entity
-    const bookingId = `booking-${Date.now()}`;
-    const bookingNumber = `BK-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`;
-    
-    const newBooking: Booking = {
-      id: bookingId,
-      bookingNumber,
-      clientId,
-      clientName,
-      resellerId, // Set resellerId if client belongs to a reseller
-      resellerName, // Set resellerName if client belongs to a reseller
+    // When using API, the backend will create the booking
+    // We only create mock booking when using mock mode
+    if (USE_MOCK_API) {
+      // Create booking entity
+      const bookingId = `booking-${Date.now()}`;
+      const bookingNumber = `BK-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`;
+      
+      const newBooking: Booking = {
+        id: bookingId,
+        bookingNumber,
+        clientId,
+        clientName,
+        resellerId, // Set resellerId if client belongs to a reseller
+        resellerName, // Set resellerName if client belongs to a reseller
+        siteName: request.siteName,
+        siteAddress: request.address,
+        scheduledDate: request.scheduledDate,
+        status: 'created',
+        assets: assetCategoriesWithNames,
+        charityPercent: request.charityPercent || 0,
+        estimatedCO2e,
+        estimatedBuyback,
+        preferredVehicleType: request.preferredVehicleType, // Save client's vehicle preference
+        roundTripDistanceKm, // Save calculated round trip distance
+        roundTripDistanceMiles, // Save calculated round trip distance in miles
+        createdAt: new Date().toISOString(),
+        createdBy: clientId, // In real app would be actual user ID
+      };
+
+      // Add booking to mockBookings array
+      mockBookings.push(newBooking);
+
+      // Generate mock job response (for backward compatibility)
+      const newJob: BookingResponse = {
+        id: bookingId,
+        erpJobNumber: bookingNumber,
+        status: 'created',
+        estimatedCO2e,
+        estimatedBuyback,
+        createdAt: new Date().toISOString(),
+      };
+
+      return newJob;
+    }
+
+    // When using API, backend handles everything
+    // The createBookingAPI method will be called instead
+    throw new Error('This code path should not be reached when using API');
+  }
+
+  private async createBookingAPI(request: BookingRequest): Promise<BookingResponse> {
+    const payload = {
+      clientId: request.clientId,
+      clientName: request.clientName,
+      siteId: request.siteId,
       siteName: request.siteName,
-      siteAddress: request.address,
+      address: request.address,
+      postcode: request.postcode,
+      lat: request.coordinates?.lat,
+      lng: request.coordinates?.lng,
       scheduledDate: request.scheduledDate,
-      status: 'created',
-      assets: assetCategoriesWithNames,
+      assets: request.assets,
       charityPercent: request.charityPercent || 0,
-      estimatedCO2e,
-      estimatedBuyback,
-      preferredVehicleType: request.preferredVehicleType, // Save client's vehicle preference
-      roundTripDistanceKm, // Save calculated round trip distance
-      roundTripDistanceMiles, // Save calculated round trip distance in miles
-      createdAt: new Date().toISOString(),
-      createdBy: clientId, // In real app would be actual user ID
+      preferredVehicleType: request.preferredVehicleType,
     };
 
-    // Add booking to mockBookings array
-    mockBookings.push(newBooking);
-
-    // Generate mock job response (for backward compatibility)
-    const newJob: BookingResponse = {
-      id: bookingId,
-      erpJobNumber: bookingNumber,
-      status: 'created',
-      estimatedCO2e,
-      estimatedBuyback,
-      createdAt: new Date().toISOString(),
-    };
-
-    return newJob;
+    const response = await apiClient.post<BookingResponse>('/bookings', payload);
+    return response;
   }
 
   async getBooking(id: string): Promise<Job | null> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getBookingAPI(id);
+    }
+
     await delay(500);
 
     // Simulate errors
@@ -328,11 +367,41 @@ class BookingService {
     return booking || null;
   }
 
-  async getBookings(user?: User | null, filter?: { status?: string; clientId?: string }): Promise<Booking[]> {
-    if (USE_MOCK_API) {
-      return this.getBookingsMock(user, filter);
+  private async getBookingAPI(id: string): Promise<Job | null> {
+    try {
+      const booking = await apiClient.get<Job>(`/bookings/${id}`);
+      return booking;
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        return null;
+      }
+      throw error;
     }
-    throw new Error('Real API not implemented yet');
+  }
+
+  async getBookings(user?: User | null, filter?: { status?: string; clientId?: string }): Promise<Booking[]> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getBookingsAPI(filter);
+    }
+    
+    return this.getBookingsMock(user, filter);
+  }
+
+  private async getBookingsAPI(filter?: { status?: string; clientId?: string }): Promise<Booking[]> {
+    const params = new URLSearchParams();
+    if (filter?.status) {
+      params.append('status', filter.status);
+    }
+    if (filter?.clientId) {
+      params.append('clientId', filter.clientId);
+    }
+
+    const queryString = params.toString();
+    const endpoint = `/bookings${queryString ? `?${queryString}` : ''}`;
+    
+    const bookings = await apiClient.get<Booking[]>(endpoint);
+    return bookings;
   }
 
   private async getBookingsMock(user?: User | null, filter?: { status?: string; clientId?: string }): Promise<Booking[]> {
@@ -376,10 +445,24 @@ class BookingService {
   }
 
   async getBookingById(id: string): Promise<Booking | null> {
-    if (USE_MOCK_API) {
-      return this.getBookingByIdMock(id);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getBookingByIdAPI(id);
     }
-    throw new Error('Real API not implemented yet');
+    
+    return this.getBookingByIdMock(id);
+  }
+
+  private async getBookingByIdAPI(id: string): Promise<Booking | null> {
+    try {
+      const booking = await apiClient.get<Booking>(`/bookings/${id}`);
+      return booking;
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   private async getBookingByIdMock(id: string): Promise<Booking | null> {
@@ -406,10 +489,17 @@ class BookingService {
   }
 
   async assignDriver(bookingId: string, driverId: string, scheduledBy: string): Promise<Booking> {
-    if (USE_MOCK_API) {
-      return this.assignDriverMock(bookingId, driverId, scheduledBy);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.assignDriverAPI(bookingId, driverId);
     }
-    throw new Error('Real API not implemented yet');
+    
+    return this.assignDriverMock(bookingId, driverId, scheduledBy);
+  }
+
+  private async assignDriverAPI(bookingId: string, driverId: string): Promise<Booking> {
+    const booking = await apiClient.post<Booking>(`/bookings/${bookingId}/assign-driver`, { driverId });
+    return booking;
   }
 
   private async assignDriverMock(bookingId: string, driverId: string, scheduledBy: string): Promise<Booking> {
@@ -525,6 +615,12 @@ class BookingService {
         quantity: asset.quantity,
       }));
 
+      // Calculate travel emissions based on booking's round trip distance and driver's vehicle type
+      // Use driver's vehicleFuelType if available, otherwise use booking's preferredVehicleType, otherwise default to 'diesel'
+      const vehicleFuelType = driver.vehicleFuelType || booking.preferredVehicleType || 'diesel';
+      const roundTripDistanceKm = booking.roundTripDistanceKm || 80; // Fallback to 80km if not set
+      const travelEmissions = calculateTravelEmissions(roundTripDistanceKm, vehicleFuelType);
+
       const newJob: Job = {
         id: jobId,
         erpJobNumber,
@@ -544,7 +640,7 @@ class BookingService {
           phone: driver.phone,
         },
         co2eSaved: booking.estimatedCO2e,
-        travelEmissions: 0, // Will be calculated when driver completes
+        travelEmissions, // Calculate from booking's round trip distance and driver's vehicle type
         buybackValue: booking.estimatedBuyback,
         charityPercent: booking.charityPercent,
         certificates: [],
@@ -559,10 +655,16 @@ class BookingService {
   }
 
   async completeBooking(bookingId: string, completedBy: string): Promise<Booking> {
-    if (USE_MOCK_API) {
-      return this.completeBookingMock(bookingId, completedBy);
+    if (!USE_MOCK_API) {
+      return this.completeBookingAPI(bookingId, completedBy);
     }
-    throw new Error('Real API not implemented yet');
+    return this.completeBookingMock(bookingId, completedBy);
+  }
+
+  private async completeBookingAPI(bookingId: string, completedBy: string): Promise<Booking> {
+    // Use the new /complete endpoint for final approval
+    const booking = await apiClient.post<Booking>(`/bookings/${bookingId}/complete`, {});
+    return booking;
   }
 
   private async completeBookingMock(bookingId: string, completedBy: string): Promise<Booking> {
@@ -688,11 +790,67 @@ class BookingService {
     return booking;
   }
 
-  async updateBookingStatus(bookingId: string, status: Booking['status']): Promise<Booking> {
-    if (USE_MOCK_API) {
-      return this.updateBookingStatusMock(bookingId, status);
+  async approveBooking(bookingId: string, notes?: string): Promise<Booking> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.approveBookingAPI(bookingId, notes);
     }
-    throw new Error('Real API not implemented yet');
+    
+    return this.approveBookingMock(bookingId, notes);
+  }
+
+  private async approveBookingAPI(bookingId: string, notes?: string): Promise<Booking> {
+    const booking = await apiClient.post<Booking>(`/bookings/${bookingId}/approve`, { notes });
+    return booking;
+  }
+
+  private async approveBookingMock(bookingId: string, notes?: string): Promise<Booking> {
+    await delay(800);
+
+    if (shouldSimulateError(SERVICE_NAME)) {
+      const config = JSON.parse(localStorage.getItem(`error_sim_${SERVICE_NAME}`) || '{}');
+      throw new ApiError(
+        config.errorType || ApiErrorType.SERVER_ERROR,
+        'Failed to approve booking. Please try again.',
+        config.errorType === ApiErrorType.NETWORK_ERROR ? 0 : 500
+      );
+    }
+
+    const booking = mockBookings.find(b => b.id === bookingId);
+    if (!booking) {
+      throw new ApiError(
+        ApiErrorType.NOT_FOUND,
+        `Booking with ID "${bookingId}" was not found.`,
+        404,
+        { bookingId }
+      );
+    }
+
+    if (booking.status !== 'pending') {
+      throw new ApiError(
+        ApiErrorType.VALIDATION_ERROR,
+        `Cannot approve booking in "${booking.status}" status. Only "pending" bookings can be approved.`,
+        400,
+        { bookingId, currentStatus: booking.status }
+      );
+    }
+
+    booking.status = 'created';
+    return booking;
+  }
+
+  async updateBookingStatus(bookingId: string, status: Booking['status']): Promise<Booking> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.updateBookingStatusAPI(bookingId, status);
+    }
+    
+    return this.updateBookingStatusMock(bookingId, status);
+  }
+
+  private async updateBookingStatusAPI(bookingId: string, status: Booking['status']): Promise<Booking> {
+    const booking = await apiClient.patch<Booking>(`/bookings/${bookingId}/status`, { status });
+    return booking;
   }
 
   private async updateBookingStatusMock(bookingId: string, status: Booking['status']): Promise<Booking> {

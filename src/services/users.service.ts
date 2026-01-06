@@ -3,16 +3,48 @@ import type { ExtendedUser } from '@/mocks/mock-entities';
 import { mockExtendedUsers } from '@/mocks/mock-entities';
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
 import { USE_MOCK_API } from '@/lib/config';
+import { apiClient } from './api-client';
 import type { User } from '@/types/auth';
 
 const SERVICE_NAME = 'users';
 
 class UsersService {
   async getUsers(filter?: { role?: string; tenantId?: string; isActive?: boolean; status?: string }): Promise<ExtendedUser[]> {
-    if (USE_MOCK_API) {
-      return this.getUsersMock(filter);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getUsersAPI(filter);
     }
-    throw new Error('Real API not implemented yet');
+    
+    return this.getUsersMock(filter);
+  }
+
+  private async getUsersAPI(filter?: { role?: string; tenantId?: string; isActive?: boolean; status?: string }): Promise<ExtendedUser[]> {
+    const params = new URLSearchParams();
+    if (filter?.role) {
+      params.append('role', filter.role);
+    }
+    if (filter?.status) {
+      params.append('status', filter.status);
+    }
+    // Note: tenantId and isActive filters are handled client-side if needed
+    // Backend returns all users for admin, so we filter client-side for tenantId/isActive
+
+    const queryString = params.toString();
+    const endpoint = `/users${queryString ? `?${queryString}` : ''}`;
+    
+    let users = await apiClient.get<ExtendedUser[]>(endpoint);
+    
+    // Apply client-side filters for tenantId and isActive if needed
+    if (filter) {
+      if (filter.tenantId) {
+        users = users.filter(u => u.tenantId === filter.tenantId);
+      }
+      if (filter.isActive !== undefined) {
+        users = users.filter(u => u.isActive === filter.isActive);
+      }
+    }
+    
+    return users;
   }
 
   private async getUsersMock(filter?: { role?: string; tenantId?: string; isActive?: boolean; status?: string }): Promise<ExtendedUser[]> {
@@ -48,10 +80,24 @@ class UsersService {
   }
 
   async getUser(id: string): Promise<ExtendedUser | null> {
-    if (USE_MOCK_API) {
-      return this.getUserMock(id);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getUserAPI(id);
     }
-    throw new Error('Real API not implemented yet');
+    
+    return this.getUserMock(id);
+  }
+
+  private async getUserAPI(id: string): Promise<ExtendedUser | null> {
+    try {
+      const user = await apiClient.get<ExtendedUser>(`/users/${id}`);
+      return user || null;
+    } catch (error: any) {
+      if (error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   private async getUserMock(id: string): Promise<ExtendedUser | null> {
@@ -78,10 +124,17 @@ class UsersService {
   }
 
   async updateUserStatus(id: string, isActive: boolean): Promise<ExtendedUser> {
-    if (USE_MOCK_API) {
-      return this.updateUserStatusMock(id, isActive);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.updateUserStatusAPI(id, isActive);
     }
-    throw new Error('Real API not implemented yet');
+    
+    return this.updateUserStatusMock(id, isActive);
+  }
+
+  private async updateUserStatusAPI(id: string, isActive: boolean): Promise<ExtendedUser> {
+    const response = await apiClient.patch<ExtendedUser>(`/users/${id}/status`, { isActive });
+    return response;
   }
 
   private async updateUserStatusMock(id: string, isActive: boolean): Promise<ExtendedUser> {
@@ -128,10 +181,17 @@ class UsersService {
    * Approve pending user (change status from pending to active)
    */
   async approveUser(id: string): Promise<ExtendedUser> {
-    if (USE_MOCK_API) {
-      return this.approveUserMock(id);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.approveUserAPI(id);
     }
-    throw new Error('Real API not implemented yet');
+    
+    return this.approveUserMock(id);
+  }
+
+  private async approveUserAPI(id: string): Promise<ExtendedUser> {
+    const response = await apiClient.patch<ExtendedUser>(`/users/${id}/approve`, {});
+    return response;
   }
 
   private async approveUserMock(id: string): Promise<ExtendedUser> {

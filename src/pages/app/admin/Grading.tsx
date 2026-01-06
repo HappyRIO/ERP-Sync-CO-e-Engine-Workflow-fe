@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useBooking, useUpdateBookingStatus } from "@/hooks/useBookings";
-import { useGradingRecords, useCreateGradingRecord, useCalculateResaleValue } from "@/hooks/useGrading";
+import { useGradingRecords, useCreateGradingRecord, useCalculateResaleValue, useCalculateResaleValueFn } from "@/hooks/useGrading";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,16 +29,25 @@ const Grading = () => {
   const { data: booking, isLoading: isLoadingBooking } = useBooking(id || null);
   const { data: records = [], isLoading: isLoadingRecords } = useGradingRecords(id);
   const createRecord = useCreateGradingRecord();
-  const calculateResaleValue = useCalculateResaleValue();
+  const calculateResaleValueFn = useCalculateResaleValueFn();
   const updateBookingStatus = useUpdateBookingStatus();
-
+  
+  // State declarations must come before they're used
   const [selectedAssetId, setSelectedAssetId] = useState<string>("");
   const [grade, setGrade] = useState<string>("");
   const [condition, setCondition] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
+  
+  // Get selected asset for resale value calculation
+  const selectedAsset = booking?.assets.find(a => a.categoryId === selectedAssetId);
+  const { data: estimatedResaleValue = 0 } = useCalculateResaleValue(
+    selectedAsset?.categoryName || selectedAsset?.categoryId,
+    grade as any,
+    selectedAsset?.quantity || 0
+  );
 
-  const handleCreateRecord = () => {
+  const handleCreateRecord = async () => {
     if (!id || !selectedAssetId || !grade || !user) {
       toast.error("Please fill in all required fields");
       return;
@@ -50,13 +59,13 @@ const Grading = () => {
       return;
     }
 
-    const resaleValue = calculateResaleValue(asset.categoryId, grade as any, asset.quantity);
+    const resaleValue = await calculateResaleValueFn(asset.categoryName || asset.categoryId, grade as any, asset.quantity);
 
     createRecord.mutate(
       {
         bookingId: id,
         assetId: selectedAssetId,
-        assetCategory: asset.categoryId,
+        assetCategory: asset.categoryName || asset.categoryId, // Use category name, fallback to ID
         grade: grade as any,
         gradedBy: user.id,
         condition: condition || undefined,
@@ -171,7 +180,7 @@ const Grading = () => {
           </div>
           {allAssetsGraded && booking.status === 'graded' && (
             <div className="mt-4 pt-4 border-t border-accent/20">
-              <Button variant="success" className="w-full" onClick={() => navigate(`/admin/approval/${id}`)}>
+              <Button variant="success" className="w-full" onClick={() => navigate(`/admin/booking-approval/${id}`)}>
                 <FileCheck className="h-4 w-4 mr-2" />
                 Proceed to Final Approval
               </Button>
@@ -192,7 +201,7 @@ const Grading = () => {
                         toast.success("Booking moved to graded status", {
                           description: "All assets have been graded.",
                         });
-                        navigate(`/admin/approval/${id}`);
+                        navigate(`/admin/booking-approval/${id}`);
                       },
                       onError: (error) => {
                         toast.error("Failed to update booking status", {
@@ -268,11 +277,7 @@ const Grading = () => {
                 <div className="p-3 rounded-lg bg-muted">
                   <p className="text-sm text-muted-foreground">Estimated Resale Value</p>
                   <p className="text-xl font-bold">
-                    £{calculateResaleValue(
-                      booking.assets.find(a => a.categoryId === selectedAssetId)?.categoryId || '',
-                      grade as any,
-                      booking.assets.find(a => a.categoryId === selectedAssetId)?.quantity || 0
-                    ).toLocaleString()}
+                    £{estimatedResaleValue.toLocaleString()}
                   </p>
                 </div>
               )}

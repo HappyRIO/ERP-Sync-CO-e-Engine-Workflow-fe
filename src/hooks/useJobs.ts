@@ -31,6 +31,8 @@ export function useDashboardStats() {
     queryKey: ['dashboardStats', user?.id],
     queryFn: () => jobsService.getDashboardStats(user),
     staleTime: 60000, // 1 minute
+    retry: false, // Don't retry on error to avoid blocking
+    refetchOnWindowFocus: false, // Don't refetch on window focus
   });
 }
 
@@ -40,9 +42,13 @@ export function useUpdateJobStatus() {
   return useMutation({
     mutationFn: ({ jobId, status }: { jobId: string; status: Job['status'] }) =>
       jobsService.updateJobStatus(jobId, status),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId] }); // Invalidate specific job
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      // Job status changes can generate notifications for driver, client, and admin
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     },
   });
 }
@@ -56,6 +62,9 @@ export function useUpdateJobEvidence() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['job', variables.jobId] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      // Evidence submission often precedes status changes; be safe and refresh notifications
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     },
   });
 }

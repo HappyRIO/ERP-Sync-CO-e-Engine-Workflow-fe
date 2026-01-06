@@ -1,5 +1,6 @@
 // Custom hooks for grading
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { gradingService } from '@/services/grading.service';
 import type { GradingRecord } from '@/mocks/mock-entities';
 
@@ -38,8 +39,21 @@ export function useCreateGradingRecord() {
   });
 }
 
-export function useCalculateResaleValue() {
-  return (category: string, grade: GradingRecord['grade'], quantity: number) => {
+export function useCalculateResaleValue(category?: string, grade?: GradingRecord['grade'], quantity?: number) {
+  return useQuery({
+    queryKey: ['calculateResaleValue', category, grade, quantity],
+    queryFn: () => {
+      if (!category || !grade || !quantity) return 0;
+      return gradingService.calculateResaleValue(category, grade, quantity);
+    },
+    enabled: !!category && !!grade && !!quantity && quantity > 0,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+}
+
+// Legacy hook for backward compatibility - returns a function
+export function useCalculateResaleValueFn() {
+  return async (category: string, grade: GradingRecord['grade'], quantity: number) => {
     return gradingService.calculateResaleValue(category, grade, quantity);
   };
 }

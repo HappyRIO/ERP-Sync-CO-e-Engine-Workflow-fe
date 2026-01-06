@@ -1,8 +1,9 @@
 // Booking Lifecycle Types
-// Authoritative lifecycle: CREATED → SCHEDULED → COLLECTED → SANITISED → GRADED → COMPLETED
+// Authoritative lifecycle: PENDING → CREATED → SCHEDULED → COLLECTED → SANITISED → GRADED → COMPLETED
 
 export type BookingLifecycleStatus = 
-  | 'created'      // Booking created by client/reseller
+  | 'pending'       // Booking submitted by client/reseller, awaiting admin approval
+  | 'created'       // Booking approved by admin, now active
   | 'scheduled'     // Admin has scheduled and assigned driver
   | 'collected'     // Driver has collected assets
   | 'sanitised'     // Admin/Ops have sanitised assets
@@ -12,6 +13,7 @@ export type BookingLifecycleStatus =
 // Status transition rules
 // Note: 'cancelled' is a special status outside the lifecycle
 export const lifecycleTransitions: Record<BookingLifecycleStatus, (BookingLifecycleStatus | 'cancelled')[]> = {
+  pending: ['created', 'cancelled'],
   created: ['scheduled', 'cancelled'],
   scheduled: ['collected', 'cancelled'],
   collected: ['sanitised'],
@@ -68,6 +70,7 @@ export function getNextValidStatuses(
  */
 export function getStatusLabel(status: BookingLifecycleStatus): string {
   const labels: Record<BookingLifecycleStatus, string> = {
+    pending: 'Pending',
     created: 'Created',
     scheduled: 'Scheduled',
     collected: 'Collected',
@@ -83,6 +86,7 @@ export function getStatusLabel(status: BookingLifecycleStatus): string {
  */
 export function getStatusColor(status: BookingLifecycleStatus | 'cancelled'): string {
   const colors: Record<BookingLifecycleStatus | 'cancelled', string> = {
+    pending: 'bg-warning/10 text-warning',
     created: 'bg-info/10 text-info',
     scheduled: 'bg-warning/10 text-warning',
     collected: 'bg-primary/10 text-primary',

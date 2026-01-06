@@ -145,8 +145,8 @@ class TenantService {
     if (branding.primaryColor !== undefined) tenant.primaryColor = branding.primaryColor;
     if (branding.accentColor !== undefined) tenant.accentColor = branding.accentColor;
 
-    // Persist to localStorage for mock persistence
-    localStorage.setItem(`tenant_${tenantId}`, JSON.stringify(tenant));
+    // Note: In production, this would be persisted via API
+    // React Query will handle caching automatically
 
     return tenant;
   }

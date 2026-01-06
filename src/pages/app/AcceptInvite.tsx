@@ -53,6 +53,27 @@ const AcceptInvite = () => {
     loadInvite();
   }, [token]);
 
+  const getRoleLabel = (role: Invite['role']) => {
+    if (role === 'client') return 'client';
+    if (role === 'reseller') return 'reseller partner';
+    if (role === 'driver') return 'driver';
+    return 'admin';
+  };
+
+  const getRoleSummary = (role: Invite['role']) => {
+    switch (role) {
+      case 'client':
+        return 'You will be able to create bookings, track collections, and view your environmental impact.';
+      case 'reseller':
+        return 'You will be able to onboard clients, create bookings on their behalf, and track commission.';
+      case 'driver':
+        return 'You will be able to view assigned jobs, update statuses, and upload collection evidence.';
+      case 'admin':
+      default:
+        return 'You will be able to manage clients, jobs, bookings, and platform settings.';
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -71,7 +92,11 @@ const AcceptInvite = () => {
         name,
         password,
       });
-      navigate("/");
+      if (invite?.role === 'reseller') {
+        navigate("/settings");
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to accept invite. Please try again.");
     } finally {
@@ -173,11 +198,19 @@ const AcceptInvite = () => {
             <CardTitle className="text-2xl">Accept Invitation</CardTitle>
             <CardDescription>
               {invite ? (
-                <>
-                  You've been invited to join <strong>{invite.tenantName}</strong> as a {invite.role === 'client' ? 'customer' : invite.role}.
-                  <br />
-                  Complete your account setup to get started.
-                </>
+                <div className="space-y-2">
+                  <p>
+                    You've been invited
+                    {invite.inviter?.name ? (
+                      <> by <strong>{invite.inviter.name}</strong></>
+                    ) : null}{' '}
+                    to join <strong>{invite.tenantName}</strong> as a <strong>{getRoleLabel(invite.role)}</strong>.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {getRoleSummary(invite.role)}
+                  </p>
+                  <p>Complete your account setup to get started.</p>
+                </div>
               ) : (
                 "Complete your account setup"
               )}

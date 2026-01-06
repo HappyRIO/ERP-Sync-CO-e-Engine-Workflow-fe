@@ -12,11 +12,24 @@ import {
   Leaf,
   Scale,
   Smartphone,
-  Loader2
+  Loader2,
+  Camera,
+  PenTool,
+  Lock,
+  FileCheck,
+  CheckCircle2,
+  Package,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { WorkflowTimeline } from "@/components/jobs/WorkflowTimeline";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { co2eEquivalencies } from "@/lib/constants";
@@ -24,6 +37,7 @@ import { useJob } from "@/hooks/useJobs";
 import { useAssetCategories } from "@/hooks/useAssets";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
+import { canDriverEditJob } from "@/utils/job-helpers";
 
 const JobDetail = () => {
   const { id } = useParams();
@@ -105,7 +119,7 @@ const JobDetail = () => {
 
       <div className={`grid gap-6 ${user?.role === 'driver' ? 'lg:grid-cols-1' : 'lg:grid-cols-3'}`}>
             {/* Left Column - Details */}
-            <div className={`${user?.role === 'driver' ? '' : 'lg:col-span-2'} space-y-6`}>
+            <div className={`${user?.role === 'driver' ? '' : 'lg:col-span-2'} space-y-6 flex flex-col`}>
           {/* Collection Details */}
           <Card>
             <CardHeader>
@@ -162,8 +176,8 @@ const JobDetail = () => {
                 <div className="pt-4 border-t">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-medium text-muted-foreground">Driver Assignment</p>
-                    {/* Only show Driver View button to admin and driver roles */}
-                    {(user?.role === 'admin' || user?.role === 'driver') && (
+                    {/* Only show Driver View button to driver role, and only if job is editable */}
+                    {user?.role === 'driver' && canDriverEditJob(job) && (
                       <Button variant="outline" size="sm" asChild>
                         <Link to={`/driver/jobs/${job.id}`} className="text-inherit no-underline">
                           <Smartphone className="h-4 w-4 mr-2" />
@@ -210,16 +224,19 @@ const JobDetail = () => {
             <CardContent>
               <div className="space-y-3">
                 {job.assets.map((asset) => {
-                  const category = assetCategories?.find((c) => c.id === asset.category);
+                  // Try to find category by ID first, then by name
+                  const category = assetCategories?.find(
+                    (c) => c.id === (asset.categoryId || asset.category) || c.name === (asset.categoryName || asset.category)
+                  );
                   return (
                     <div
                       key={asset.id}
                       className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{category?.icon}</span>
+                        <span className="text-2xl">{category?.icon || '📦'}</span>
                         <div>
-                          <p className="font-medium">{category?.name || asset.category}</p>
+                          <p className="font-medium">{category?.name || asset.categoryName || asset.category}</p>
                           <p className="text-sm text-muted-foreground">
                             {asset.quantity} units
                             {asset.weight && ` • ${asset.weight}kg`}
@@ -246,10 +263,10 @@ const JobDetail = () => {
 
         {/* Right Column - Summary */}
         {user?.role !== 'driver' && (
-          <div className="space-y-6">
+          <div className="space-y-6 flex flex-col">
             {/* CO2e Impact */}
-            <Card className="bg-gradient-eco border-primary/20">
-              <CardHeader>
+            <Card className="bg-gradient-eco border-primary/20 flex-shrink-0">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Leaf className="h-4 w-4 text-primary" />
                   Environmental Impact
@@ -281,8 +298,8 @@ const JobDetail = () => {
             </Card>
 
             {/* Financial Summary */}
-            <Card>
-              <CardHeader>
+            <Card className="flex-shrink-0">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Scale className="h-4 w-4" />
                   Financial Summary
@@ -306,9 +323,326 @@ const JobDetail = () => {
               </CardContent>
             </Card>
 
+          {/* Evidence Review (Admin only) */}
+          {user?.role === 'admin' && (
+            <Card className="border-border/50 flex flex-col h-full">
+              <CardHeader className="pb-3 flex-shrink-0">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-base flex items-center gap-2 min-w-0">
+                    <FileCheck className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span className="truncate">Collection Evidence</span>
+                  </CardTitle>
+                  <Badge variant="outline" className="text-xs font-normal flex-shrink-0">
+                    <Lock className="h-3 w-3 mr-1" />
+                    Immutable
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col min-h-0">
+                {(() => {
+                  // Handle both array and single evidence (backward compatibility)
+                  // Also handle null/undefined cases
+                  let evidenceList: any[] = [];
+                  
+                  if (job.evidence) {
+                    if (Array.isArray(job.evidence)) {
+                      evidenceList = job.evidence;
+                    } else if (typeof job.evidence === 'object') {
+                      // Single evidence object (backward compatibility)
+                      evidenceList = [{ ...job.evidence, status: job.evidence.status || job.status }];
+                    }
+                  }
+
+                  // Sort evidence by workflow order for better UX
+                  const workflowOrder: Record<string, number> = {
+                    'en-route': 1,
+                    'en_route': 1,
+                    'arrived': 2,
+                    'collected': 3,
+                    'warehouse': 4,
+                    'sanitised': 5,
+                    'graded': 6,
+                    'completed': 7,
+                    'booked': 0,
+                    'routed': 0,
+                  };
+                  
+                  evidenceList.sort((a, b) => {
+                    const orderA = workflowOrder[a.status] ?? 999;
+                    const orderB = workflowOrder[b.status] ?? 999;
+                    return orderA - orderB;
+                  });
+
+                  // Status labels
+                  const statusLabels: Record<string, string> = {
+                    'en-route': 'En Route',
+                    'en_route': 'En Route',
+                    'arrived': 'Arrived',
+                    'collected': 'Collected',
+                    'warehouse': 'Warehouse',
+                    'sanitised': 'Sanitised',
+                    'graded': 'Graded',
+                    'completed': 'Completed',
+                    'booked': 'Booked',
+                    'routed': 'Routed',
+                  };
+                  
+                  // Normalize status for comparison (handle both en-route and en_route)
+                  const normalizeStatus = (status: string) => status === 'en_route' ? 'en-route' : status;
+                  const statusesWithEvidence = new Set(
+                    evidenceList.map((ev: any) => normalizeStatus(ev.status || ''))
+                  );
+                  
+                  const requiredStatuses = ['en-route', 'arrived', 'collected', 'warehouse'];
+
+                  if (evidenceList.length === 0) {
+                    return (
+                      <div className="py-8 text-center">
+                        <FileCheck className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                        <p className="text-sm text-muted-foreground">
+                          No evidence submitted yet
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="flex flex-col h-full min-h-0 space-y-3">
+                      {/* Compact Summary */}
+                      <div className="p-3 bg-gradient-to-br from-muted/30 to-muted/10 rounded-lg border border-border/50 flex-shrink-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-semibold text-foreground">Status Summary</p>
+                          <Badge variant="secondary" className="text-xs">
+                            {evidenceList.length}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {requiredStatuses.map((status) => {
+                            const hasEvidence = statusesWithEvidence.has(status);
+                            return (
+                              <div
+                                key={status}
+                                className={`flex items-center gap-1.5 p-1.5 rounded border transition-colors ${
+                                  hasEvidence
+                                    ? 'bg-success/10 border-success/20 text-success'
+                                    : 'bg-muted/30 border-border/50 text-muted-foreground'
+                                }`}
+                              >
+                                <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${hasEvidence ? 'bg-success' : 'bg-muted-foreground/30'}`} />
+                                <span className="text-xs font-medium truncate">{statusLabels[status] || status}</span>
+                                {hasEvidence && (
+                                  <CheckCircle2 className="h-3 w-3 ml-auto flex-shrink-0" />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Compact Accordion with scroll */}
+                      <div className="flex-1 min-h-0 overflow-hidden">
+                        <Accordion type="single" collapsible className="w-full space-y-1.5">
+                        {evidenceList.map((evidence: any, idx: number) => {
+                          const statusLabel = statusLabels[evidence.status] || evidence.status || 'Unknown';
+                          const evidenceKey = `${job.id}-${evidence.status}-${idx}`;
+                          
+                          // Check if this evidence is for the current job status
+                          const normalizeStatus = (status: string) => status === 'en_route' ? 'en-route' : status;
+                          const isCurrentStatusEvidence = normalizeStatus(evidence.status || '') === normalizeStatus(job.status);
+                          
+                          // Count evidence items
+                          const hasPhotos = evidence.photos && evidence.photos.length > 0;
+                          const hasSignature = !!evidence.signature;
+                          const hasSealNumbers = evidence.sealNumbers && evidence.sealNumbers.length > 0;
+                          const hasNotes = !!evidence.notes;
+                          const itemCount = [hasPhotos, hasSignature, hasSealNumbers, hasNotes].filter(Boolean).length;
+                          
+                          const submissionDate = evidence.createdAt 
+                            ? new Date(evidence.createdAt).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : null;
+                          
+                          return (
+                            <AccordionItem 
+                              key={evidenceKey} 
+                              value={evidenceKey} 
+                              className={`border rounded-md overflow-hidden transition-colors ${
+                                isCurrentStatusEvidence 
+                                  ? 'border-primary/50 bg-primary/5 hover:bg-primary/10' 
+                                  : 'border-border/50 bg-card hover:bg-muted/30'
+                              }`}
+                            >
+                              <AccordionTrigger className="hover:no-underline px-3 py-2.5">
+                                <div className="flex items-center justify-between w-full pr-2 min-w-0">
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${isCurrentStatusEvidence ? 'bg-primary' : 'bg-muted-foreground'}`} />
+                                    <Badge 
+                                      variant={isCurrentStatusEvidence ? "default" : "secondary"} 
+                                      className="font-medium text-xs flex-shrink-0"
+                                    >
+                                      {statusLabel}
+                                      {isCurrentStatusEvidence && (
+                                        <span className="ml-1 text-xs">(Current)</span>
+                                      )}
+                                    </Badge>
+                                    {submissionDate && (
+                                      <span className="text-xs text-muted-foreground truncate hidden lg:inline">
+                                        {submissionDate}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs flex-shrink-0 ml-2">
+                                    {hasPhotos && (
+                                      <span className="flex items-center gap-0.5 text-muted-foreground" title={`${evidence.photos.length} photos`}>
+                                        <Camera className="h-3 w-3" />
+                                        <span className="font-medium hidden sm:inline">{evidence.photos.length}</span>
+                                      </span>
+                                    )}
+                                    {hasSignature && (
+                                      <span className="text-muted-foreground" title="Signature">
+                                        <PenTool className="h-3 w-3" />
+                                      </span>
+                                    )}
+                                    {hasSealNumbers && (
+                                      <span className="text-muted-foreground hidden sm:inline" title={`${evidence.sealNumbers.length} seals`}>
+                                        {evidence.sealNumbers.length}
+                                      </span>
+                                    )}
+                                    {hasNotes && (
+                                      <span className="text-muted-foreground hidden sm:inline" title="Notes">N</span>
+                                    )}
+                                    {itemCount === 0 && (
+                                      <Badge variant="destructive" className="text-xs">
+                                        Empty
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent className="px-3 pb-3 pt-2 max-h-[400px] overflow-y-auto">
+                                <div className="space-y-3 border-t border-border/50 pt-3">
+                                  {/* Photos */}
+                                  {hasPhotos && (
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Camera className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <p className="text-xs font-semibold">Photos</p>
+                                        <Badge variant="outline" className="text-xs ml-auto">
+                                          {evidence.photos.length}
+                                        </Badge>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {evidence.photos.map((photo: string, photoIdx: number) => (
+                                          <div
+                                            key={photoIdx}
+                                            className="relative group cursor-pointer rounded overflow-hidden border border-border/50 hover:border-primary/50 transition-all"
+                                            onClick={() => window.open(photo, '_blank')}
+                                          >
+                                            <img
+                                              src={photo}
+                                              alt={`Photo ${photoIdx + 1}`}
+                                              className="w-full h-20 object-cover group-hover:scale-105 transition-transform duration-200"
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <FileCheck className="h-4 w-4 text-white drop-shadow-lg" />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Signature */}
+                                  {hasSignature && (
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <PenTool className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <p className="text-xs font-semibold">Signature</p>
+                                      </div>
+                                      <div 
+                                        className="inline-block border border-border rounded p-1.5 bg-white cursor-pointer hover:border-primary/50 transition-colors"
+                                        onClick={() => window.open(evidence.signature, '_blank')}
+                                      >
+                                        <img
+                                          src={evidence.signature}
+                                          alt="Signature"
+                                          className="h-16 w-auto object-contain"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Seal Numbers */}
+                                  {hasSealNumbers && (
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <p className="text-xs font-semibold">Seals</p>
+                                        <Badge variant="outline" className="text-xs ml-auto">
+                                          {evidence.sealNumbers.length}
+                                        </Badge>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {evidence.sealNumbers.map((seal: string, sealIdx: number) => (
+                                          <Badge 
+                                            key={sealIdx} 
+                                            variant="secondary" 
+                                            className="text-xs py-1 px-2 font-mono bg-muted hover:bg-muted/80 transition-colors"
+                                          >
+                                            {seal}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Notes */}
+                                  {hasNotes && (
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <FileCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <p className="text-xs font-semibold">Notes</p>
+                                      </div>
+                                      <div className="bg-muted/50 p-2 rounded border border-border/50">
+                                        <p className="text-xs whitespace-pre-wrap text-foreground leading-relaxed break-words">
+                                          {evidence.notes}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {itemCount === 0 && (
+                                    <div className="text-center py-4 space-y-1.5">
+                                      <AlertCircle className="h-6 w-6 mx-auto text-muted-foreground/50" />
+                                      <p className="text-xs font-medium text-muted-foreground">
+                                        No data available
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          );
+                        })}
+                        </Accordion>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Certificates */}
-          <Card>
-            <CardHeader>
+          <Card className="flex-shrink-0">
+            <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <FileText className="h-4 w-4" />
                 Certificates

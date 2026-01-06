@@ -27,10 +27,16 @@ const Jobs = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<WorkflowStatus | "all">("all");
 
-  const { data: jobs, isLoading, error } = useJobs({
+  const { data: allJobs, isLoading, error } = useJobs({
     status: activeFilter === "all" ? undefined : activeFilter,
     searchQuery: searchQuery || undefined,
   });
+  
+  // For drivers, filter out jobs with status "warehouse" or later (they should only appear in Job History)
+  // Jobs at "warehouse", "sanitised", "graded", or "completed" should be in history
+  const jobs = user?.role === 'driver' 
+    ? (allJobs || []).filter(job => !['warehouse', 'sanitised', 'graded', 'completed'].includes(job.status))
+    : (allJobs || []);
   
   const isReseller = user?.role === 'reseller';
 

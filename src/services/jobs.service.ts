@@ -4,6 +4,8 @@ import { mockJobs } from '@/mocks/mock-data';
 import type { User } from '@/types/auth';
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
 import { USE_MOCK_API, API_BASE_URL } from '@/lib/config';
+import { apiClient } from './api-client';
+import { transformJobs, transformJob } from './data-transform';
 import { 
   calculateAllVehicleEmissions,
   kmToMiles,
@@ -13,14 +15,42 @@ const SERVICE_NAME = 'jobs';
 
 class JobsService {
   async getJobs(filter?: JobsFilter, user?: User | null): Promise<Job[]> {
-    // Use mock API for Milestone 1
-    if (USE_MOCK_API) {
-      return this.getJobsMock(filter, user);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getJobsAPI(filter, user);
     }
     
-    // Future: Real API implementation
-    // return this.getJobsAPI(filter, user);
-    throw new Error('Real API not implemented yet');
+    return this.getJobsMock(filter, user);
+  }
+
+  private async getJobsAPI(filter?: JobsFilter, user?: User | null): Promise<Job[]> {
+    const params = new URLSearchParams();
+    if (filter?.status && filter.status !== 'all') {
+      // Convert frontend status format to backend format
+      const statusMap: Record<string, string> = {
+        'en-route': 'en_route',
+      };
+      const backendStatus = statusMap[filter.status] || filter.status;
+      params.append('status', backendStatus);
+    }
+    if (filter?.clientName) {
+      params.append('clientName', filter.clientName);
+    }
+    if (filter?.searchQuery) {
+      params.append('searchQuery', filter.searchQuery);
+    }
+    if (filter?.limit) {
+      params.append('limit', filter.limit.toString());
+    }
+    if (filter?.offset) {
+      params.append('offset', filter.offset.toString());
+    }
+
+    const queryString = params.toString();
+    const endpoint = `/jobs${queryString ? `?${queryString}` : ''}`;
+    
+    const backendJobs = await apiClient.get<any[]>(endpoint);
+    return transformJobs(backendJobs);
   }
 
   private async getJobsMock(filter?: JobsFilter, user?: User | null): Promise<Job[]> {
@@ -59,18 +89,18 @@ class JobsService {
         const clientNames = resellerClients.map(c => c.name);
         jobs = jobs.filter(job => clientNames.includes(job.clientName));
       } else if (user.role === 'driver') {
-        // Drivers only see jobs assigned to them (by name match)
-        // Only exclude completed jobs if not explicitly requested in filter
+        // Drivers see all jobs assigned to them (by name match) for history
+        // Access restriction to jobs at "warehouse" or beyond is handled at the UI level (DriverJobView)
         jobs = jobs.filter(job => {
           if (!job.driver || job.driver.name !== user.name) {
             return false;
           }
-          // If filter explicitly requests completed jobs, don't exclude them
-          if (filter?.status === 'completed') {
-            return true;
+          // Apply status filter if provided
+          if (filter?.status) {
+            return job.status === filter.status;
           }
-          // Otherwise exclude completed jobs (for schedule view)
-          return job.status !== 'completed';
+          // Otherwise show all jobs (for history)
+          return true;
         });
       }
     }
@@ -110,12 +140,37 @@ class JobsService {
   }
 
   async getJob(id: string): Promise<Job | null> {
-    if (USE_MOCK_API) {
-      return this.getJobMock(id);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getJobAPI(id);
     }
     
-    // Future: Real API implementation
-    throw new Error('Real API not implemented yet');
+    return this.getJobMock(id);
+  }
+
+  private async getJobAPI(id: string): Promise<Job | null> {
+    try {
+      const backendJob = await apiClient.get<any>(`/jobs/${id}`);
+      
+      // Debug: Log raw backend response
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Jobs Service] Raw backend job response:', {
+          id: backendJob?.id,
+          hasEvidence: !!backendJob?.evidence,
+          evidenceType: typeof backendJob?.evidence,
+          evidenceIsArray: Array.isArray(backendJob?.evidence),
+          evidenceLength: Array.isArray(backendJob?.evidence) ? backendJob.evidence.length : 'N/A',
+          evidenceValue: backendJob?.evidence,
+        });
+      }
+      
+      return transformJob(backendJob);
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   private async getJobMock(id: string): Promise<Job | null> {
@@ -155,12 +210,41 @@ class JobsService {
   }
 
   async getDashboardStats(user?: User | null): Promise<DashboardStats> {
-    if (USE_MOCK_API) {
-      return this.getDashboardStatsMock(user);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getDashboardStatsAPI();
     }
     
-    // Future: Real API implementation
-    throw new Error('Real API not implemented yet');
+    return this.getDashboardStatsMock(user);
+  }
+
+  private async getDashboardStatsAPI(): Promise<DashboardStats> {
+    try {
+      const stats = await apiClient.get<DashboardStats>('/dashboard/stats');
+      return stats;
+    } catch (error) {
+      console.error('Failed to fetch dashboard stats:', error);
+      // Return empty stats instead of throwing to prevent blocking page load
+      return {
+        totalJobs: 0,
+        activeJobs: 0,
+        totalCO2eSaved: 0,
+        totalBuyback: 0,
+        totalAssets: 0,
+        avgCharityPercent: 0,
+        travelEmissions: {
+          petrol: 0,
+          diesel: 0,
+          electric: 0,
+          totalDistanceKm: 0,
+          totalDistanceMiles: 0,
+        },
+        completedJobsCount: 0,
+        bookedJobsCount: 0,
+        completedCO2eSaved: 0,
+        estimatedCO2eSaved: 0,
+      };
+    }
   }
 
   private async getDashboardStatsMock(user?: User | null): Promise<DashboardStats> {
@@ -179,22 +263,31 @@ class JobsService {
     const jobs = await this.getJobs(undefined, user);
     
     // Calculate travel emissions based on job locations
-    // For dashboard, we estimate total distance based on existing travelEmissions values
-    // (which are calculated for a van/truck, averaging around 0.24-0.89 kg/km)
-    // We'll estimate based on average emissions per km (using 0.24 for van as baseline)
-    // Since travelEmissions is already round trip, we can estimate one-way distance
-    const avgEmissionsPerKm = 0.24; // kg CO2e per km for van (conservative estimate)
+    // Sum up all travelEmissions from jobs (these are already calculated for the actual vehicle used)
+    // Sum up actual round trip distances from bookings (more accurate than deriving from emissions)
     let totalDistanceKm = 0;
+    let totalTravelEmissionsActual = 0;
+    
+    // Use actual roundTripDistanceKm from bookings if available, otherwise estimate from emissions
+    const avgEmissionsPerKm = 0.24; // kg CO2e per km for van (fallback for jobs without booking distance)
     
     for (const job of jobs) {
-      // Estimate one-way distance from travelEmissions, then multiply by 2 for round trip
-      // travelEmissions = distance_round_trip * emissions_per_km
-      // So: distance_round_trip = travelEmissions / emissions_per_km
-      const roundTripDistance = job.travelEmissions / avgEmissionsPerKm;
-      totalDistanceKm += roundTripDistance;
+      const emissions = job.travelEmissions || 0;
+      if (emissions > 0) {
+        totalTravelEmissionsActual += emissions;
+      }
+      
+      // Use actual distance from booking if available (more accurate)
+      if (job.booking?.roundTripDistanceKm) {
+        totalDistanceKm += job.booking.roundTripDistanceKm;
+      } else if (emissions > 0) {
+        // Fallback: estimate from emissions if booking distance not available
+        totalDistanceKm += emissions / avgEmissionsPerKm;
+      }
     }
     
     // Calculate emissions for all vehicle types based on total distance
+    // This shows what the emissions would be if all jobs used petrol, diesel, or electric vehicles
     const vehicleEmissions = calculateAllVehicleEmissions(totalDistanceKm);
     
     // Separate completed and booked (not yet completed) jobs for client dashboard
@@ -203,9 +296,20 @@ class JobsService {
     const completedJobs = jobs.filter(j => j.status === 'completed');
     const bookedJobs = jobs.filter(j => j.status !== 'completed'); // All jobs that are not yet completed
     
+    // Calculate active jobs - for drivers, exclude jobs at "warehouse" or later
+    // (those should only appear in Job History)
+    let activeJobs: number;
+    if (user?.role === 'driver') {
+      activeJobs = jobs.filter(j => 
+        !['warehouse', 'sanitised', 'graded', 'completed'].includes(j.status)
+      ).length;
+    } else {
+      activeJobs = jobs.filter(j => !['completed'].includes(j.status)).length;
+    }
+    
     return {
       totalJobs: jobs.length,
-      activeJobs: jobs.filter(j => !['completed'].includes(j.status)).length,
+      activeJobs,
       totalCO2eSaved: jobs.reduce((sum, j) => sum + j.co2eSaved, 0),
       totalBuyback: jobs.reduce((sum, j) => sum + j.buybackValue, 0),
       totalAssets: jobs.reduce((sum, j) => sum + j.assets.reduce((a, asset) => a + asset.quantity, 0), 0),
@@ -227,12 +331,25 @@ class JobsService {
   }
 
   async updateJobStatus(jobId: string, status: Job['status']): Promise<Job> {
-    if (USE_MOCK_API) {
-      return this.updateJobStatusMock(jobId, status);
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.updateJobStatusAPI(jobId, status);
     }
     
-    // Future: Real API implementation
-    throw new Error('Real API not implemented yet');
+    return this.updateJobStatusMock(jobId, status);
+  }
+
+  private async updateJobStatusAPI(jobId: string, status: Job['status']): Promise<Job> {
+    // Convert frontend status format to backend format
+    const statusMap: Record<string, string> = {
+      'en-route': 'en_route',
+    };
+    const backendStatus = statusMap[status] || status;
+    
+    const backendJob = await apiClient.patch<any>(`/jobs/${jobId}/status`, { 
+      status: backendStatus 
+    });
+    return transformJob(backendJob);
   }
 
   private async updateJobStatusMock(jobId: string, status: Job['status']): Promise<Job> {
@@ -335,13 +452,18 @@ class JobsService {
     return job;
   }
 
-  async updateJobEvidence(jobId: string, evidence: Partial<Job['evidence']>): Promise<Job> {
-    if (USE_MOCK_API) {
-      return this.updateJobEvidenceMock(jobId, evidence);
+  async updateJobEvidence(jobId: string, evidence: Partial<Job['evidence']> & { status?: string }): Promise<Job> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.updateJobEvidenceAPI(jobId, evidence);
     }
     
-    // Future: Real API implementation
-    throw new Error('Real API not implemented yet');
+    return this.updateJobEvidenceMock(jobId, evidence);
+  }
+
+  private async updateJobEvidenceAPI(jobId: string, evidence: Partial<Job['evidence']> & { status?: string }): Promise<Job> {
+    const backendJob = await apiClient.patch<any>(`/jobs/${jobId}/evidence`, evidence);
+    return transformJob(backendJob);
   }
 
   private async updateJobEvidenceMock(jobId: string, evidence: Partial<Job['evidence']>): Promise<Job> {

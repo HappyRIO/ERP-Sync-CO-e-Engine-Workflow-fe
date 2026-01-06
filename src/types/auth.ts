@@ -64,5 +64,12 @@ export interface Invite {
   invitedAt: string;
   expiresAt: string;
   acceptedAt?: string;
+  token?: string;
+  status?: 'pending' | 'accepted' | 'expired';
+  inviter?: {
+    id: string;
+    name: string;
+    email: string;
+  };
 }
 

@@ -1,7 +1,8 @@
 // Grading Service (for admin grading management)
 import type { GradingRecord } from '@/mocks/mock-entities';
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
-import { USE_MOCK_API } from '@/lib/config';
+import { USE_MOCK_API, API_BASE_URL } from '@/lib/config';
+import { apiClient } from './api-client';
 
 const SERVICE_NAME = 'grading';
 
@@ -109,10 +110,23 @@ const baseResaleValues: Record<string, number> = {
 
 class GradingService {
   async getGradingRecords(bookingId?: string): Promise<GradingRecord[]> {
-    if (USE_MOCK_API) {
-      return this.getGradingRecordsMock(bookingId);
+    if (!USE_MOCK_API) {
+      return this.getGradingRecordsAPI(bookingId);
     }
-    throw new Error('Real API not implemented yet');
+    return this.getGradingRecordsMock(bookingId);
+  }
+
+  private async getGradingRecordsAPI(bookingId?: string): Promise<GradingRecord[]> {
+    try {
+      const params = bookingId ? `?bookingId=${bookingId}` : '';
+      const records = await apiClient.get<GradingRecord[]>(`/grading${params}`);
+      return records;
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) {
+        return [];
+      }
+      throw error;
+    }
   }
 
   private async getGradingRecordsMock(bookingId?: string): Promise<GradingRecord[]> {
@@ -145,10 +159,30 @@ class GradingService {
     condition?: string,
     notes?: string
   ): Promise<GradingRecord> {
-    if (USE_MOCK_API) {
-      return this.createGradingRecordMock(bookingId, assetId, assetCategory, grade, gradedBy, condition, notes);
+    if (!USE_MOCK_API) {
+      return this.createGradingRecordAPI(bookingId, assetId, assetCategory, grade, gradedBy, condition, notes);
     }
-    throw new Error('Real API not implemented yet');
+    return this.createGradingRecordMock(bookingId, assetId, assetCategory, grade, gradedBy, condition, notes);
+  }
+
+  private async createGradingRecordAPI(
+    bookingId: string,
+    assetId: string,
+    assetCategory: string,
+    grade: GradingRecord['grade'],
+    gradedBy: string,
+    condition?: string,
+    notes?: string
+  ): Promise<GradingRecord> {
+    const record = await apiClient.post<GradingRecord>('/grading', {
+      bookingId,
+      assetId,
+      assetCategory,
+      grade,
+      condition,
+      notes,
+    });
+    return record;
   }
 
   private async createGradingRecordMock(
@@ -225,7 +259,27 @@ class GradingService {
     return newRecord;
   }
 
-  calculateResaleValue(category: string, grade: GradingRecord['grade'], quantity: number): number {
+  async calculateResaleValue(category: string, grade: GradingRecord['grade'], quantity: number): Promise<number> {
+    if (!USE_MOCK_API) {
+      return this.calculateResaleValueAPI(category, grade, quantity);
+    }
+    return this.calculateResaleValueMock(category, grade, quantity);
+  }
+
+  private async calculateResaleValueAPI(category: string, grade: GradingRecord['grade'], quantity: number): Promise<number> {
+    try {
+      // The API client automatically extracts data.data from { success: true, data: value }
+      // So we expect the response to be a number directly
+      const response = await apiClient.get<number>(`/grading/calculate-resale-value?category=${encodeURIComponent(category)}&grade=${encodeURIComponent(grade)}&quantity=${quantity}`);
+      return response || 0;
+    } catch (error) {
+      console.error('Failed to calculate resale value:', error);
+      // Fallback to mock calculation if API fails
+      return this.calculateResaleValueMock(category, grade, quantity);
+    }
+  }
+
+  private calculateResaleValueMock(category: string, grade: GradingRecord['grade'], quantity: number): number {
     const baseValue = baseResaleValues[category] || 0;
     const multiplier = gradeMultipliers[grade] || 0;
     return Math.round(baseValue * multiplier * quantity);

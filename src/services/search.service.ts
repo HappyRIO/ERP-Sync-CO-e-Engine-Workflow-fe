@@ -1,6 +1,7 @@
 // Global Search Service
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
 import { USE_MOCK_API } from '@/lib/config';
+import { apiClient } from './api-client';
 import { mockJobs } from '@/mocks/mock-data';
 import { mockBookings, mockClients } from '@/mocks/mock-entities';
 import type { User } from '@/types/auth';
@@ -22,10 +23,16 @@ export interface SearchResponse {
 
 class SearchService {
   async search(query: string, user?: User | null): Promise<SearchResponse> {
-    if (USE_MOCK_API) {
+    // Use real API if not using mocks
+    // For now, search is done client-side, so we'll keep using mocks
+    // TODO: Implement backend search endpoint if needed
+    if (!USE_MOCK_API) {
+      // Backend doesn't have a unified search endpoint yet
+      // For now, use mock implementation
       return this.searchMock(query, user);
     }
-    throw new Error('Real API not implemented yet');
+    
+    return this.searchMock(query, user);
   }
 
   private async searchMock(query: string, user?: User | null): Promise<SearchResponse> {

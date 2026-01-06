@@ -14,6 +14,7 @@ import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
 import { toast } from "sonner";
 
 const statusGroups: { label: string; statuses: (BookingLifecycleStatus | 'cancelled')[] }[] = [
+  { label: "Pending Approval", statuses: ['pending'] },
   { label: "Created", statuses: ['created'] },
   { label: "Scheduled", statuses: ['scheduled'] },
   { label: "In Progress", statuses: ['collected', 'sanitised', 'graded'] },
@@ -195,6 +196,13 @@ const BookingQueue = () => {
                                 <span>Driver: {booking.driverName}</span>
                               </div>
                             )}
+                            {booking.status === 'pending' && (
+                              <Button variant="default" asChild className="w-full mt-2" size="sm">
+                                <Link to={`/admin/booking-approval/${booking.id}`} className="text-inherit no-underline">
+                                  Review & Approve
+                                </Link>
+                              </Button>
+                            )}
                             {booking.status === 'created' && (
                               <Button variant="default" asChild className="w-full mt-2" size="sm">
                                 <Link to={`/admin/assign?booking=${booking.id}`} className="text-inherit no-underline">
@@ -219,7 +227,7 @@ const BookingQueue = () => {
                             )}
                             {booking.status === 'graded' && (
                               <Button asChild className="w-full mt-2" size="sm" variant="success">
-                                <Link to={`/admin/approval/${booking.id}`} className="text-inherit no-underline">
+                                <Link to={`/admin/booking-approval/${booking.id}`} className="text-inherit no-underline">
                                   Final Approval
                                 </Link>
                               </Button>

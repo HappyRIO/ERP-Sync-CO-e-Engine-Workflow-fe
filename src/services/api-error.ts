@@ -34,6 +34,14 @@ export interface ErrorSimulationConfig {
 
 // Get error simulation config from localStorage or defaults
 export function getErrorSimulationConfig(serviceName: string): ErrorSimulationConfig {
+  // Only read from localStorage in development
+  if (process.env.NODE_ENV !== 'development') {
+    return {
+      enabled: false,
+      errorRate: 0,
+    };
+  }
+  
   const stored = localStorage.getItem(`error_sim_${serviceName}`);
   if (stored) {
     try {
@@ -190,6 +198,11 @@ export const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, 
 
 // Check if error should be simulated (for conditional error throwing)
 export function shouldSimulateError(serviceName: string): boolean {
+  // Only enable error simulation in development
+  if (process.env.NODE_ENV !== 'development') {
+    return false;
+  }
+  
   const config = getErrorSimulationConfig(serviceName);
   if (!config.enabled) return false;
   return Math.random() <= config.errorRate;

@@ -19,18 +19,19 @@ import { useJobs } from "@/hooks/useJobs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { kmToMiles } from "@/lib/calculations";
 
 const DriverSchedule = () => {
   const { user } = useAuth();
   const { data: allJobs = [], isLoading, error } = useJobs();
 
-  // Filter jobs for current driver (assigned to this driver and not completed)
-  // Note: Service already filters by driver name and excludes completed, but we also check by ID
+  // Filter jobs for current driver (assigned to this driver, exclude jobs at "warehouse" or later)
+  // Jobs at "warehouse" or later should only appear in Job History
   const driverJobs = useMemo(() => {
     return allJobs.filter(job => 
       job.driver && 
       (job.driver.id === user?.id || job.driver.name === user?.name) && 
-      job.status !== 'completed'
+      !['warehouse', 'sanitised', 'graded', 'completed'].includes(job.status)
     );
   }, [allJobs, user?.id, user?.name]);
 
@@ -73,18 +74,39 @@ const DriverSchedule = () => {
     return grouped;
   }, [upcomingJobs]);
 
-  // Calculate route statistics (mock - would use actual routing API)
+  // Calculate route statistics based on travel emissions (approximate but consistent with dashboard)
   const routeStats = useMemo(() => {
     if (upcomingJobs.length === 0) return null;
 
-    // Mock calculations
-    const totalDistance = upcomingJobs.length * 15; // Mock: 15km average between jobs
-    const estimatedTime = upcomingJobs.length * 30; // Mock: 30 minutes per job including travel
+    // Use same baseline assumption as dashboard stats:
+    // travelEmissions (kg CO2e) ≈ distance_round_trip_km * 0.24 kg/km (van baseline)
+    const avgEmissionsPerKm = 0.24;
+
+    let totalDistanceKm = 0;
+
+    for (const job of upcomingJobs) {
+      // Guard against zero to avoid division by zero if config changes
+      if (!avgEmissionsPerKm || job.travelEmissions <= 0) continue;
+
+      const roundTripKm = job.travelEmissions / avgEmissionsPerKm;
+      totalDistanceKm += roundTripKm;
+    }
+
+    // Estimate total time:
+    // - Travel time at ~40 km/h average speed
+    // - Plus 30 minutes on-site per job
+    const averageSpeedKmh = 40;
+    const travelTimeMinutes = averageSpeedKmh > 0
+      ? (totalDistanceKm / averageSpeedKmh) * 60
+      : 0;
+    const onSiteMinutes = upcomingJobs.length * 30;
+    const estimatedTimeMinutes = Math.round(travelTimeMinutes + onSiteMinutes);
 
     return {
       totalJobs: upcomingJobs.length,
-      totalDistance,
-      estimatedTime,
+      totalDistanceKm,
+      totalDistanceMiles: kmToMiles(totalDistanceKm),
+      estimatedTimeMinutes,
     };
   }, [upcomingJobs]);
 
@@ -136,8 +158,12 @@ const DriverSchedule = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Distance</p>
-                  <p className="text-2xl font-bold">{routeStats.totalDistance} km</p>
-                  <p className="text-xs text-muted-foreground mt-1">(Estimated)</p>
+                  <p className="text-2xl font-bold">
+                    {routeStats.totalDistanceMiles.toFixed(1)} miles
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ({routeStats.totalDistanceKm.toFixed(1)} km, estimated)
+                  </p>
                 </div>
                 <RouteIcon className="h-8 w-8 text-success/50" />
               </div>
@@ -148,7 +174,10 @@ const DriverSchedule = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Estimated Time</p>
-                  <p className="text-2xl font-bold">{Math.floor(routeStats.estimatedTime / 60)}h {routeStats.estimatedTime % 60}m</p>
+                  <p className="text-2xl font-bold">
+                    {Math.floor(routeStats.estimatedTimeMinutes / 60)}h{" "}
+                    {routeStats.estimatedTimeMinutes % 60}m
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">(Including travel)</p>
                 </div>
                 <Clock className="h-8 w-8 text-warning/50" />

@@ -19,6 +19,7 @@ import Documents from "./pages/app/Documents";
 import Settings from "./pages/app/Settings";
 import Users from "./pages/app/Users";
 import Clients from "./pages/app/Clients";
+import Drivers from "./pages/app/admin/Drivers";
 import Invoices from "./pages/app/Invoices";
 import Commission from "./pages/app/Commission";
 import BookingQueue from "./pages/app/admin/BookingQueue";
@@ -32,6 +33,7 @@ import BookingGradingReport from "./pages/app/BookingGradingReport";
 import Sites from "./pages/app/Sites";
 import JobHistory from "./pages/app/JobHistory";
 import Approval from "./pages/app/admin/Approval";
+import BookingApproval from "./pages/app/admin/BookingApproval";
 import BookingSummary from "./pages/app/BookingSummary";
 import DriverSchedule from "./pages/app/DriverSchedule";
 import Notifications from "./pages/app/Notifications";
@@ -79,7 +81,7 @@ const App = () => (
                 <Route
                   path="/driver/jobs/:id"
                   element={
-                    <ProtectedRoute allowedRoles={['driver', 'admin']}>
+                    <ProtectedRoute allowedRoles={['driver']}>
                       <DriverJobView />
                     </ProtectedRoute>
                   }
@@ -95,7 +97,7 @@ const App = () => (
                 <Route
                   path="/booking"
                   element={
-                    <ProtectedRoute allowedRoles={['client', 'reseller', 'admin']}>
+                    <ProtectedRoute allowedRoles={['client', 'admin']}>
                       <Booking />
                     </ProtectedRoute>
                   }
@@ -145,6 +147,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin', 'reseller']}>
                       <Clients />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/drivers"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <Drivers />
                     </ProtectedRoute>
                   }
                 />
@@ -201,6 +211,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin']}>
                       <Grading />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/booking-approval/:id"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <BookingApproval />
                     </ProtectedRoute>
                   }
                 />

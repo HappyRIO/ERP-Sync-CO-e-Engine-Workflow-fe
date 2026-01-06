@@ -27,13 +27,15 @@ export interface Job {
   travelEmissions: number;
   buybackValue: number;
   charityPercent: number;
-  evidence?: Evidence;
+  evidence?: Evidence | Evidence[]; // Can be single evidence (backward compat) or array of evidence per status
   certificates: Certificate[];
 }
 
 export interface Asset {
   id: string;
-  category: string;
+  category: string; // Category ID or name (for backward compatibility)
+  categoryId?: string; // Category ID for matching with AssetCategory
+  categoryName?: string; // Category name for display
   quantity: number;
   serialNumbers?: string[];
   grade?: 'A' | 'B' | 'C' | 'D' | 'Recycled';
@@ -56,10 +58,12 @@ export interface Driver {
 }
 
 export interface Evidence {
+  status?: string; // Status for which this evidence was submitted
   photos: string[];
   signature?: string;
   sealNumbers: string[];
   notes?: string;
+  createdAt?: string;
 }
 
 export interface Certificate {

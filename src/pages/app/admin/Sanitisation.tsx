@@ -150,41 +150,40 @@ const Sanitisation = () => {
   const handleMoveToNextStatus = () => {
     if (!id || !booking) return;
     
-    // Determine the target status based on current status
-    // Workflow: collected → sanitised → graded (one step at a time)
-    const targetStatus = booking.status === 'collected' ? 'sanitised' : 'graded';
-    
-    updateBookingStatus.mutate(
-      { bookingId: id, status: targetStatus },
-      {
-        onSuccess: () => {
-          // Invalidate booking queries to refresh data
-          if (id) {
-            queryClient.invalidateQueries({ queryKey: ['bookings', id] });
-          }
-          queryClient.invalidateQueries({ queryKey: ['bookings'] });
-          
-          if (targetStatus === 'sanitised') {
-            // Moved from 'collected' to 'sanitised' - navigate to grading page
+    // Only update status if moving from 'collected' to 'sanitised'
+    // Do NOT update to 'graded' - that should only happen after actual grading is completed
+    if (booking.status === 'collected') {
+      // Update to 'sanitised' status
+      updateBookingStatus.mutate(
+        { bookingId: id, status: 'sanitised' },
+        {
+          onSuccess: () => {
+            // Invalidate booking queries to refresh data
+            if (id) {
+              queryClient.invalidateQueries({ queryKey: ['bookings', id] });
+            }
+            queryClient.invalidateQueries({ queryKey: ['bookings'] });
+            
             toast.success("Booking moved to sanitised status", {
               description: "All assets have been sanitised and verified. Proceeding to grading.",
             });
             navigate(`/admin/grading/${id}`);
-          } else {
-            // Moved from 'sanitised' to 'graded' - navigate to grading page
-            toast.success("Booking moved to grading", {
-              description: "All assets have been sanitised and verified.",
+          },
+          onError: (error) => {
+            toast.error("Failed to update booking status", {
+              description: error instanceof Error ? error.message : "Please try again.",
             });
-            navigate(`/admin/grading/${id}`);
-          }
-        },
-        onError: (error) => {
-          toast.error("Failed to update booking status", {
-            description: error instanceof Error ? error.message : "Please try again.",
-          });
-        },
-      }
-    );
+          },
+        }
+      );
+    } else if (booking.status === 'sanitised') {
+      // Just navigate to grading page - do NOT update status to 'graded'
+      // Status will remain 'sanitised' until grading is actually completed
+      toast.success("Navigating to grading page", {
+        description: "All assets have been sanitised and verified. Complete grading to proceed.",
+      });
+      navigate(`/admin/grading/${id}`);
+    }
   };
 
   return (

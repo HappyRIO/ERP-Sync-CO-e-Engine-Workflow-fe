@@ -25,6 +25,7 @@ import { useJob } from "@/hooks/useJobs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGradingRecords } from "@/hooks/useGrading";
 import { useSanitisationRecords } from "@/hooks/useSanitisation";
+import { canDriverEditJob } from "@/utils/job-helpers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
@@ -316,18 +317,6 @@ const BookingSummary = () => {
                 </Link>
               </Button>
             )}
-            <Button variant="outline" asChild>
-              <Link to={`/bookings/${id}/timeline`} className="text-inherit no-underline">
-                <Calendar className="h-4 w-4 mr-2" />
-                View Timeline
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to={`/bookings/${id}`} className="text-inherit no-underline">
-                <FileText className="h-4 w-4 mr-2" />
-                View Full Details
-              </Link>
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -369,14 +358,14 @@ const BookingSummary = () => {
               <div className="space-y-3">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-medium text-muted-foreground">Driver Details</p>
-                  {(user?.role === 'admin' || user?.role === 'driver') && relatedJob.id && (
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
-                        <Smartphone className="h-4 w-4 mr-2" />
-                        Driver View
-                      </Link>
-                    </Button>
-                  )}
+                  {user?.role === 'driver' && canDriverEditJob(relatedJob) && relatedJob.id && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
+                          <Smartphone className="h-4 w-4 mr-2" />
+                          Driver View
+                        </Link>
+                      </Button>
+                    )}
                 </div>
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-2">

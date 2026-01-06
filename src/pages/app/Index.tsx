@@ -13,21 +13,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Index = () => {
   const { user } = useAuth();
-  const canCreateBooking = user && ['admin', 'client', 'reseller'].includes(user.role);
+  const canCreateBooking = user && ['admin', 'client'].includes(user.role);
   const welcomeName = user?.name || 'User';
   
   const { data: stats, isLoading, error } = useDashboardStats();
 
+  // Show error but don't block the page - allow partial rendering
   if (error) {
-    return (
-      <div className="space-y-6">
-        <Alert variant="destructive">
-          <AlertDescription>
-            Failed to load dashboard data. Please try refreshing the page.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
+    console.error('Dashboard stats error:', error);
   }
 
   return (
@@ -58,6 +51,15 @@ const Index = () => {
         )}
       </motion.div>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load dashboard data. Showing cached data or empty state.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Stats Grid */}
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -73,7 +75,11 @@ const Index = () => {
         <div className={`grid gap-4 ${user?.role === 'driver' ? 'sm:grid-cols-1 lg:grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-4'}`}>
           <StatCard
             title="Active Jobs"
-            value={stats.activeJobs}
+            value={
+              user?.role === 'client' && typeof stats.bookedJobsCount === 'number'
+                ? stats.bookedJobsCount
+                : stats.activeJobs
+            }
             subtitle="In progress"
             icon={Truck}
             variant="primary"
@@ -113,8 +119,9 @@ const Index = () => {
 
       {/* Main Content Grid */}
       <div className={`grid gap-6 ${user?.role === 'driver' ? 'lg:grid-cols-1' : 'lg:grid-cols-5'}`}>
-        <div className={user?.role === 'driver' ? '' : 'lg:col-span-3'}>
+        <div className={user?.role === 'driver' ? 'space-y-6' : 'lg:col-span-3'}>
           <RecentJobsTable />
+          {user?.role === 'driver' && <TravelEmissionsBox />}
         </div>
         {user?.role !== 'driver' && (
           <div className="lg:col-span-2 space-y-6">

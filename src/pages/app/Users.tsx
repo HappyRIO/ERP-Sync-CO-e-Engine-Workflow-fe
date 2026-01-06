@@ -1,16 +1,31 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Users as UsersIcon, Mail, Building2, Shield, UserCheck, UserX, Loader2, Clock, CheckCircle2 } from "lucide-react";
+import { Search, Users as UsersIcon, Mail, Building2, Shield, UserCheck, UserX, Loader2, Clock, CheckCircle2, UserPlus, Trash2, Copy, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useUsers, useUpdateUserStatus, useApproveUser } from "@/hooks/useUsers";
+import { useInvites, useCancelInvite } from "@/hooks/useInvites";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { authService } from "@/services/auth.service";
 import type { UserRole } from "@/types/auth";
+import type { Invite } from "@/types/auth";
 
 const roleColors: Record<UserRole, string> = {
   admin: "bg-primary/10 text-primary",
@@ -20,9 +35,16 @@ const roleColors: Record<UserRole, string> = {
 };
 
 const Users = () => {
+  const { user: currentUser } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<'reseller'>('reseller'); // Only resellers can be invited from Users page
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [inviteStatusFilter, setInviteStatusFilter] = useState<string>("all");
 
   const { data: users = [], isLoading, error } = useUsers({
     role: roleFilter !== "all" ? roleFilter : undefined,
@@ -30,6 +52,59 @@ const Users = () => {
   });
   const updateStatus = useUpdateUserStatus();
   const approveUser = useApproveUser();
+  const cancelInvite = useCancelInvite();
+
+  // Fetch reseller invitations only
+  const { data: resellerInvites = [], isLoading: isLoadingInvites } = useInvites(
+    inviteStatusFilter !== "all" ? inviteStatusFilter as 'pending' | 'accepted' | 'expired' : undefined,
+    'reseller' // Only fetch reseller invitations
+  );
+
+  // Create invite mutation
+  const createInvite = useMutation({
+    mutationFn: async (data: { email: string; role: 'client' | 'reseller' }) => {
+      if (!currentUser?.tenantId || !currentUser?.tenantName || !currentUser?.id) {
+        throw new Error('User information not found');
+      }
+      return authService.createInvite(
+        data.email,
+        data.role,
+        currentUser.id,
+        currentUser.tenantId,
+        currentUser.tenantName
+      );
+    },
+    onSuccess: (invite) => {
+      toast.success('Invitation sent successfully!', {
+        description: `An invitation has been sent to ${invite.email} as a ${invite.role}`,
+      });
+      setIsInviteDialogOpen(false);
+      setInviteEmail("");
+      setInviteRole('reseller');
+      // Invalidate users and invites queries to refresh lists
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['invites'] });
+    },
+    onError: (error) => {
+      toast.error('Failed to send invitation', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    },
+  });
+
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) {
+      toast.error('Please enter an email address');
+      return;
+    }
+    setIsSendingInvite(true);
+    try {
+      await createInvite.mutateAsync({ email: inviteEmail.trim(), role: inviteRole });
+    } finally {
+      setIsSendingInvite(false);
+    }
+  };
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -94,15 +169,99 @@ const Users = () => {
           <h2 className="text-2xl font-bold text-foreground">User Management</h2>
           <p className="text-muted-foreground">Manage platform users and access</p>
         </div>
+        <Button onClick={() => setIsInviteDialogOpen(true)}>
+          <UserPlus className="h-4 w-4 mr-2" />
+          Invite Reseller
+        </Button>
       </motion.div>
 
-      {/* Search and Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="flex flex-col sm:flex-row gap-4"
-      >
+      {/* Invite Reseller Dialog */}
+      <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite New Reseller</DialogTitle>
+            <DialogDescription>
+              Send an invitation to a new reseller. They will receive an email with instructions to join the platform and can then invite and manage clients.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSendInvite}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="inviteEmail">Email Address</Label>
+                <Input
+                  id="inviteEmail"
+                  type="email"
+                  placeholder="reseller@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  disabled={isSendingInvite}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter the email address of the reseller you want to invite. Resellers can invite and manage clients, and create bookings on their behalf.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsInviteDialogOpen(false);
+                  setInviteEmail("");
+                  setInviteRole('reseller');
+                }}
+                disabled={isSendingInvite}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSendingInvite || !inviteEmail.trim()}>
+                {isSendingInvite ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Send Invitation
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tabs Interface */}
+      <Tabs defaultValue="users" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="users">
+            Users
+            {filteredUsers.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {filteredUsers.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="invitations">
+            Reseller Invitations
+            {resellerInvites.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {resellerInvites.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Users Tab */}
+        <TabsContent value="users" className="space-y-4">
+              <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="flex flex-col sm:flex-row gap-4"
+          >
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -135,9 +294,9 @@ const Users = () => {
             <SelectItem value="inactive">Inactive</SelectItem>
           </SelectContent>
         </Select>
-      </motion.div>
+          </motion.div>
 
-      {/* Users List */}
+          {/* Users List */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -216,7 +375,15 @@ const Users = () => {
                         variant={getUserStatus(user) === 'active' ? "destructive" : "success"}
                         size="sm"
                         onClick={() => handleToggleStatus(user.id, user.isActive)}
-                        disabled={updateStatus.isPending}
+                        disabled={
+                          updateStatus.isPending || 
+                          (user.id === currentUser?.id && getUserStatus(user) === 'active')
+                        }
+                        title={
+                          user.id === currentUser?.id && getUserStatus(user) === 'active'
+                            ? "You cannot deactivate your own account"
+                            : undefined
+                        }
                       >
                         {getUserStatus(user) === 'active' ? "Deactivate" : "Activate"}
                       </Button>
@@ -227,7 +394,145 @@ const Users = () => {
             </motion.div>
           ))}
         </div>
-      )}
+        )}
+        </TabsContent>
+
+        {/* Reseller Invitations Tab */}
+        <TabsContent value="invitations" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Reseller Invitations</h3>
+              <p className="text-sm text-muted-foreground">
+                Manage and track reseller invitations
+              </p>
+            </div>
+            <Select value={inviteStatusFilter} onValueChange={setInviteStatusFilter}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Invitations</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="accepted">Accepted</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isLoadingInvites ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : resellerInvites.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                <Mail className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>No reseller invitations found</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {resellerInvites.map((invite: Invite) => {
+                const isPending = invite.status === 'pending';
+                const isAccepted = invite.status === 'accepted';
+                const isExpired = invite.status === 'expired';
+                const expiresDate = new Date(invite.expiresAt);
+                const isExpiringSoon = isPending && expiresDate.getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000; // 3 days
+
+                return (
+                  <Card key={invite.id} className={cn(
+                    "transition-all",
+                    isExpiringSoon && "border-warning/50 bg-warning/5"
+                  )}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-3">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{invite.email}</span>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                isPending && "bg-warning/10 text-warning border-warning/20",
+                                isAccepted && "bg-success/10 text-success border-success/20",
+                                isExpired && "bg-destructive/10 text-destructive border-destructive/20"
+                              )}
+                            >
+                            {isPending && <Clock className="h-3 w-3 mr-1" />}
+                            {isAccepted && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                            {isExpired && <XCircle className="h-3 w-3 mr-1" />}
+                              {invite.status || 'pending'}
+                            </Badge>
+                            {isExpiringSoon && isPending && (
+                              <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                                Expiring Soon
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            <p>
+                              Role: <span className="font-medium capitalize">{invite.role}</span>
+                            </p>
+                            <p>
+                              Sent: {new Date(invite.invitedAt).toLocaleDateString()} at {new Date(invite.invitedAt).toLocaleTimeString()}
+                            </p>
+                            {isPending && (
+                              <p className={cn(isExpiringSoon && "text-warning font-medium")}>
+                                Expires: {expiresDate.toLocaleDateString()} ({Math.ceil((expiresDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000))} days left)
+                              </p>
+                            )}
+                            {isAccepted && invite.acceptedAt && (
+                              <p className="text-success">
+                                Accepted: {new Date(invite.acceptedAt).toLocaleDateString()} at {new Date(invite.acceptedAt).toLocaleTimeString()}
+                              </p>
+                            )}
+                            {isExpired && (
+                              <p className="text-destructive">
+                                Expired: {expiresDate.toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isPending && invite.token && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const inviteUrl = `${window.location.origin}/invite?token=${invite.token}`;
+                                navigator.clipboard.writeText(inviteUrl);
+                                toast.success('Invitation link copied to clipboard');
+                              }}
+                            >
+                              <Copy className="h-4 w-4 mr-1" />
+                              Copy Link
+                            </Button>
+                          )}
+                          {isPending && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to cancel the invitation to ${invite.email}?`)) {
+                                  cancelInvite.mutate(invite.id);
+                                }
+                              }}
+                              disabled={cancelInvite.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Cancel
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

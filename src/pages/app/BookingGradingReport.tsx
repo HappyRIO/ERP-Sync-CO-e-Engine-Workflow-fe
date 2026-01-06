@@ -8,6 +8,7 @@ import { useBooking } from "@/hooks/useBookings";
 import { useJob } from "@/hooks/useJobs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGradingRecords } from "@/hooks/useGrading";
+import { canDriverEditJob } from "@/utils/job-helpers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
@@ -47,18 +48,76 @@ const BookingGradingReport = () => {
     );
   }
 
+  // Check if job exists
+  if (!booking.jobId && !relatedJob) {
+    return (
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-4"
+        >
+          <Button variant="ghost" size="icon" asChild>
+            <Link to={`/bookings/${id}`} className="text-inherit no-underline">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-foreground">Asset Grading Report</h2>
+            <p className="text-muted-foreground">{booking.bookingNumber} - {booking.clientName}</p>
+          </div>
+        </motion.div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-12">
+              <Award className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+              <p className="text-muted-foreground">No job assigned yet</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                A driver must be assigned to this booking before grading can be performed.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (booking.status !== 'graded' && booking.status !== 'completed') {
     return (
-      <div className="space-y-6">
-        <Alert>
-          <AlertDescription>
-            Grading report will be available after assets are graded.
-            Current status: {booking.status}
-          </AlertDescription>
-        </Alert>
-        <Button asChild>
-          <Link to={`/bookings/${id}`} className="text-inherit no-underline">Back to Booking</Link>
-        </Button>
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-4"
+        >
+          <Button variant="ghost" size="icon" asChild>
+            <Link to={`/bookings/${id}`} className="text-inherit no-underline">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-foreground">Asset Grading Report</h2>
+            <p className="text-muted-foreground">{booking.bookingNumber} - {booking.clientName}</p>
+          </div>
+        </motion.div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-12">
+              <Award className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+              <p className="text-muted-foreground">Grading report will be available after assets are graded</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Current status: <Badge variant="outline" className="ml-1">{booking.status}</Badge>
+              </p>
+              {(booking.status === 'sanitised' || booking.status === 'graded') && user?.role === 'admin' && (
+                <Button className="mt-4" asChild>
+                  <Link to={`/admin/grading/${id}`} className="text-inherit no-underline">
+                    Go to Asset Grading
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -154,6 +213,16 @@ const BookingGradingReport = () => {
             <div className="text-center py-12">
               <Award className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">No grading records available</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Assets need to be graded through the Asset Grading page.
+              </p>
+              {user?.role === 'admin' && (
+                <Button className="mt-4" asChild>
+                  <Link to={`/admin/grading/${id}`} className="text-inherit no-underline">
+                    Go to Asset Grading
+                  </Link>
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -250,14 +319,14 @@ const BookingGradingReport = () => {
               <div className="space-y-3">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-medium text-muted-foreground">Driver Details</p>
-                  {(user?.role === 'admin' || user?.role === 'driver') && relatedJob.id && (
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
-                        <Smartphone className="h-4 w-4 mr-2" />
-                        Driver View
-                      </Link>
-                    </Button>
-                  )}
+                  {user?.role === 'driver' && canDriverEditJob(relatedJob) && relatedJob.id && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
+                          <Smartphone className="h-4 w-4 mr-2" />
+                          Driver View
+                        </Link>
+                      </Button>
+                    )}
                 </div>
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-2">

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Building2, Mail, Phone, Package, PoundSterling, Loader2, CheckCircle2, Clock, XCircle, MoreVertical, UserPlus, X, AlertCircle } from "lucide-react";
+import { Search, Building2, Mail, Phone, Package, PoundSterling, Loader2, CheckCircle2, Clock, XCircle, MoreVertical, UserPlus, X, AlertCircle, Trash2, Copy, Users as UsersIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,12 +25,14 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useClients, useUpdateClientStatus } from "@/hooks/useClients";
+import { useInvites, useCancelInvite } from "@/hooks/useInvites";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { authService } from "@/services/auth.service";
+import type { Invite } from "@/types/auth";
 
 const statusConfig: Record<string, { label: string; icon: typeof CheckCircle2; color: string }> = {
   active: { label: "Active", icon: CheckCircle2, color: "bg-success/10 text-success" },
@@ -45,19 +48,27 @@ const Clients = () => {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [inviteStatusFilter, setInviteStatusFilter] = useState<string>("all");
   const updateStatus = useUpdateClientStatus();
+  const cancelInvite = useCancelInvite();
   const isReseller = user?.role === 'reseller';
   const isAdmin = user?.role === 'admin';
+  
+  // Fetch client invitations only
+  const { data: invites = [], isLoading: isLoadingInvites } = useInvites(
+    inviteStatusFilter !== "all" ? inviteStatusFilter as 'pending' | 'accepted' | 'expired' : undefined,
+    'client' // Only fetch client invitations
+  );
 
   // Create invite mutation
   const createInvite = useMutation({
     mutationFn: async (email: string) => {
-      // For admin: use platform tenant, for reseller: use their tenant
-      const tenantId = isAdmin ? 'tenant-1' : user?.tenantId; // tenant-1 is platform/admin tenant
-      const tenantName = isAdmin ? 'Reuse ITAD Platform' : user?.tenantName;
+      // Use the user's actual tenantId (backend will verify and use it)
+      const tenantId = user?.tenantId;
+      const tenantName = user?.tenantName;
       
-      if (!tenantId || !tenantName) {
-        throw new Error('Tenant information not found');
+      if (!tenantId || !tenantName || !user?.id) {
+        throw new Error('User information not found');
       }
       return authService.createInvite(
         email,
@@ -73,8 +84,9 @@ const Clients = () => {
       });
       setIsInviteDialogOpen(false);
       setInviteEmail("");
-      // Invalidate clients query to refresh list
+      // Invalidate clients and invites queries to refresh lists
       queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['invites'] });
     },
     onError: (error) => {
       toast.error('Failed to send invitation', {
@@ -121,7 +133,7 @@ const Clients = () => {
     );
   }
 
-  const handleStatusChange = (clientId: string, clientName: string, newStatus: 'active' | 'inactive' | 'pending') => {
+  const handleStatusChange = (clientId: string, clientName: string, newStatus: 'active' | 'inactive') => {
     updateStatus.mutate(
       { clientId, status: newStatus },
       {
@@ -264,13 +276,39 @@ const Clients = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Search and Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="flex flex-col sm:flex-row gap-4"
-      >
+      {/* Tabs Interface */}
+      <Tabs defaultValue="clients" className="space-y-4">
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="clients">
+              Clients
+              {filteredClients.length > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {filteredClients.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            {(isReseller || isAdmin) && (
+              <TabsTrigger value="invitations">
+                Invitations
+                {invites.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {invites.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </div>
+
+        {/* Clients Tab */}
+        <TabsContent value="clients" className="space-y-4">
+              <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="flex flex-col sm:flex-row gap-4"
+          >
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -288,12 +326,11 @@ const Clients = () => {
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
           </SelectContent>
         </Select>
-      </motion.div>
+          </motion.div>
 
-      {/* Clients List */}
+          {/* Clients List */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -351,19 +388,20 @@ const Clients = () => {
                                 <XCircle className="h-4 w-4 mr-2 text-destructive" />
                                 Set Inactive
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleStatusChange(client.id, client.name, 'pending')}
-                                disabled={client.status === 'pending'}
-                              >
-                                <Clock className="h-4 w-4 mr-2 text-warning" />
-                                Set Pending
-                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
                       </div>
                     </div>
-                    <h3 className="font-semibold text-lg mb-2">{client.name}</h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-lg">{client.name}</h3>
+                      {client.resellerId && client.resellerName && (
+                        <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">
+                          <UsersIcon className="h-3 w-3 mr-1" />
+                          Via {client.resellerName}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="space-y-2 text-sm text-muted-foreground mb-4">
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4" />
@@ -397,7 +435,147 @@ const Clients = () => {
             );
           })}
         </div>
-      )}
+        )}
+        </TabsContent>
+
+        {/* Invitations Tab */}
+        {(isReseller || isAdmin) && (
+          <TabsContent value="invitations" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Client Invitations</h3>
+                <p className="text-sm text-muted-foreground">
+                  Manage and track client invitations
+                </p>
+              </div>
+              <Select value={inviteStatusFilter} onValueChange={setInviteStatusFilter}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Invitations</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="accepted">Accepted</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {isLoadingInvites ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : invites.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  <Mail className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>No invitations found</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {invites.map((invite: Invite) => {
+                  const isPending = invite.status === 'pending';
+                  const isAccepted = invite.status === 'accepted';
+                  const isExpired = invite.status === 'expired';
+                  const expiresDate = new Date(invite.expiresAt);
+                  const isExpiringSoon = isPending && expiresDate.getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000; // 3 days
+
+                  return (
+                    <Card key={invite.id} className={cn(
+                      "transition-all",
+                      isExpiringSoon && "border-warning/50 bg-warning/5"
+                    )}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-3">
+                              <Mail className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{invite.email}</span>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  isPending && "bg-warning/10 text-warning border-warning/20",
+                                  isAccepted && "bg-success/10 text-success border-success/20",
+                                  isExpired && "bg-destructive/10 text-destructive border-destructive/20"
+                                )}
+                              >
+                                {isPending && <Clock className="h-3 w-3 mr-1" />}
+                                {isAccepted && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                                {isExpired && <XCircle className="h-3 w-3 mr-1" />}
+                                {invite.status || 'pending'}
+                              </Badge>
+                              {isExpiringSoon && isPending && (
+                                <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                                  Expiring Soon
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-muted-foreground space-y-1">
+                              <p>
+                                Role: <span className="font-medium capitalize">{invite.role}</span>
+                              </p>
+                              <p>
+                                Sent: {new Date(invite.invitedAt).toLocaleDateString()} at {new Date(invite.invitedAt).toLocaleTimeString()}
+                              </p>
+                              {isPending && (
+                                <p className={cn(isExpiringSoon && "text-warning font-medium")}>
+                                  Expires: {expiresDate.toLocaleDateString()} ({Math.ceil((expiresDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000))} days left)
+                                </p>
+                              )}
+                              {isAccepted && invite.acceptedAt && (
+                                <p className="text-success">
+                                  Accepted: {new Date(invite.acceptedAt).toLocaleDateString()} at {new Date(invite.acceptedAt).toLocaleTimeString()}
+                                </p>
+                              )}
+                              {isExpired && (
+                                <p className="text-destructive">
+                                  Expired: {expiresDate.toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isPending && invite.token && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const inviteUrl = `${window.location.origin}/invite?token=${invite.token}`;
+                                  navigator.clipboard.writeText(inviteUrl);
+                                  toast.success('Invitation link copied to clipboard');
+                                }}
+                              >
+                                <Copy className="h-4 w-4 mr-1" />
+                                Copy Link
+                              </Button>
+                            )}
+                            {isPending && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to cancel the invitation to ${invite.email}?`)) {
+                                    cancelInvite.mutate(invite.id);
+                                  }
+                                }}
+                                disabled={cancelInvite.isPending}
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Cancel
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 };

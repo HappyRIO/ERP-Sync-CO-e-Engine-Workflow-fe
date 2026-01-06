@@ -7,21 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useBooking, useAssignDriver } from "@/hooks/useBookings";
-import { useUsers } from "@/hooks/useUsers";
+import { useDrivers } from "@/hooks/useDrivers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
 import { calculateRoundTripDistance, geocodePostcode, kmToMiles } from "@/lib/calculations";
-
-// Driver vehicle information mapping (in a real app, this would come from the backend)
-const driverVehicleInfo: Record<string, { vehicleReg: string; vehicleType: 'van' | 'truck' | 'car'; vehicleFuelType: 'petrol' | 'diesel' | 'electric' }> = {
-  'user-4': { vehicleReg: 'AB12 CDE', vehicleType: 'van', vehicleFuelType: 'diesel' }, // James Wilson
-  'user-6': { vehicleReg: 'XY34 FGH', vehicleType: 'truck', vehicleFuelType: 'diesel' }, // Sarah Chen
-  'user-7': { vehicleReg: 'CD56 IJK', vehicleType: 'truck', vehicleFuelType: 'diesel' }, // Mike Thompson
-  'user-8': { vehicleReg: 'EF78 LMN', vehicleType: 'truck', vehicleFuelType: 'petrol' }, // Emma Davis
-  'user-9': { vehicleReg: 'GH90 OPQ', vehicleType: 'van', vehicleFuelType: 'electric' }, // David Martinez
-  'user-10': { vehicleReg: 'IJ12 RST', vehicleType: 'van', vehicleFuelType: 'petrol' }, // Lisa Anderson
-};
 
 const Assignment = () => {
   const navigate = useNavigate();
@@ -29,15 +19,25 @@ const Assignment = () => {
   const bookingId = searchParams.get("booking");
 
   const { data: booking, isLoading: isLoadingBooking } = useBooking(bookingId);
-  const { data: drivers = [] } = useUsers({ role: "driver", isActive: true });
+  const { data: drivers = [], isLoading: isLoadingDrivers } = useDrivers();
   const [selectedDriverId, setSelectedDriverId] = useState<string>("");
   const [roundTripDistanceKm, setRoundTripDistanceKm] = useState<number | null>(null);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const assignMutation = useAssignDriver();
   
   const selectedDriver = drivers.find(d => d.id === selectedDriverId);
-  const selectedDriverVehicle = selectedDriverId ? driverVehicleInfo[selectedDriverId] : null;
-  const assignedDriverVehicle = booking?.driverId ? driverVehicleInfo[booking.driverId] : null;
+  const selectedDriverVehicle = selectedDriver ? {
+    vehicleReg: selectedDriver.vehicleReg,
+    vehicleType: selectedDriver.vehicleType,
+    vehicleFuelType: selectedDriver.vehicleFuelType,
+  } : null;
+  
+  const assignedDriver = booking?.driverId ? drivers.find(d => d.id === booking.driverId) : null;
+  const assignedDriverVehicle = assignedDriver ? {
+    vehicleReg: assignedDriver.vehicleReg,
+    vehicleType: assignedDriver.vehicleType,
+    vehicleFuelType: assignedDriver.vehicleFuelType,
+  } : null;
 
   // Set selected driver if booking already has one
   useEffect(() => {
@@ -289,18 +289,23 @@ const Assignment = () => {
                         <SelectValue placeholder="Choose a driver..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {drivers.length === 0 ? (
+                        {isLoadingDrivers ? (
+                          <SelectItem value="loading" disabled>Loading drivers...</SelectItem>
+                        ) : drivers.length === 0 ? (
                           <SelectItem value="none" disabled>No drivers available</SelectItem>
                         ) : (
-                          drivers.map((driver) => {
-                            const vehicleInfo = driverVehicleInfo[driver.id];
-                            return (
-                              <SelectItem key={driver.id} value={driver.id}>
-                                {driver.name}
-                                {vehicleInfo && ` (${vehicleInfo.vehicleReg} - ${vehicleInfo.vehicleType} ${vehicleInfo.vehicleFuelType})`}
-                              </SelectItem>
-                            );
-                          })
+                          drivers.map((driver) => (
+                            <SelectItem key={driver.id} value={driver.id}>
+                              <div className="flex items-center gap-2">
+                                <span>{driver.name}</span>
+                                {driver.hasProfile && (
+                                  <span className="text-xs text-muted-foreground">
+                                    ({driver.vehicleReg} - {driver.vehicleType} {driver.vehicleFuelType})
+                                  </span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))
                         )}
                       </SelectContent>
                     </Select>

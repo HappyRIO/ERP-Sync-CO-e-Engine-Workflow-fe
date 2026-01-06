@@ -50,7 +50,7 @@ import {
 const getMainNavItems = (role: string) => {
   const baseItems = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard, roles: ['admin', 'client', 'reseller', 'driver'] },
-    { title: "New Booking", url: "/booking", icon: Plus, roles: ['admin', 'client', 'reseller'] },
+    { title: "New Booking", url: "/booking", icon: Plus, roles: ['admin', 'client'] },
     { title: "Jobs", url: "/jobs", icon: Truck, roles: ['admin', 'client', 'reseller', 'driver'] },
     { title: "Route & Schedule", url: "/driver/schedule", icon: RouteIcon, roles: ['driver'] },
     { title: "Job History", url: "/jobs/history", icon: Clock, roles: ['driver'] },
@@ -58,6 +58,7 @@ const getMainNavItems = (role: string) => {
     { title: "Booking Queue", url: "/admin/bookings", icon: ClipboardList, roles: ['admin'] },
     { title: "Users", url: "/users", icon: Users, roles: ['admin'] },
     { title: "Clients", url: "/clients", icon: Building2, roles: ['admin', 'reseller'] },
+    { title: "Drivers", url: "/admin/drivers", icon: Truck, roles: ['admin'] },
     { title: "Sites", url: "/sites", icon: MapPin, roles: ['client'] },
     { title: "Invoices", url: "/invoices", icon: Receipt, roles: ['admin', 'client', 'reseller'] },
     { title: "Commission", url: "/commission", icon: DollarSign, roles: ['admin', 'reseller'] },

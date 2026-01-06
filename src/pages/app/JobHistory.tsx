@@ -17,15 +17,19 @@ const JobHistory = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("all");
 
-  // Get only completed jobs for driver history
+  // Get jobs with status "warehouse" or later for driver history
+  // This includes: warehouse, sanitised, graded, completed
   const { data: allJobs = [], isLoading, error } = useJobs({
-    status: 'completed',
     searchQuery: searchQuery || undefined,
   });
+  
+  // Filter to only show jobs at "warehouse" or later
+  const historyJobs = (allJobs || []).filter(job => 
+    ['warehouse', 'sanitised', 'graded', 'completed'].includes(job.status)
+  );
 
   // Filter jobs for current driver (only show jobs assigned to this driver)
-  // Note: Service already filters by driver name and status='completed', but we also check by ID
-  const driverJobs = allJobs.filter(job => 
+  const driverJobs = historyJobs.filter(job => 
     job.driver && (job.driver.id === user?.id || job.driver.name === user?.name)
   );
 

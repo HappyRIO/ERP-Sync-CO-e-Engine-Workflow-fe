@@ -9,10 +9,9 @@ const SERVICE_NAME = 'invoices';
 
 class InvoicesService {
   async getInvoices(user?: User | null, filter?: { status?: string }): Promise<Invoice[]> {
-    if (USE_MOCK_API) {
-      return this.getInvoicesMock(user, filter);
-    }
-    throw new Error('Real API not implemented yet');
+    // Backend doesn't have invoice routes yet (invoices are ERP-owned)
+    // For now, use mocks regardless of USE_MOCK_API setting
+    return this.getInvoicesMock(user, filter);
   }
 
   private async getInvoicesMock(user?: User | null, filter?: { status?: string }): Promise<Invoice[]> {
@@ -55,10 +54,8 @@ class InvoicesService {
   }
 
   async getInvoice(id: string): Promise<Invoice | null> {
-    if (USE_MOCK_API) {
-      return this.getInvoiceMock(id);
-    }
-    throw new Error('Real API not implemented yet');
+    // Backend doesn't have invoice routes yet (invoices are ERP-owned)
+    return this.getInvoiceMock(id);
   }
 
   private async getInvoiceMock(id: string): Promise<Invoice | null> {

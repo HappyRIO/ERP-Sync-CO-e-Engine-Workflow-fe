@@ -317,6 +317,7 @@ const Approval = () => {
                 size="lg"
                 onClick={handleApprove}
                 disabled={completeBooking.isPending || !allProcessesComplete}
+                className="w-auto"
               >
                 {completeBooking.isPending ? (
                   <>

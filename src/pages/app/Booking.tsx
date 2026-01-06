@@ -20,7 +20,9 @@ import {
   Loader2,
   Zap,
   Fuel,
-  PoundSterling
+  PoundSterling,
+  AlertCircle,
+  UserPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DatePicker } from "@/components/booking/DatePicker";
 import { MapPicker } from "@/components/booking/MapPicker";
 import { AddressAutocomplete } from "@/components/booking/AddressAutocomplete";
@@ -37,6 +40,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSites } from "@/hooks/useSites";
 import { useClients } from "@/hooks/useClients";
+import { useOrganisationProfileComplete } from "@/hooks/useOrganisationProfile";
 import { useAssetCategories } from "@/hooks/useAssets";
 import { useCO2Calculation } from "@/hooks/useCO2";
 import { useCreateBooking } from "@/hooks/useBooking";
@@ -76,19 +80,25 @@ const Booking = () => {
   const [charityPercent, setCharityPercent] = useState(10);
   const [selectedVehicleType, setSelectedVehicleType] = useState<'petrol' | 'diesel' | 'electric'>('petrol');
 
-  // Load clients (for resellers and admin)
-  const { data: clients = [], isLoading: isLoadingClients } = useClients({ status: 'active' });
-  
-  // Load sites (for client role only - resellers create bookings for clients, so they enter site details manually)
-  const { data: sites = [], isLoading: isLoadingSites } = useSites();
-  const { data: assetCategories = [] } = useAssetCategories();
-  const createBooking = useCreateBooking();
-  
+  // Determine user roles first (needed for conditional queries)
   const isReseller = user?.role === 'reseller';
   const isClient = user?.role === 'client';
   const isAdmin = user?.role === 'admin';
   
-  // Calculate CO2e when assets change
+  // Load clients (for resellers and admin only) - only active clients for booking
+  const { data: allClients = [], isLoading: isLoadingClients, error: clientsError } = useClients({ status: 'active' });
+  
+  // Filter to ensure only active clients are shown (safety filter)
+  const clients = useMemo(() => {
+    return allClients.filter(client => client.status === 'active');
+  }, [allClients]);
+  
+  // Load sites (for client role only - resellers create bookings for clients, so they enter site details manually)
+  const { data: sites = [], isLoading: isLoadingSites } = useSites();
+  const { data: assetCategories = [], error: categoriesError, isLoading: isLoadingCategories } = useAssetCategories();
+  const createBooking = useCreateBooking();
+  
+  // Calculate CO2e when assets change - MUST be called before any early returns (React Hooks rule)
   // Use memoized request object to prevent unnecessary query key changes
   // If location isn't set yet, use a default location for calculations
   const co2CalculationRequest = useMemo(() => {
@@ -105,8 +115,12 @@ const Booking = () => {
   }, [selectedAssets, siteLocation, selectedVehicleType]);
 
   const { data: co2Calculation, isLoading: isCalculatingCO2, isFetching: isFetchingCO2 } = useCO2Calculation(co2CalculationRequest);
-
+  
+  // Reseller organisation profile completion - MUST be called before any early returns (React Hooks rule)
+  const { data: isResellerProfileComplete = false } = useOrganisationProfileComplete(isReseller);
+  
   // Set default site on mount (only if sites exist and we're still on 'new')
+  // MUST be called before any early returns (React Hooks rule)
   useEffect(() => {
     if (sites.length > 0 && selectedSiteId === 'new') {
       const defaultSite = sites.find(s => s.isDefault);
@@ -116,6 +130,36 @@ const Booking = () => {
       }
     }
   }, [sites, selectedSiteId]);
+  
+  // Show error if critical data fails to load (AFTER all hooks are called)
+  if (categoriesError) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center space-y-2">
+          <p className="text-destructive">Failed to load asset categories</p>
+          <p className="text-sm text-muted-foreground">
+            {categoriesError instanceof Error ? categoriesError.message : 'Unknown error'}
+          </p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show loading state while critical data is loading (AFTER all hooks are called)
+  if (isLoadingCategories) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
+      </div>
+    );
+  }
+  
+  // Log client errors but don't block rendering (clients are optional for admin if none exist)
+  if (clientsError) {
+    console.warn('Failed to load clients:', clientsError);
+  }
 
   const handleSiteSelect = (siteId: string) => {
     if (siteId === 'new') {
@@ -228,9 +272,13 @@ const Booking = () => {
   const estimatedCost = calculateEstimatedCost();
 
   const canProceed = () => {
+    if (isReseller && !isResellerProfileComplete) {
+      return false;
+    }
     if (currentStep === 1) {
-      // For resellers and admin, require client selection
-      if ((isReseller || isAdmin) && !selectedClientId) {
+      // For resellers and admin, require client selection only if clients are available
+      // If no clients exist, allow proceeding (backend will create client)
+      if ((isReseller || isAdmin) && !selectedClientId && clients.length > 0) {
         return false;
       }
       // Check all required fields (contactName and contactPhone are optional)
@@ -248,8 +296,14 @@ const Booking = () => {
     }
     if (currentStep === 3) {
       // For step 3, validate all previous steps are complete
+      // For admin/reseller: require at least one active client
+      if ((isReseller || isAdmin) && !isLoadingClients && clients.length === 0) {
+        return false;
+      }
+      
       // Check step 1 requirements
-      if ((isReseller || isAdmin) && !selectedClientId) {
+      // For resellers and admin, require client selection only if clients are available
+      if ((isReseller || isAdmin) && !selectedClientId && clients.length > 0) {
         return false;
       }
       const hasStep1Fields = (
@@ -267,7 +321,21 @@ const Booking = () => {
   };
 
   const handleSubmit = async () => {
+    if (isReseller && !isResellerProfileComplete) {
+      toast.error("Complete your organisation profile first", {
+        description: "Please finish your organisation details in Settings before creating bookings.",
+      });
+      return;
+    }
     if (!scheduledDate) return;
+    
+    // Prevent submission if no clients available (for admin/reseller)
+    if ((isReseller || isAdmin) && clients.length === 0) {
+      toast.error("Cannot create booking", {
+        description: "No active clients available. Please add or invite clients first.",
+      });
+      return;
+    }
     
     // Combine address parts
     const fullAddress = [
@@ -282,23 +350,27 @@ const Booking = () => {
     let bookingClientName: string | undefined;
     
     if (isReseller || isAdmin) {
-      // For resellers and admin: use selected client
-      if (selectedClientId) {
-        bookingClientId = selectedClientId;
-        const selectedClient = clients.find(c => c.tenantId === selectedClientId);
-        bookingClientName = selectedClient?.name || undefined;
+      // For resellers and admin: require client selection
+      if (!selectedClientId) {
+        toast.error("Please select a client", {
+          description: "You must select a client to create a booking.",
+        });
+        return;
       }
-      // If no client selected, bookingClientName will be undefined (will be handled by service)
-      // DO NOT fall back to admin/reseller's tenant name - they must select a client
+      
+      bookingClientId = selectedClientId;
+      const selectedClient = clients.find(c => c.id === selectedClientId);
+      if (!selectedClient) {
+        toast.error("Invalid client selected", {
+          description: "The selected client is no longer available.",
+        });
+        return;
+      }
+      bookingClientName = selectedClient.name;
     } else if (isClient && user) {
-      // For clients: use their own tenant info
+      // For clients: use their own tenant info (organisation name only)
       bookingClientId = user.tenantId;
-      bookingClientName = user.tenantName || user.name || 'Client'; // Fallback to user name if tenantName not available
-    }
-    
-    // Only set fallback for clients, not for admin/reseller (they must select a client)
-    if (!bookingClientName && isClient && user) {
-      bookingClientName = user.tenantName || user.name || 'Client';
+      bookingClientName = user.tenantName || 'Client Organisation';
     }
     
     createBooking.mutate(
@@ -338,8 +410,35 @@ const Booking = () => {
     );
   };
 
+  // Check if booking is blocked due to no clients
+  const isBlocked = (isReseller || isAdmin) && !isLoadingClients && clients.length === 0 && !clientsError;
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      {/* Notification for no clients */}
+      {isBlocked && (
+        <Alert className="bg-destructive/10 border-destructive/20">
+          <AlertCircle className="h-4 w-4 text-destructive" />
+          <AlertDescription className="flex items-center justify-between">
+            <div>
+              <strong className="text-destructive">Cannot Create Booking</strong>
+              <p className="text-sm text-muted-foreground mt-1">
+                You must add or invite at least one active client before creating bookings.
+              </p>
+            </div>
+            <Button 
+              variant="default" 
+              size="sm"
+              onClick={() => navigate('/clients')}
+              className="ml-4"
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add Clients
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       {/* Progress Steps */}
       <div className="flex items-center justify-center">
         {steps.map((step, index) => (
@@ -372,15 +471,16 @@ const Booking = () => {
       </div>
 
       {/* Step Content */}
-      <AnimatePresence mode="wait">
-        {currentStep === 1 && (
-          <motion.div
-            key="step1"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-          >
-            <div className="grid gap-6 lg:grid-cols-2">
+      <div className={cn("relative", isBlocked && "opacity-50")}>
+        <AnimatePresence mode="wait">
+          {currentStep === 1 && (
+            <motion.div
+              key="step1"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <div className="grid gap-6 lg:grid-cols-2">
               {/* Left Column - Form Fields */}
               <div className="space-y-6">
               <Card>
@@ -391,10 +491,16 @@ const Booking = () => {
                   {/* Client Selection for Resellers and Admin */}
                   {(isReseller || isAdmin) && (
                     <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
-                      <Label className="text-sm font-semibold">Client Selection *</Label>
+                      <Label className="text-sm font-semibold">
+                        Client Selection {clients.length > 0 ? '*' : '(optional - will create new client)'}
+                      </Label>
                       {isLoadingClients ? (
                         <div className="flex items-center justify-center py-2">
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : clientsError ? (
+                        <div className="text-sm text-muted-foreground p-2">
+                          Unable to load clients. A new client will be created when you submit.
                         </div>
                       ) : (
                         <Select
@@ -406,10 +512,12 @@ const Booking = () => {
                           </SelectTrigger>
                           <SelectContent>
                             {clients.length === 0 ? (
-                              <SelectItem value="" disabled>No clients available</SelectItem>
+                              <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                No clients available - a new client will be created
+                              </div>
                             ) : (
                               clients.map((client) => (
-                                <SelectItem key={client.id} value={client.tenantId}>
+                                <SelectItem key={client.id} value={client.id}>
                                   <div className="flex items-center gap-2">
                                     <Building2 className="h-4 w-4" />
                                     <span>{client.name}</span>
@@ -1079,6 +1187,29 @@ const Booking = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Overlay when blocked */}
+      {isBlocked && (
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-lg flex items-center justify-center z-10 pointer-events-auto">
+          <div className="text-center space-y-4 p-8 bg-card border rounded-lg shadow-lg">
+            <Building2 className="h-12 w-12 mx-auto text-muted-foreground" />
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">No Active Clients</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                You need to add at least one active client before creating a booking.
+              </p>
+              <Button
+                variant="default"
+                onClick={() => navigate('/clients')}
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                Go to Clients Page
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
 
       {/* Navigation Buttons */}
       <div className="flex justify-between">
@@ -1097,7 +1228,7 @@ const Booking = () => {
           <Button
           variant="outline"
             onClick={() => setCurrentStep((s) => s + 1)}
-            disabled={!canProceed()}
+            disabled={!canProceed() || ((isReseller || isAdmin) && !isLoadingClients && clients.length === 0)}
           >
             Continue
             <ArrowRight className="h-4 w-4 ml-2" />
@@ -1106,7 +1237,7 @@ const Booking = () => {
           <Button
             variant="default"
             onClick={handleSubmit}
-            disabled={createBooking.isPending || !canProceed()}
+            disabled={createBooking.isPending || !canProceed() || ((isReseller || isAdmin) && !isLoadingClients && clients.length === 0)}
           >
             {createBooking.isPending ? (
               <>

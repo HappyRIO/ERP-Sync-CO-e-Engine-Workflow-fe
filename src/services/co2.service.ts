@@ -9,6 +9,8 @@ import {
   WAREHOUSE_POSTCODE
 } from '@/lib/calculations';
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
+import { USE_MOCK_API } from '@/lib/config';
+import { apiClient } from './api-client';
 
 const SERVICE_NAME = 'co2';
 
@@ -54,6 +56,36 @@ const co2eEquivalencies = {
 
 class CO2Service {
   async calculateCO2e(request: CO2CalculationRequest): Promise<CO2CalculationResponse> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.calculateCO2eAPI(request);
+    }
+
+    return this.calculateCO2eMock(request);
+  }
+
+  private async calculateCO2eAPI(request: CO2CalculationRequest): Promise<CO2CalculationResponse> {
+    const payload: any = {
+      assets: request.assets,
+    };
+
+    // Add optional fields if provided
+    if (request.distanceKm !== undefined) {
+      payload.distanceKm = request.distanceKm;
+    }
+    if (request.collectionCoordinates) {
+      payload.collectionLat = request.collectionCoordinates.lat;
+      payload.collectionLng = request.collectionCoordinates.lng;
+    }
+    if (request.vehicleType) {
+      payload.vehicleType = request.vehicleType;
+    }
+
+    const response = await apiClient.post<CO2CalculationResponse>('/co2/calculate', payload);
+    return response;
+  }
+
+  private async calculateCO2eMock(request: CO2CalculationRequest): Promise<CO2CalculationResponse> {
     await delay(500);
 
     // Simulate errors
@@ -63,58 +95,6 @@ class CO2Service {
         config.errorType || ApiErrorType.SERVER_ERROR,
         'Failed to calculate CO₂e. Please try again.',
         config.errorType === ApiErrorType.NETWORK_ERROR ? 0 : 500
-      );
-    }
-
-    // Validate input
-    if (!request.assets || request.assets.length === 0) {
-      throw new ApiError(
-        ApiErrorType.VALIDATION_ERROR,
-        'At least one asset is required for CO₂e calculation.',
-        400
-      );
-    }
-
-    // Validate asset quantities
-    for (const asset of request.assets) {
-      if (asset.quantity <= 0) {
-        throw new ApiError(
-          ApiErrorType.VALIDATION_ERROR,
-          `Invalid quantity for asset category "${asset.categoryId}". Quantity must be greater than 0.`,
-          400,
-          { categoryId: asset.categoryId, quantity: asset.quantity }
-        );
-      }
-
-      // Check if category exists
-      const category = assetCategories.find(cat => cat.id === asset.categoryId);
-      if (!category) {
-        throw new ApiError(
-          ApiErrorType.VALIDATION_ERROR,
-          `Invalid asset category "${asset.categoryId}".`,
-          400,
-          { categoryId: asset.categoryId }
-        );
-      }
-    }
-
-    // Validate distance if provided
-    if (request.distanceKm !== undefined && request.distanceKm < 0) {
-      throw new ApiError(
-        ApiErrorType.VALIDATION_ERROR,
-        'Distance must be a positive number.',
-        400
-      );
-    }
-
-    // Validate vehicle type if provided (support both old and new types)
-    const validVehicleTypes = ['car', 'van', 'truck', 'petrol', 'diesel', 'electric'];
-    if (request.vehicleType && !validVehicleTypes.includes(request.vehicleType)) {
-      throw new ApiError(
-        ApiErrorType.VALIDATION_ERROR,
-        `Invalid vehicle type "${request.vehicleType}". Must be one of: ${validVehicleTypes.join(', ')}.`,
-        400,
-        { vehicleType: request.vehicleType }
       );
     }
 

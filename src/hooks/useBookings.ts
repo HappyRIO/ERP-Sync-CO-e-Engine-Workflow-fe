@@ -29,6 +29,9 @@ export function useAssignDriver() {
       bookingService.assignDriver(bookingId, driverId, user?.id || ''),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      // Refresh notifications and unread count, as driver assignment triggers notifications
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     },
   });
 }
@@ -43,6 +46,25 @@ export function useCompleteBooking() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      // Completing a booking triggers notifications for client and admin
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+    },
+  });
+}
+
+export function useApproveBooking() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ bookingId, notes }: { bookingId: string; notes?: string }) =>
+      bookingService.approveBooking(bookingId, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      // Booking approval triggers notifications
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     },
   });
 }
@@ -56,6 +78,9 @@ export function useUpdateBookingStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      // Many booking status changes generate notifications
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     },
   });
 }

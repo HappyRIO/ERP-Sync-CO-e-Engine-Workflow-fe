@@ -9,10 +9,9 @@ const SERVICE_NAME = 'commission';
 
 class CommissionService {
   async getCommissions(user?: User | null, filter?: { status?: string; period?: string }): Promise<Commission[]> {
-    if (USE_MOCK_API) {
-      return this.getCommissionsMock(user, filter);
-    }
-    throw new Error('Real API not implemented yet');
+    // Backend doesn't have commission routes yet
+    // Commissions are ERP-owned
+    return this.getCommissionsMock(user, filter);
   }
 
   private async getCommissionsMock(user?: User | null, filter?: { status?: string; period?: string }): Promise<Commission[]> {

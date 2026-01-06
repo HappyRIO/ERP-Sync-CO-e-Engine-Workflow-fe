@@ -7,7 +7,7 @@
  * 
  * Defaults to true for Milestone 1 (frontend-only development).
  */
-export const USE_MOCK_API = import.meta.env.VITE_MOCK_API !== 'false';
+export const USE_MOCK_API = import.meta.env.VITE_MOCK_API === 'true';
 
 /**
  * Base URL for the backend API (when not using mocks)

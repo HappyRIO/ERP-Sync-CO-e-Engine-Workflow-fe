@@ -1,5 +1,7 @@
 // Mock Site Service for Client/Reseller Portal
 import { delay, shouldSimulateError, ApiError, ApiErrorType } from './api-error';
+import { USE_MOCK_API } from '@/lib/config';
+import { apiClient } from './api-client';
 
 const SERVICE_NAME = 'site';
 
@@ -65,6 +67,11 @@ const mockSites: Site[] = [
 
 class SiteService {
   async getSites(): Promise<Site[]> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getSitesAPI();
+    }
+
     await delay(800);
 
     // Simulate errors
@@ -80,7 +87,17 @@ class SiteService {
     return [...mockSites];
   }
 
+  private async getSitesAPI(): Promise<Site[]> {
+    const response = await apiClient.get<Site[]>('/sites');
+    return response || [];
+  }
+
   async getSite(id: string): Promise<Site | null> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.getSiteAPI(id);
+    }
+
     await delay(500);
 
     // Simulate errors
@@ -115,7 +132,33 @@ class SiteService {
     return site || null;
   }
 
+  private async getSiteAPI(id: string): Promise<Site | null> {
+    try {
+      const response = await apiClient.get<Site>(`/sites/${id}`);
+      return response || null;
+    } catch (error: any) {
+      if (error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async searchSites(query: string): Promise<Site[]> {
+    // Use real API if not using mocks - filter on frontend for now
+    if (!USE_MOCK_API) {
+      const sites = await this.getSitesAPI();
+      // Client-side filtering
+      const lowerQuery = query.toLowerCase();
+      return sites.filter(
+        site =>
+          site.name.toLowerCase().includes(lowerQuery) ||
+          site.address.toLowerCase().includes(lowerQuery) ||
+          site.postcode.toLowerCase().includes(lowerQuery) ||
+          site.city.toLowerCase().includes(lowerQuery)
+      );
+    }
+
     await delay(600);
 
     // Simulate errors
@@ -156,6 +199,11 @@ class SiteService {
   }
 
   async createSite(site: Omit<Site, 'id'>): Promise<Site> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.createSiteAPI(site);
+    }
+
     await delay(1000);
 
     // Simulate errors
@@ -210,7 +258,27 @@ class SiteService {
     return newSite;
   }
 
+  private async createSiteAPI(site: Omit<Site, 'id'>): Promise<Site> {
+    const payload = {
+      name: site.name,
+      address: site.address,
+      postcode: site.postcode,
+      lat: site.coordinates?.lat,
+      lng: site.coordinates?.lng,
+      contactName: site.contactName,
+      contactPhone: site.contactPhone,
+    };
+
+    const response = await apiClient.post<Site>('/sites', payload);
+    return response;
+  }
+
   async updateSite(id: string, updates: Partial<Omit<Site, 'id'>>): Promise<Site> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.updateSiteAPI(id, updates);
+    }
+
     await delay(1000);
 
     // Simulate errors
@@ -246,7 +314,28 @@ class SiteService {
     return updatedSite;
   }
 
+  private async updateSiteAPI(id: string, updates: Partial<Omit<Site, 'id'>>): Promise<Site> {
+    const payload: any = {};
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.address !== undefined) payload.address = updates.address;
+    if (updates.postcode !== undefined) payload.postcode = updates.postcode;
+    if (updates.coordinates !== undefined) {
+      payload.lat = updates.coordinates?.lat;
+      payload.lng = updates.coordinates?.lng;
+    }
+    if (updates.contactName !== undefined) payload.contactName = updates.contactName;
+    if (updates.contactPhone !== undefined) payload.contactPhone = updates.contactPhone;
+
+    const response = await apiClient.put<Site>(`/sites/${id}`, payload);
+    return response;
+  }
+
   async deleteSite(id: string): Promise<void> {
+    // Use real API if not using mocks
+    if (!USE_MOCK_API) {
+      return this.deleteSiteAPI(id);
+    }
+
     await delay(800);
 
     // Simulate errors
@@ -269,6 +358,10 @@ class SiteService {
     }
 
     mockSites.splice(siteIndex, 1);
+  }
+
+  private async deleteSiteAPI(id: string): Promise<void> {
+    await apiClient.delete(`/sites/${id}`);
   }
 
   async setDefaultSite(id: string): Promise<Site> {

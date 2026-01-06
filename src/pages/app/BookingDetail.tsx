@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import type { Driver } from "@/types/jobs";
+import { canDriverEditJob } from "@/utils/job-helpers";
 
 // Driver vehicle information mapping (same as Assignment page)
 const driverVehicleInfo: Record<string, { vehicleReg: string; vehicleType: 'van' | 'truck' | 'car'; vehicleFuelType: 'petrol' | 'diesel' | 'electric' }> = {
@@ -276,13 +277,22 @@ const BookingDetail = () => {
                   </div>
                 </div>
               )}
+              {booking.preferredVehicleType && (
+                <div className="flex items-center gap-3">
+                  <Truck className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Client Preferred Vehicle</p>
+                    <p className="font-medium capitalize">{booking.preferredVehicleType}</p>
+                  </div>
+                </div>
+              )}
 
               {(relatedJob?.driver || driverDetails) && (
                 <div className="pt-4 border-t">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-medium text-muted-foreground">Driver Assignment</p>
-                    {/* Only show Driver View button to admin and driver roles */}
-                    {(user?.role === 'admin' || user?.role === 'driver') && relatedJob?.id && (
+                    {/* Only show Driver View button to driver role, and only if job is editable */}
+                    {user?.role === 'driver' && relatedJob && canDriverEditJob(relatedJob) && relatedJob?.id && (
                       <Button variant="outline" size="sm" asChild>
                         <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
                           <Smartphone className="h-4 w-4 mr-2" />
@@ -365,7 +375,7 @@ const BookingDetail = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-medium text-muted-foreground">Driver Details</p>
-                    {(user?.role === 'admin' || user?.role === 'driver') && relatedJob?.id && (
+                    {user?.role === 'driver' && relatedJob && canDriverAccessJob(relatedJob) && relatedJob?.id && (
                       <Button variant="outline" size="sm" asChild>
                         <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
                           <Smartphone className="h-4 w-4 mr-2" />
