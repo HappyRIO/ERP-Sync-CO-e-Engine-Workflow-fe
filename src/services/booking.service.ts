@@ -790,21 +790,21 @@ class BookingService {
     return booking;
   }
 
-  async approveBooking(bookingId: string, notes?: string): Promise<Booking> {
+  async approveBooking(bookingId: string, erpJobNumber: string, notes?: string): Promise<Booking> {
     // Use real API if not using mocks
     if (!USE_MOCK_API) {
-      return this.approveBookingAPI(bookingId, notes);
+      return this.approveBookingAPI(bookingId, erpJobNumber, notes);
     }
     
-    return this.approveBookingMock(bookingId, notes);
+    return this.approveBookingMock(bookingId, erpJobNumber, notes);
   }
 
-  private async approveBookingAPI(bookingId: string, notes?: string): Promise<Booking> {
-    const booking = await apiClient.post<Booking>(`/bookings/${bookingId}/approve`, { notes });
+  private async approveBookingAPI(bookingId: string, erpJobNumber: string, notes?: string): Promise<Booking> {
+    const booking = await apiClient.post<Booking>(`/bookings/${bookingId}/approve`, { erpJobNumber, notes });
     return booking;
   }
 
-  private async approveBookingMock(bookingId: string, notes?: string): Promise<Booking> {
+  private async approveBookingMock(bookingId: string, erpJobNumber: string, notes?: string): Promise<Booking> {
     await delay(800);
 
     if (shouldSimulateError(SERVICE_NAME)) {
@@ -835,6 +835,8 @@ class BookingService {
       );
     }
 
+    // Update booking with ERP Job Number
+    booking.erpJobNumber = erpJobNumber;
     booking.status = 'created';
     return booking;
   }

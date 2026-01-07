@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useBooking, useApproveBooking, useUpdateBookingStatus, useCompleteBooking } from "@/hooks/useBookings";
 import { useGradingRecords } from "@/hooks/useGrading";
 import { useSanitisationRecords } from "@/hooks/useSanitisation";
@@ -38,6 +40,7 @@ const BookingApproval = () => {
   const cancelBooking = useUpdateBookingStatus();
   const completeBooking = useCompleteBooking();
   const [approvalNotes, setApprovalNotes] = useState("");
+  const [erpJobNumber, setErpJobNumber] = useState("");
   const [cancellationNotes, setCancellationNotes] = useState("");
   const [showCancelForm, setShowCancelForm] = useState(false);
   
@@ -47,8 +50,15 @@ const BookingApproval = () => {
   const handleApprove = () => {
     if (!id) return;
 
+    if (!erpJobNumber.trim()) {
+      toast.error("Job ID is required", {
+        description: "Please enter a unique Job ID before approving the booking.",
+      });
+      return;
+    }
+
     approveBooking.mutate(
-      { bookingId: id, notes: approvalNotes || undefined },
+      { bookingId: id, erpJobNumber: erpJobNumber.trim(), notes: approvalNotes || undefined },
       {
         onSuccess: () => {
           toast.success("Booking approved successfully!", {
@@ -485,17 +495,35 @@ const BookingApproval = () => {
               </div>
               
               {isPending && (
-                <div className="space-y-2">
-                  <label htmlFor="approval-notes" className="text-sm font-medium">
-                    Approval Notes (Optional)
-                  </label>
-                  <Textarea
-                    id="approval-notes"
-                    placeholder="Add any notes about this approval..."
-                    value={approvalNotes}
-                    onChange={(e) => setApprovalNotes(e.target.value)}
-                    rows={3}
-                  />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="erp-job-number" className="text-sm font-medium">
+                      Job ID <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="erp-job-number"
+                      placeholder="Enter unique Job ID from ERP system"
+                      value={erpJobNumber}
+                      onChange={(e) => setErpJobNumber(e.target.value)}
+                      required
+                      className="font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enter the unique Job ID from the ERP system. This will be used to link the booking to the ERP job.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="approval-notes" className="text-sm font-medium">
+                      Approval Notes (Optional)
+                    </Label>
+                    <Textarea
+                      id="approval-notes"
+                      placeholder="Add any notes about this approval..."
+                      value={approvalNotes}
+                      onChange={(e) => setApprovalNotes(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -538,7 +566,7 @@ const BookingApproval = () => {
                       variant="success"
                       size="lg"
                       onClick={handleApprove}
-                      disabled={approveBooking.isPending}
+                      disabled={approveBooking.isPending || !erpJobNumber.trim()}
                     >
                       {approveBooking.isPending ? (
                         <>

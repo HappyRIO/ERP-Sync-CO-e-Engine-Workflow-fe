@@ -57,8 +57,8 @@ export function useApproveBooking() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ bookingId, notes }: { bookingId: string; notes?: string }) =>
-      bookingService.approveBooking(bookingId, notes),
+    mutationFn: ({ bookingId, erpJobNumber, notes }: { bookingId: string; erpJobNumber: string; notes?: string }) =>
+      bookingService.approveBooking(bookingId, erpJobNumber, notes),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
