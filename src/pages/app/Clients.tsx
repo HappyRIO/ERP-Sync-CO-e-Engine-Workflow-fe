@@ -394,7 +394,10 @@ const Clients = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-lg">{client.name}</h3>
+                      <div className="flex-1">
+                        <div className="text-xs text-muted-foreground mb-1">Organization Name</div>
+                        <h3 className="font-semibold text-lg">{client.organisationName || client.name}</h3>
+                      </div>
                       {client.resellerId && client.resellerName && (
                         <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">
                           <UsersIcon className="h-3 w-3 mr-1" />

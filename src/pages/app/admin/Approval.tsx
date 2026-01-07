@@ -163,7 +163,7 @@ const Approval = () => {
         </Button>
         <div className="flex-1">
           <h2 className="text-2xl font-bold text-foreground">Final Approval</h2>
-          <p className="text-muted-foreground">{booking.bookingNumber} - {booking.clientName}</p>
+          <p className="text-muted-foreground">{booking.bookingNumber} - {booking.organisationName || booking.clientName}</p>
         </div>
       </motion.div>
 

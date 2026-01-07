@@ -355,7 +355,7 @@ export function AppLayout() {
                       </div>
                     ) : (
                       <div className="p-2 space-y-1">
-                        {notifications.map((notification) => (
+                        {notifications.slice(0, 5).map((notification) => (
                           <div
                             key={notification.id}
                             onClick={() => handleNotificationClick(notification)}

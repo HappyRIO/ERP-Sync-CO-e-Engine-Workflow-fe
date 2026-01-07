@@ -76,7 +76,7 @@ const BookingApproval = () => {
     }
 
     cancelBooking.mutate(
-      { bookingId: id, status: 'cancelled' },
+      { bookingId: id, status: 'cancelled', notes: cancellationNotes },
       {
         onSuccess: () => {
           toast.success("Booking cancelled", {
@@ -243,7 +243,7 @@ const BookingApproval = () => {
           <h2 className="text-2xl font-bold text-foreground">
             {isGraded ? 'Final Approval' : 'Booking Approval'}
           </h2>
-          <p className="text-muted-foreground">{booking.bookingNumber} - {booking.clientName}</p>
+          <p className="text-muted-foreground">{booking.bookingNumber} - {booking.organisationName || booking.clientName}</p>
         </div>
         <Badge className={isGraded ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}>
           {isGraded ? 'Ready for Final Approval' : 'Pending Approval'}
@@ -499,7 +499,7 @@ const BookingApproval = () => {
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 justify-end">
                 {isGraded ? (
                   <>
                     <Button
@@ -539,7 +539,6 @@ const BookingApproval = () => {
                       size="lg"
                       onClick={handleApprove}
                       disabled={approveBooking.isPending}
-                      className="flex-1"
                     >
                       {approveBooking.isPending ? (
                         <>
@@ -597,13 +596,12 @@ const BookingApproval = () => {
                 />
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 justify-end">
                 <Button
                   variant="destructive"
                   size="lg"
                   onClick={handleCancel}
                   disabled={cancelBooking.isPending}
-                  className="flex-1"
                 >
                   {cancelBooking.isPending ? (
                     <>

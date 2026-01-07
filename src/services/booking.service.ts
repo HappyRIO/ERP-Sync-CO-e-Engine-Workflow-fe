@@ -839,21 +839,21 @@ class BookingService {
     return booking;
   }
 
-  async updateBookingStatus(bookingId: string, status: Booking['status']): Promise<Booking> {
+  async updateBookingStatus(bookingId: string, status: Booking['status'], notes?: string): Promise<Booking> {
     // Use real API if not using mocks
     if (!USE_MOCK_API) {
-      return this.updateBookingStatusAPI(bookingId, status);
+      return this.updateBookingStatusAPI(bookingId, status, notes);
     }
     
-    return this.updateBookingStatusMock(bookingId, status);
+    return this.updateBookingStatusMock(bookingId, status, notes);
   }
 
-  private async updateBookingStatusAPI(bookingId: string, status: Booking['status']): Promise<Booking> {
-    const booking = await apiClient.patch<Booking>(`/bookings/${bookingId}/status`, { status });
+  private async updateBookingStatusAPI(bookingId: string, status: Booking['status'], notes?: string): Promise<Booking> {
+    const booking = await apiClient.patch<Booking>(`/bookings/${bookingId}/status`, { status, notes });
     return booking;
   }
 
-  private async updateBookingStatusMock(bookingId: string, status: Booking['status']): Promise<Booking> {
+  private async updateBookingStatusMock(bookingId: string, status: Booking['status'], notes?: string): Promise<Booking> {
     await delay(600);
 
     if (shouldSimulateError(SERVICE_NAME)) {
@@ -897,6 +897,11 @@ class BookingService {
     }
 
     booking.status = status;
+    
+    // Store cancellation notes if provided
+    if (status === 'cancelled' && notes) {
+      booking.cancellationNotes = notes;
+    }
     
     // Set timestamps
     if (status === 'sanitised' && !booking.sanitisedAt) {

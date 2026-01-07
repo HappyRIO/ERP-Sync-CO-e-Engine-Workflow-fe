@@ -34,7 +34,12 @@ const Signup = () => {
       // Show success message for pending approval
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Signup failed. Please try again.');
+      const errorMessage = err instanceof Error ? err.message : 'Signup failed. Please try again.';
+      setError(errorMessage);
+      // If it's a company name conflict, highlight the company name field
+      if (errorMessage.includes('company with this name already exists')) {
+        // Error will be displayed in the Alert component
+      }
     } finally {
       setIsLoading(false);
     }

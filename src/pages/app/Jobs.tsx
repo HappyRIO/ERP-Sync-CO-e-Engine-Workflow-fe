@@ -130,7 +130,7 @@ const Jobs = () => {
                 {/* Main Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-semibold text-foreground truncate">{job.clientName}</h3>
+                    <h3 className="font-semibold text-foreground truncate">{job.organisationName || job.clientName}</h3>
                     <JobStatusBadge status={job.status} />
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">

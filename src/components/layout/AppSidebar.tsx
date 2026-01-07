@@ -20,6 +20,8 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantTheme } from "@/contexts/TenantThemeContext";
+import { useClientProfile } from "@/hooks/useClients";
+import { useOrganisationProfile } from "@/hooks/useOrganisationProfile";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -115,6 +117,8 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
   const { user, logout } = useAuth();
   const { logo } = useTenantTheme();
+  const { data: clientProfile } = useClientProfile();
+  const { data: organisationProfile } = useOrganisationProfile();
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -218,7 +222,11 @@ export function AppSidebar() {
                   {!isCollapsed && (
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-sidebar-foreground truncate">
-                        Reuse ITAD Platform
+                        {user.role === 'client' && clientProfile?.organisationName
+                          ? clientProfile.organisationName
+                          : user.role === 'reseller' && organisationProfile?.organisationName
+                            ? organisationProfile.organisationName
+                            : 'Reuse ITAD Platform'}
                       </p>
                       <p className="text-xs text-sidebar-foreground/60 truncate capitalize">
                         {user.name} • {user.role}

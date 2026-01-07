@@ -68,6 +68,7 @@ class SearchService {
     jobs
       .filter(job =>
         job.clientName.toLowerCase().includes(lowerQuery) ||
+        job.organisationName?.toLowerCase().includes(lowerQuery) ||
         job.erpJobNumber.toLowerCase().includes(lowerQuery) ||
         job.siteName.toLowerCase().includes(lowerQuery) ||
         job.siteAddress.toLowerCase().includes(lowerQuery)
@@ -77,7 +78,7 @@ class SearchService {
         results.push({
           type: 'job',
           id: job.id,
-          title: job.clientName,
+          title: job.organisationName || job.clientName,
           subtitle: `${job.erpJobNumber} • ${job.siteName}`,
           url: `/jobs/${job.id}`,
         });
@@ -96,6 +97,7 @@ class SearchService {
     clients
       .filter(client =>
         client.name.toLowerCase().includes(lowerQuery) ||
+        client.organisationName?.toLowerCase().includes(lowerQuery) ||
         client.email?.toLowerCase().includes(lowerQuery) ||
         client.contactName?.toLowerCase().includes(lowerQuery)
       )
@@ -104,7 +106,7 @@ class SearchService {
         results.push({
           type: 'client',
           id: client.id,
-          title: client.name,
+          title: client.organisationName || client.name,
           subtitle: client.email || client.contactName || 'Client',
           url: `/clients`,
         });
@@ -121,6 +123,7 @@ class SearchService {
     bookings
       .filter(booking =>
         booking.clientName.toLowerCase().includes(lowerQuery) ||
+        booking.organisationName?.toLowerCase().includes(lowerQuery) ||
         booking.bookingNumber.toLowerCase().includes(lowerQuery) ||
         booking.siteName.toLowerCase().includes(lowerQuery)
       )
@@ -129,7 +132,7 @@ class SearchService {
         results.push({
           type: 'booking',
           id: booking.id,
-          title: booking.clientName,
+          title: booking.organisationName || booking.clientName,
           subtitle: `${booking.bookingNumber} • ${booking.siteName}`,
           url: `/bookings/${booking.id}`,
         });

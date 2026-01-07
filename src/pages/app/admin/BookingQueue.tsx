@@ -165,7 +165,7 @@ const BookingQueue = () => {
                           <CardHeader className="pb-3">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
-                                <CardTitle className="text-base mb-1">{booking.clientName}</CardTitle>
+                                <CardTitle className="text-base mb-1">{booking.organisationName || booking.clientName}</CardTitle>
                                 <p className="text-xs font-mono text-muted-foreground">{booking.bookingNumber}</p>
                               </div>
                               <Badge className={statusColor}>{statusLabel}</Badge>

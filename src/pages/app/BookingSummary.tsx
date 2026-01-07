@@ -116,7 +116,7 @@ const BookingSummary = () => {
           </Button>
           <div>
             <h2 className="text-2xl font-bold text-foreground">Booking Completion Summary</h2>
-            <p className="text-muted-foreground">{booking.bookingNumber} - {booking.clientName}</p>
+            <p className="text-muted-foreground">{booking.bookingNumber} - {booking.organisationName || booking.clientName}</p>
           </div>
         </div>
         <Button variant="outline" asChild>

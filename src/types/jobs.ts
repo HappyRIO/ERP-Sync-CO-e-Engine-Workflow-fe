@@ -16,6 +16,7 @@ export interface Job {
   erpJobNumber: string;
   bookingId?: string; // Link to booking
   clientName: string;
+  organisationName?: string; // Organisation/company name
   siteName: string;
   siteAddress: string;
   status: WorkflowStatus;

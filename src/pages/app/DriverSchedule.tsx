@@ -254,7 +254,7 @@ const DriverSchedule = () => {
 
                         {/* Main Info */}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-foreground mb-2">{job.clientName}</h3>
+                          <h3 className="font-semibold text-foreground mb-2">{job.organisationName || job.clientName}</h3>
                           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                               <MapPin className="h-3.5 w-3.5" />

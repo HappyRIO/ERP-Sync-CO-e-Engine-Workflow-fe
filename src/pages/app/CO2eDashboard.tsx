@@ -386,7 +386,7 @@ const CO2eDashboard = () => {
                       </div>
                       <span className="text-xs font-medium text-muted-foreground">Travel Emissions</span>
                     </div>
-                    <p className="text-2xl font-bold text-destructive">{totalTravel}kg</p>
+                    <p className="text-2xl font-bold text-destructive">{totalTravel.toFixed(2)}kg</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Collection logistics</p>
                   </CardContent>
                 </Card>
@@ -580,6 +580,7 @@ const CO2eDashboard = () => {
                             name: j.erpJobNumber, // Use full job number as key
                             jobNumber: j.erpJobNumber,
                             clientName: j.clientName,
+                            organisationName: j.organisationName,
                             siteName: j.siteName,
                             date: `${month} ${year}`,
                             fullName: `${j.erpJobNumber} - ${j.siteName} (${month} ${year})`,
@@ -618,7 +619,7 @@ const CO2eDashboard = () => {
                                 const maxChars = Math.floor((estimatedBarWidth * 0.9) / charWidth);
                                 
                                 // Show full text, but italicize if it would overflow
-                                const clientName = data.clientName || '';
+                                const clientName = data.organisationName || data.clientName || '';
                                 const siteName = data.siteName || '';
                                 const date = data.date || '';
                                 
@@ -759,7 +760,7 @@ const CO2eDashboard = () => {
                 </div>
                 <span className="text-sm font-medium text-muted-foreground">Travel Emissions</span>
               </div>
-              <p className="text-4xl font-bold text-destructive">{totalTravel}kg</p>
+              <p className="text-4xl font-bold text-destructive">{totalTravel.toFixed(2)}kg</p>
               <p className="text-sm text-muted-foreground mt-1">Collection logistics</p>
             </CardContent>
           </Card>

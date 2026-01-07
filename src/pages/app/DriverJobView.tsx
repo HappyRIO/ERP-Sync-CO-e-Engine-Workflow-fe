@@ -379,7 +379,7 @@ const DriverJobView = () => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold truncate">{job.clientName}</h1>
+            <h1 className="text-lg font-bold truncate">{job.organisationName || job.clientName}</h1>
             <p className="text-xs text-muted-foreground font-mono truncate">
               {job.erpJobNumber}
             </p>

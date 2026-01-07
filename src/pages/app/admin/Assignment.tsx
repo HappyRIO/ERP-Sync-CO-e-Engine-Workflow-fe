@@ -181,7 +181,7 @@ const Assignment = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Client</p>
-                <p className="font-semibold">{booking.clientName}</p>
+                <p className="font-semibold">{booking.organisationName || booking.clientName}</p>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-muted-foreground" />

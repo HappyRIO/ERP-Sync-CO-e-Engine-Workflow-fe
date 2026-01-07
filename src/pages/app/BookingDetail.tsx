@@ -99,6 +99,18 @@ const BookingDetail = () => {
     }
   }, [booking, relatedJob]);
 
+  // Debug: Log cancellation notes to console (must be before early returns)
+  useEffect(() => {
+    if (booking && booking.status === 'cancelled') {
+      console.log('Booking cancellation details:', {
+        status: booking.status,
+        cancellationNotes: booking.cancellationNotes,
+        hasCancellationNotes: !!booking.cancellationNotes,
+        bookingKeys: Object.keys(booking)
+      });
+    }
+  }, [booking]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -147,7 +159,7 @@ const BookingDetail = () => {
           </Link>
         </Button>
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground">{booking.clientName}</h2>
+          <h2 className="text-2xl font-bold text-foreground">{booking.organisationName || booking.clientName}</h2>
           <p className="text-muted-foreground font-mono">{booking.bookingNumber}</p>
         </div>
         <Badge className={cn("text-sm", statusColor)}>{statusLabel}</Badge>
@@ -242,6 +254,14 @@ const BookingDetail = () => {
               <CardTitle>Booking Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {isCancelled && booking.cancellationNotes && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>
+                    <p className="font-semibold mb-2">Cancellation Reason</p>
+                    <p className="whitespace-pre-wrap">{booking.cancellationNotes}</p>
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="flex items-center gap-3">
                 <MapPin className="h-5 w-5 text-muted-foreground" />
                 <div>
@@ -375,7 +395,7 @@ const BookingDetail = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-medium text-muted-foreground">Driver Details</p>
-                    {user?.role === 'driver' && relatedJob && canDriverAccessJob(relatedJob) && relatedJob?.id && (
+                    {user?.role === 'driver' && relatedJob && canDriverEditJob(relatedJob) && relatedJob?.id && (
                       <Button variant="outline" size="sm" asChild>
                         <Link to={`/driver/jobs/${relatedJob.id}`} className="text-inherit no-underline">
                           <Smartphone className="h-4 w-4 mr-2" />

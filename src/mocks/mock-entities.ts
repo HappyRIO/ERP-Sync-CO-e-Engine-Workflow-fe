@@ -16,6 +16,7 @@ export interface ExtendedUser extends User {
 export interface Client {
   id: string;
   name: string;
+  organisationName?: string; // Organisation/company name
   tenantId: string;
   tenantName: string;
   email: string;
@@ -36,6 +37,7 @@ export interface Booking {
   bookingNumber: string;
   clientId: string;
   clientName: string;
+  organisationName?: string; // Organisation/company name
   resellerId?: string;
   resellerName?: string;
   siteName: string;
@@ -65,6 +67,7 @@ export interface Booking {
   gradedAt?: string;
   completedAt?: string;
   notes?: string;
+  cancellationNotes?: string; // Notes from admin when cancelling the booking
 }
 
 // Sanitisation record
@@ -301,6 +304,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-1',
     name: 'TechCorp Industries',
+    organisationName: 'TechCorp Industries',
     tenantId: 'tenant-2',
     tenantName: 'TechCorp Industries',
     email: 'contact@techcorp.com',
@@ -315,6 +319,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-2',
     name: 'Green Finance Ltd',
+    organisationName: 'Green Finance Ltd',
     tenantId: 'tenant-4',
     tenantName: 'Green Finance Ltd',
     email: 'contact@greenfinance.com',
@@ -331,6 +336,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-3',
     name: 'HealthFirst NHS Trust',
+    organisationName: 'HealthFirst NHS Trust',
     tenantId: 'tenant-5',
     tenantName: 'HealthFirst NHS Trust',
     email: 'contact@healthfirst.nhs.uk',
@@ -347,6 +353,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-4',
     name: 'EduTech University',
+    organisationName: 'EduTech University',
     tenantId: 'tenant-6',
     tenantName: 'EduTech University',
     email: 'contact@edutech.ac.uk',
@@ -361,6 +368,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-5',
     name: 'RetailMax Corporation',
+    organisationName: 'RetailMax Corporation',
     tenantId: 'tenant-7',
     tenantName: 'RetailMax Corporation',
     email: 'contact@retailmax.com',
@@ -377,6 +385,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-6',
     name: 'Legal Services Group',
+    organisationName: 'Legal Services Group',
     tenantId: 'tenant-8',
     tenantName: 'Legal Services Group',
     email: 'contact@legalservices.co.uk',
@@ -393,6 +402,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-7',
     name: 'Manufacturing Solutions Ltd',
+    organisationName: 'Manufacturing Solutions Ltd',
     tenantId: 'tenant-9',
     tenantName: 'Manufacturing Solutions Ltd',
     email: 'contact@manufacturing-solutions.com',
@@ -409,6 +419,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-8',
     name: 'City Council Authority',
+    organisationName: 'City Council Authority',
     tenantId: 'tenant-10',
     tenantName: 'City Council Authority',
     email: 'contact@citycouncil.gov.uk',
@@ -425,6 +436,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-9',
     name: 'Media Production House',
+    organisationName: 'Media Production House',
     tenantId: 'tenant-11',
     tenantName: 'Media Production House',
     email: 'contact@mediaprod.com',
@@ -441,6 +453,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-10',
     name: 'Financial Services Inc',
+    organisationName: 'Financial Services Inc',
     tenantId: 'tenant-12',
     tenantName: 'Financial Services Inc',
     email: 'contact@financialservices.com',
@@ -457,6 +470,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-11',
     name: 'Healthcare Network',
+    organisationName: 'Healthcare Network',
     tenantId: 'tenant-13',
     tenantName: 'Healthcare Network',
     email: 'contact@healthcarenetwork.org',
@@ -473,6 +487,7 @@ export const mockClients: Client[] = [
   {
     id: 'client-12',
     name: 'TechStart Innovations',
+    organisationName: 'TechStart Innovations',
     tenantId: 'tenant-14',
     tenantName: 'TechStart Innovations',
     email: 'contact@techstart.io',

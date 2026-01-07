@@ -8,6 +8,7 @@ interface BackendJob {
   erpJobNumber: string;
   bookingId?: string | null;
   clientName: string;
+  organisationName?: string; // Organisation/company name
   siteName: string;
   siteAddress: string;
   status: string; // 'en_route' format
@@ -246,6 +247,7 @@ export function transformJob(backendJob: BackendJob): Job {
     erpJobNumber: backendJob.erpJobNumber,
     bookingId: backendJob.bookingId || undefined,
     clientName: backendJob.clientName,
+    organisationName: backendJob.organisationName,
     siteName: backendJob.siteName,
     siteAddress: backendJob.siteAddress,
     status: transformStatus(backendJob.status),

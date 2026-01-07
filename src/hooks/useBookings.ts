@@ -73,8 +73,8 @@ export function useUpdateBookingStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ bookingId, status }: { bookingId: string; status: string }) =>
-      bookingService.updateBookingStatus(bookingId, status as any),
+    mutationFn: ({ bookingId, status, notes }: { bookingId: string; status: string; notes?: string }) =>
+      bookingService.updateBookingStatus(bookingId, status as any, notes),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
