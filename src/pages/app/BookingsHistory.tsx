@@ -164,6 +164,10 @@ const BookingsHistory = () => {
                         <p className="font-semibold text-foreground">£{booking.estimatedBuyback.toLocaleString()}</p>
                         <p className="text-xs text-muted-foreground">Est. Buyback</p>
                       </div>
+                      <div className="text-center">
+                        <p className="font-semibold text-foreground">{booking.charityPercent}%</p>
+                        <p className="text-xs text-muted-foreground">Charity</p>
+                      </div>
                       <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </div>

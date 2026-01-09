@@ -192,12 +192,12 @@ const BookingDetail = () => {
               <div className="relative flex flex-col">
                 {/* Full height background line */}
                 <div className="absolute left-5 top-5 bottom-5 w-0.5 bg-border" />
-                
+              
                 {/* Progress line - ends at center of current icon */}
                 {!isCancelled && currentIndex >= 0 && (() => {
                   const totalSteps = timelineSteps.length;
                   return (
-                    <motion.div 
+                <motion.div 
                       className="absolute left-5 w-0.5 bg-primary"
                       initial={{ height: "0%" }}
                       animate={{ 
@@ -207,16 +207,16 @@ const BookingDetail = () => {
                           ? 'calc(100% - 20px)' // Full height minus top offset
                           : `calc(${((currentIndex + 0.5) / totalSteps) * 100}% - 20px)` // To center of current icon
                       }}
-                      transition={{ duration: 0.8, ease: "easeOut" }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
                       style={{ top: '20px' }} // Start from center of first icon
-                    />
+                />
                   );
                 })()}
 
-                {timelineSteps.map((step, index) => {
-                  const isCompleted = !isCancelled && index < currentIndex;
-                  const isCurrent = !isCancelled && index === currentIndex;
-                  const Icon = step.icon;
+              {timelineSteps.map((step, index) => {
+                const isCompleted = !isCancelled && index < currentIndex;
+                const isCurrent = !isCancelled && index === currentIndex;
+                const Icon = step.icon;
 
                   return (
                     <motion.div
@@ -276,14 +276,14 @@ const BookingDetail = () => {
                   const Icon = step.icon;
                   const isLast = index === timelineSteps.length - 1;
 
-                  return (
-                    <motion.div
-                      key={step.status}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                return (
+                  <motion.div
+                    key={step.status}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
                       className="flex flex-col items-center relative z-10 flex-1"
-                    >
+                  >
                       {/* Horizontal line connector - connects through center of icons */}
                       {!isLast && (
                         <div 
@@ -304,41 +304,41 @@ const BookingDetail = () => {
                       )}
                       
                       {/* Icon with solid background to cover line */}
-                      <div className={cn(
+                    <div className={cn(
                         "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all mb-2 relative z-10",
-                        isCompleted || isCurrent
+                      isCompleted || isCurrent
                           ? "border-primary bg-background"
                           : "border-muted bg-background"
-                      )}>
-                        {isCompleted ? (
-                          <CheckCircle2 className="h-5 w-5 text-primary" />
-                        ) : (
-                          <Icon className={cn("h-5 w-5", isCurrent ? "text-primary" : "text-muted-foreground")} />
-                        )}
-                      </div>
-
-                      {/* Label */}
-                      <span className={cn(
-                        "text-xs font-medium text-center mb-1",
-                        (isCompleted || isCurrent) ? "text-foreground" : "text-muted-foreground"
-                      )}>
-                        {step.label}
-                      </span>
-
-                      {/* Status Badge */}
-                      {isCurrent && (
-                        <Badge className="bg-warning/20 text-warning text-xs px-2 py-0">
-                          Current
-                        </Badge>
+                    )}>
+                      {isCompleted ? (
+                        <CheckCircle2 className="h-5 w-5 text-primary" />
+                      ) : (
+                        <Icon className={cn("h-5 w-5", isCurrent ? "text-primary" : "text-muted-foreground")} />
                       )}
-                      {isCompleted && (
-                        <Badge variant="outline" className="bg-success/10 text-success text-xs px-2 py-0">
-                          Done
-                        </Badge>
-                      )}
-                    </motion.div>
-                  );
-                })}
+                    </div>
+
+                    {/* Label */}
+                    <span className={cn(
+                      "text-xs font-medium text-center mb-1",
+                      (isCompleted || isCurrent) ? "text-foreground" : "text-muted-foreground"
+                    )}>
+                      {step.label}
+                    </span>
+
+                    {/* Status Badge */}
+                    {isCurrent && (
+                      <Badge className="bg-warning/20 text-warning text-xs px-2 py-0">
+                        Current
+                      </Badge>
+                    )}
+                    {isCompleted && (
+                      <Badge variant="outline" className="bg-success/10 text-success text-xs px-2 py-0">
+                        Done
+                      </Badge>
+                    )}
+                  </motion.div>
+                );
+              })}
               </div>
             </div>
             
@@ -562,7 +562,7 @@ const BookingDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Charity Donation</p>
-                <p className="text-lg font-semibold">{booking.charityPercent}%</p>
+                <p className="text-lg font-semibold">{booking.charityPercent ?? 0}%</p>
               </div>
             </CardContent>
           </Card>

@@ -70,10 +70,10 @@ export function WorkflowTimeline({ currentStatus }: WorkflowTimelineProps) {
         <div className="relative flex flex-col">
           {/* Full height background line */}
           <div className="absolute left-5 top-5 bottom-5 w-0.5 bg-border" />
-          
+        
           {/* Progress line - ends at center of current icon */}
           {currentIndex >= 0 && (
-            <motion.div 
+        <motion.div 
               className="absolute left-5 w-0.5 bg-primary"
               initial={{ height: "0%" }}
               animate={{ 
@@ -83,15 +83,15 @@ export function WorkflowTimeline({ currentStatus }: WorkflowTimelineProps) {
                   ? 'calc(100% - 20px)' // Full height minus top offset
                   : `calc(${((currentIndex + 0.5) / totalSteps) * 100}% - 20px)` // To center of current icon
               }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
               style={{ top: '20px' }} // Start from center of first icon
-            />
+        />
           )}
 
-          {workflowSteps.map((step, index) => {
-            const isCompleted = index < currentIndex;
-            const isCurrent = index === currentIndex;
-            const Icon = step.icon;
+        {workflowSteps.map((step, index) => {
+          const isCompleted = index < currentIndex;
+          const isCurrent = index === currentIndex;
+          const Icon = step.icon;
 
             return (
               <motion.div
@@ -154,14 +154,14 @@ export function WorkflowTimeline({ currentStatus }: WorkflowTimelineProps) {
             const Icon = step.icon;
             const isLast = index === totalSteps - 1;
 
-            return (
-              <motion.div
-                key={step.status}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
+          return (
+            <motion.div
+              key={step.status}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3, delay: index * 0.05 }}
                 className="flex flex-col items-center relative z-10 group flex-1"
-              >
+            >
                 {/* Horizontal line connector - connects through center of icons */}
                 {!isLast && (
                   <div 
@@ -182,48 +182,48 @@ export function WorkflowTimeline({ currentStatus }: WorkflowTimelineProps) {
                 )}
                 
                 {/* Icon with solid background to cover line */}
-                <div className={cn(
+              <div className={cn(
                   "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all mb-2 relative z-10",
-                  isCompleted || isCurrent
+                isCompleted || isCurrent
                     ? "border-primary bg-background"
                     : "border-muted bg-background"
-                )}>
-                  {isCompleted ? (
-                    <CheckCircle2 className="h-5 w-5 text-primary" />
-                  ) : (
-                    <Icon className={cn("h-5 w-5", isCurrent ? "text-primary" : "text-muted-foreground")} />
-                  )}
-                </div>
-
-                {/* Label */}
-                <span className={cn(
-                  "text-xs font-medium text-center mb-1",
-                  (isCompleted || isCurrent) ? "text-foreground" : "text-muted-foreground"
-                )}>
-                  {step.label}
-                </span>
-
-                {/* Status Badge */}
-                {isCurrent && (
-                  <Badge className="bg-warning/20 text-warning text-xs px-2 py-0">
-                    Current
-                  </Badge>
+              )}>
+                {isCompleted ? (
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                ) : (
+                  <Icon className={cn("h-5 w-5", isCurrent ? "text-primary" : "text-muted-foreground")} />
                 )}
-                {isCompleted && (
-                  <Badge variant="outline" className="bg-success/10 text-success text-xs px-2 py-0">
-                    Done
-                  </Badge>
-                )}
+              </div>
 
-                {/* Tooltip with description on hover */}
-                <div className="absolute top-full mt-2 hidden group-hover:block z-20">
-                  <div className="bg-popover text-popover-foreground text-xs rounded-md shadow-lg p-2 whitespace-nowrap border">
-                    {step.description}
-                  </div>
+              {/* Label */}
+              <span className={cn(
+                "text-xs font-medium text-center mb-1",
+                (isCompleted || isCurrent) ? "text-foreground" : "text-muted-foreground"
+              )}>
+                {step.label}
+              </span>
+
+              {/* Status Badge */}
+              {isCurrent && (
+                <Badge className="bg-warning/20 text-warning text-xs px-2 py-0">
+                  Current
+                </Badge>
+              )}
+              {isCompleted && (
+                <Badge variant="outline" className="bg-success/10 text-success text-xs px-2 py-0">
+                  Done
+                </Badge>
+              )}
+
+              {/* Tooltip with description on hover */}
+              <div className="absolute top-full mt-2 hidden group-hover:block z-20">
+                <div className="bg-popover text-popover-foreground text-xs rounded-md shadow-lg p-2 whitespace-nowrap border">
+                  {step.description}
                 </div>
-              </motion.div>
-            );
-          })}
+              </div>
+            </motion.div>
+          );
+        })}
         </div>
       </div>
     </div>
