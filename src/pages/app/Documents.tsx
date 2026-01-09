@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useJobs } from "@/hooks/useJobs";
 import { useDocuments } from "@/hooks/useDocuments";
@@ -135,23 +136,40 @@ const Documents = () => {
         transition={{ delay: 0.1 }}
         className="flex flex-col sm:flex-row gap-4"
       >
-        <div className="relative flex-1">
+        <div className="relative flex-1 w-full min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by client or job number..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-9 w-full"
           />
         </div>
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
+        {/* Mobile: Dropdown Select for Filters */}
+        <div className="sm:hidden w-full">
+          <Select value={activeFilter} onValueChange={setActiveFilter}>
+            <SelectTrigger className="w-full">
+              <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Filter by type" />
+            </SelectTrigger>
+            <SelectContent>
+              {filters.map((filter) => (
+                <SelectItem key={filter.value} value={filter.value}>
+                  {filter.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {/* Desktop: Horizontal Buttons for Filters */}
+        <div className="hidden sm:flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 -mx-1 px-1">
           {filters.map((filter) => (
             <Button
               key={filter.value}
               variant={activeFilter === filter.value ? "secondary" : "outline"}
               size="sm"
               onClick={() => setActiveFilter(filter.value)}
-              className="whitespace-nowrap"
+              className="whitespace-nowrap flex-shrink-0"
             >
               {filter.label}
             </Button>
