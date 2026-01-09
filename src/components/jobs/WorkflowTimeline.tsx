@@ -36,18 +36,41 @@ const workflowSteps: {
 
 export function WorkflowTimeline({ currentStatus }: WorkflowTimelineProps) {
   const currentIndex = workflowSteps.findIndex((s) => s.status === currentStatus);
+  
+  // Calculate progress line width to end at the center of the current icon
+  // With justify-between, icons are evenly spaced
+  // The line should end at the center of the current icon, not at its edge
+  // Since icons are evenly distributed with justify-between, we interpolate between
+  // the first icon center and last icon center positions
+  const totalSteps = workflowSteps.length;
+  
+  // For justify-between layout:
+  // - First icon's left edge is at container's left (0%)
+  // - Last icon's right edge is at container's right (100%)
+  // - Icon centers are evenly spaced between these bounds
+  // Icon is 40px (w-10), so center offset is ~2-3% for typical container widths
+  // We use a small offset to account for icon width, then interpolate
+  const iconCenterOffset = 2.5; // Approximate offset for icon center (2.5% works for most screen sizes)
+  
+  const progressPercent = totalSteps === 1
+    ? 100
+    : currentIndex === 0
+    ? iconCenterOffset // First icon center
+    : currentIndex === totalSteps - 1
+    ? 100 // Last icon: line goes full width
+    : iconCenterOffset + (currentIndex / (totalSteps - 1)) * (100 - 2 * iconCenterOffset);
 
   return (
     <div className="py-4">
       <div className="relative flex items-center justify-between">
         {/* Progress line background */}
-        <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-border -translate-y-1/2 mx-6" />
+        <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-border -translate-y-1/2" />
         
-        {/* Progress line fill */}
+        {/* Progress line fill - ends at center of current icon */}
         <motion.div 
-          className="absolute left-0 top-1/2 h-0.5 bg-primary -translate-y-1/2 mx-6"
+          className="absolute left-0 top-1/2 h-0.5 bg-primary -translate-y-1/2"
           initial={{ width: "0%" }}
-          animate={{ width: `${(currentIndex / (workflowSteps.length - 1)) * 100}%` }}
+          animate={{ width: `${progressPercent}%` }}
           transition={{ duration: 0.8, ease: "easeOut" }}
         />
 
