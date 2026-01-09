@@ -152,14 +152,14 @@ const Grading = () => {
         className="flex flex-col sm:flex-row sm:items-center gap-4"
       >
         <div className="flex items-center gap-4 flex-1">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/admin/bookings" className="text-inherit no-underline">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-foreground">Asset Grading</h2>
-            <p className="text-muted-foreground">{booking.bookingNumber} - {booking.organisationName || booking.clientName}</p>
+        <Button variant="ghost" size="icon" asChild>
+          <Link to="/admin/bookings" className="text-inherit no-underline">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        </Button>
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold text-foreground">Asset Grading</h2>
+          <p className="text-muted-foreground">{booking.bookingNumber} - {booking.organisationName || booking.clientName}</p>
           </div>
         </div>
         {!showForm && (

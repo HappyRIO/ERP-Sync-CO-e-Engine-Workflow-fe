@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
   Leaf, 
@@ -52,6 +52,17 @@ const CO2eDashboard = () => {
   const { data: assetCategories = [] } = useAssetCategories();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientSearchQuery, setClientSearchQuery] = useState("");
+  const [isNarrowScreen, setIsNarrowScreen] = useState(false);
+
+  // Detect narrow screen for chart margins
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsNarrowScreen(window.innerWidth < 640); // sm breakpoint
+    };
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   // Filter jobs by selected client if reseller has selected a client
   const filteredJobs = useMemo(() => {
@@ -753,7 +764,7 @@ const CO2eDashboard = () => {
                                     <text
                                       x={0}
                                       y={0}
-                                      dy={showClientName ? 40 : 28}
+                                      dy={showOrganisationName ? 40 : 28}
                                       textAnchor="middle"
                                       fill="hsl(var(--muted-foreground))"
                                       fontSize={10}
@@ -918,10 +929,10 @@ const CO2eDashboard = () => {
             <CardHeader>
               <CardTitle className="text-base">CO₂e Savings Trend</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pl-0 sm:pl-6">
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthlyData}>
+                  <AreaChart data={monthlyData} margin={{ left: isNarrowScreen ? 0 : 10, right: 10, top: 10, bottom: 10 }}>
                     <defs>
                       <linearGradient id="colorSaved" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="hsl(168, 70%, 35%)" stopOpacity={0.3}/>
@@ -977,15 +988,15 @@ const CO2eDashboard = () => {
               <CardTitle className="text-base">Savings by Asset Category</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-64 flex items-center">
+              <div className="h-48 sm:h-64 flex items-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={categoryData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
+                      innerRadius={isNarrowScreen ? 40 : 60}
+                      outerRadius={isNarrowScreen ? 60 : 90}
                       paddingAngle={2}
                       dataKey="value"
                     >
@@ -1037,7 +1048,7 @@ const CO2eDashboard = () => {
           <CardHeader>
             <CardTitle className="text-base">CO₂e by Job</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pl-0 sm:pl-6">
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 {(() => {
@@ -1060,13 +1071,13 @@ const CO2eDashboard = () => {
                   });
                   
                   return (
-                    <BarChart data={chartData}>
+                    <BarChart data={chartData} margin={{ left: isNarrowScreen ? 0 : 10, right: 10, top: 10, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis 
                     dataKey="name" 
                     stroke="hsl(var(--muted-foreground))"
-                        fontSize={11}
-                        angle={-45}
+                        fontSize={isNarrowScreen ? 9 : 11}
+                        angle={isNarrowScreen ? -60 : -45}
                         textAnchor="end"
                         height={selectedClientId ? 80 : 100}
                          tick={(props: any) => {
@@ -1079,19 +1090,32 @@ const CO2eDashboard = () => {
                            if (!data) return null;
                            
                            // Estimate bar width: chart width / number of bars
-                           // Approximate chart width for h-64 container (256px minus margins)
-                           const estimatedChartWidth = 240;
+                           // Adjust chart width estimation based on screen size
+                           const estimatedChartWidth = isNarrowScreen ? (window.innerWidth - 40) : 240;
                            const barCount = chartData.length;
                            const estimatedBarWidth = estimatedChartWidth / barCount;
                            
-                           // Character width estimation (approximate: 6.5px per character at fontSize 11)
-                           const charWidth = 6.5;
-                           const maxChars = Math.floor((estimatedBarWidth * 0.9) / charWidth);
+                           // Character width estimation (adjust based on font size)
+                           const fontSize = isNarrowScreen ? 9 : 11;
+                           const charWidth = isNarrowScreen ? 5.5 : 6.5;
+                           const maxChars = Math.floor((estimatedBarWidth * 0.8) / charWidth);
                            
-                           // Show full text, but italicize if it would overflow
-                           const organisationName = data.organisationName || '';
-                           const siteName = data.siteName || '';
+                           // Helper function to truncate text
+                           const truncateText = (text: string, maxLength: number) => {
+                             if (text.length <= maxLength) return text;
+                             return text.substring(0, maxLength - 3) + '...';
+                           };
+                           
+                           // Show full text, but truncate if it would overflow on narrow screens
+                           let organisationName = data.organisationName || '';
+                           let siteName = data.siteName || '';
                            const date = data.date || '';
+                           
+                           if (isNarrowScreen) {
+                             // Truncate text on narrow screens to prevent overflow
+                             organisationName = truncateText(organisationName, maxChars);
+                             siteName = truncateText(siteName, maxChars);
+                           }
                            
                            // Check if text would overflow
                            const organisationOverflow = organisationName.length > maxChars;
@@ -1110,7 +1134,7 @@ const CO2eDashboard = () => {
                                    dy={16}
                                    textAnchor="middle"
                                    fill="hsl(var(--muted-foreground))"
-                                   fontSize={11}
+                                   fontSize={fontSize}
                                    fontStyle={organisationOverflow ? 'italic' : 'normal'}
                                  >
                                    {organisationName}
@@ -1122,7 +1146,7 @@ const CO2eDashboard = () => {
                                  dy={showOrganisationName ? 28 : 16}
                                  textAnchor="middle"
                                  fill="hsl(var(--muted-foreground))"
-                                 fontSize={11}
+                                 fontSize={fontSize}
                                  fontStyle={siteNameOverflow ? 'italic' : 'normal'}
                                >
                                  {siteName}
@@ -1133,7 +1157,7 @@ const CO2eDashboard = () => {
                                  dy={showOrganisationName ? 40 : 28}
                                  textAnchor="middle"
                                  fill="hsl(var(--muted-foreground))"
-                                 fontSize={11}
+                                 fontSize={fontSize}
                                  fontStyle={dateOverflow ? 'italic' : 'normal'}
                                >
                                  {date}

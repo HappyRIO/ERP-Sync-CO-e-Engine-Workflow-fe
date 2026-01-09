@@ -319,47 +319,47 @@ const Users = () => {
                 <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 py-4">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary flex-shrink-0">
-                      <UsersIcon className="h-6 w-6" />
-                    </div>
-                    <div className="flex-1 min-w-0">
+                    <UsersIcon className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-1">
                         <p className="font-semibold text-foreground break-words">{user.name}</p>
                         <Badge className={cn("text-xs flex-shrink-0", roleColors[user.role])}>
-                          {user.role}
-                        </Badge>
-                        {getUserStatus(user) === 'pending' ? (
+                        {user.role}
+                      </Badge>
+                      {getUserStatus(user) === 'pending' ? (
                           <Badge variant="secondary" className="bg-warning/10 text-warning flex-shrink-0">
-                            <Clock className="h-3 w-3 mr-1" />
-                            Pending
-                          </Badge>
-                        ) : getUserStatus(user) === 'active' ? (
+                          <Clock className="h-3 w-3 mr-1" />
+                          Pending
+                        </Badge>
+                      ) : getUserStatus(user) === 'active' ? (
                           <Badge variant="secondary" className="bg-success/10 text-success flex-shrink-0">
-                            <UserCheck className="h-3 w-3 mr-1" />
-                            Active
-                          </Badge>
-                        ) : (
+                          <UserCheck className="h-3 w-3 mr-1" />
+                          Active
+                        </Badge>
+                      ) : (
                           <Badge variant="secondary" className="bg-destructive/10 text-destructive flex-shrink-0">
-                            <UserX className="h-3 w-3 mr-1" />
-                            Inactive
-                          </Badge>
-                        )}
-                      </div>
+                          <UserX className="h-3 w-3 mr-1" />
+                          Inactive
+                        </Badge>
+                      )}
+                    </div>
                       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-x-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1 min-w-0">
                           <Mail className="h-3 w-3 flex-shrink-0" />
                           <span className="truncate">{user.email}</span>
-                        </span>
+                      </span>
                         <span className="flex items-center gap-1 min-w-0">
                           <Building2 className="h-3 w-3 flex-shrink-0" />
                           <span className="truncate">{user.tenantName}</span>
+                      </span>
+                      {user.lastLogin && (
+                        <span className="text-xs">
+                          Last login: {new Date(user.lastLogin).toLocaleDateString("en-GB")}
                         </span>
-                        {user.lastLogin && (
-                          <span className="text-xs">
-                            Last login: {new Date(user.lastLogin).toLocaleDateString("en-GB")}
-                          </span>
-                        )}
-                      </div>
+                      )}
                     </div>
+                  </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0 sm:flex-shrink-0">
                     {getUserStatus(user) === 'pending' ? (
