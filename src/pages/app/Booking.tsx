@@ -38,14 +38,12 @@ import { co2eEquivalencies } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSites } from "@/hooks/useSites";
 import { useClients } from "@/hooks/useClients";
 import { useOrganisationProfileComplete } from "@/hooks/useOrganisationProfile";
 import { useAssetCategories } from "@/hooks/useAssets";
 import { useCO2Calculation } from "@/hooks/useCO2";
 import { useCreateBooking } from "@/hooks/useBooking";
 import { geocodePostcode } from "@/lib/calculations";
-import type { Site } from "@/services/site.service";
 
 const steps = [
   { id: 1, title: "Site Details", icon: Building2 },
@@ -65,7 +63,9 @@ const Booking = () => {
   const [selectedClientId, setSelectedClientId] = useState<string>(""); // For resellers: selected client
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
   const [siteLocation, setSiteLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [selectedSiteId, setSelectedSiteId] = useState<string>("new"); // Default to "Create New Site"
+  // Legacy state kept so existing logic (e.g. map auto-fill conditions) continues to work,
+  // but sites are no longer loaded from the API.
+  const [selectedSiteId] = useState<string>("new");
   const [siteDetails, setSiteDetails] = useState({
     siteName: "",
     street: "",
@@ -93,8 +93,6 @@ const Booking = () => {
     return allClients.filter(client => client.status === 'active');
   }, [allClients]);
   
-  // Load sites (for client role only - resellers create bookings for clients, so they enter site details manually)
-  const { data: sites = [], isLoading: isLoadingSites } = useSites();
   const { data: assetCategories = [], error: categoriesError, isLoading: isLoadingCategories } = useAssetCategories();
   const createBooking = useCreateBooking();
   
@@ -118,18 +116,6 @@ const Booking = () => {
   
   // Reseller organisation profile completion - MUST be called before any early returns (React Hooks rule)
   const { data: isResellerProfileComplete = false } = useOrganisationProfileComplete(isReseller);
-  
-  // Set default site on mount (only if sites exist and we're still on 'new')
-  // MUST be called before any early returns (React Hooks rule)
-  useEffect(() => {
-    if (sites.length > 0 && selectedSiteId === 'new') {
-      const defaultSite = sites.find(s => s.isDefault);
-      if (defaultSite) {
-        // Don't auto-select, let user choose
-        // Keep "Create New Site" as default
-      }
-    }
-  }, [sites, selectedSiteId]);
   
   // Show error if critical data fails to load (AFTER all hooks are called)
   if (categoriesError) {
@@ -161,51 +147,10 @@ const Booking = () => {
     console.warn('Failed to load clients:', clientsError);
   }
 
-  const handleSiteSelect = (siteId: string) => {
-    if (siteId === 'new') {
-      // Reset form for new site
-      setSelectedSiteId('new');
-      setSiteDetails({
-        siteName: "",
-        street: "",
-        city: "",
-        county: "",
-        postcode: "",
-        country: "United Kingdom",
-        contactName: "",
-        contactPhone: "",
-      });
-      setSiteLocation(null);
-      return;
-    }
-
-    const site = sites.find(s => s.id === siteId);
-    if (site) {
-      setSelectedSiteId(siteId);
-      // Use site fields directly - Site interface has separate address, city, and postcode fields
-      setSiteDetails({
-        siteName: site.name,
-        street: site.address || "", // Use address as street
-        city: site.city || "", // Use city field directly
-        county: "", // County not stored in Site, leave empty
-        postcode: site.postcode || "",
-        country: "United Kingdom",
-        contactName: site.contactName || "",
-        contactPhone: site.contactPhone || "",
-      });
-      if (site.coordinates) {
-        setSiteLocation(site.coordinates);
-      } else if (site.postcode) {
-        // Geocode postcode if coordinates not available
-        geocodePostcode(site.postcode).then(coords => {
-          if (coords) {
-            setSiteLocation(coords);
-          }
-        }).catch(() => {
-          // Silently fail if geocoding fails
-        });
-      }
-    }
+  const handleSiteSelect = (_siteId: string) => {
+    // Site feature has been removed - keep handler as no-op for safety
+    // Users now always enter site details manually
+    setSiteLocation(null);
   };
 
   const updateAssetQuantity = (categoryId: string, delta: number) => {
@@ -375,7 +320,6 @@ const Booking = () => {
     
     createBooking.mutate(
       {
-        siteId: selectedSiteId !== 'new' ? selectedSiteId : undefined,
         clientId: bookingClientId,
         clientName: bookingClientName, // Pass client name explicitly
         siteName: siteDetails.siteName,
@@ -531,50 +475,7 @@ const Booking = () => {
                     </div>
                   )}
 
-                  {/* Site Selection for Clients Only */}
-                  {isClient && sites.length > 0 && (
-                    <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-semibold">Site Selection</Label>
-                        {selectedSiteId === 'new' && (
-                          <span className="text-xs text-green-600 dark:text-green-400">● Creating New</span>
-                        )}
-                        {selectedSiteId !== 'new' && (
-                          <span className="text-xs text-blue-600 dark:text-blue-400">● Loaded</span>
-                        )}
-                      </div>
-                      {isLoadingSites ? (
-                        <div className="flex items-center justify-center py-2">
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <Select
-                          value={selectedSiteId}
-                          onValueChange={handleSiteSelect}
-                        >
-                          <SelectTrigger className="bg-background h-9">
-                            <SelectValue placeholder="Choose a site or create new" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="new">
-                              <div className="flex items-center gap-2">
-                                <Plus className="h-4 w-4" />
-                                <span>Create New Site</span>
-                              </div>
-                            </SelectItem>
-                            {sites.map((site) => (
-                              <SelectItem key={site.id} value={site.id}>
-                                <div className="flex items-center gap-2">
-                                  <Building2 className="h-4 w-4" />
-                                  <span>{site.name} - {site.postcode}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  )}
+                  {/* Site Selection for Clients Only - removed (sites feature deprecated) */}
 
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
@@ -586,7 +487,6 @@ const Booking = () => {
                         onChange={(e) =>
                           setSiteDetails({ ...siteDetails, siteName: e.target.value })
                         }
-                        disabled={selectedSiteId && selectedSiteId !== 'new'}
                         className="h-9"
                       />
                     </div>
@@ -616,7 +516,6 @@ const Booking = () => {
                           onChange={(e) =>
                             setSiteDetails({ ...siteDetails, street: e.target.value })
                           }
-                          disabled={selectedSiteId && selectedSiteId !== 'new'}
                           className="h-9"
                         />
                       </div>
@@ -629,7 +528,6 @@ const Booking = () => {
                           onChange={(e) =>
                             setSiteDetails({ ...siteDetails, city: e.target.value })
                           }
-                          disabled={selectedSiteId && selectedSiteId !== 'new'}
                           className="h-9"
                         />
                       </div>
@@ -644,7 +542,6 @@ const Booking = () => {
                           onChange={(e) =>
                             setSiteDetails({ ...siteDetails, county: e.target.value })
                           }
-                          disabled={selectedSiteId && selectedSiteId !== 'new'}
                           className="h-9"
                         />
                       </div>
@@ -657,7 +554,6 @@ const Booking = () => {
                           onChange={(e) =>
                             setSiteDetails({ ...siteDetails, postcode: e.target.value })
                           }
-                          disabled={selectedSiteId && selectedSiteId !== 'new'}
                           className="h-9"
                         />
                       </div>
@@ -669,7 +565,6 @@ const Booking = () => {
                           onChange={(e) =>
                             setSiteDetails({ ...siteDetails, country: e.target.value })
                           }
-                          disabled={selectedSiteId && selectedSiteId !== 'new'}
                           className="h-9"
                         />
                       </div>
