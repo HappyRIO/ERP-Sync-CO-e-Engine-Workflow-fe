@@ -745,30 +745,31 @@ const Booking = () => {
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       )}
                     </div>
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <p className="text-2xl font-bold text-success">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
+                      <div className="min-w-0 overflow-hidden">
+                        <p className="text-lg sm:text-2xl font-bold text-success break-words overflow-hidden leading-tight">
                           {co2eSaved >= 1000 
                             ? `${(co2eSaved / 1000).toFixed(1)}t` 
                             : `${co2eSaved.toFixed(1)}kg`}
                         </p>
-                        <p className="text-xs text-muted-foreground">CO₂e Saved</p>
+                        <p className="text-xs text-muted-foreground mt-1">CO₂e Saved</p>
                       </div>
-                      <div>
+                      <div className="min-w-0 overflow-hidden">
                         <p className={cn(
-                          "text-2xl font-bold",
+                          "text-lg sm:text-2xl font-bold break-words overflow-hidden leading-tight",
                           selectedVehicleType === 'electric' ? "text-success" : "text-destructive"
                         )}>
                           {selectedVehicleType === 'electric' ? '0kg' : `-${travelEmissions.toFixed(1)}kg`}
                         </p>
-                        <p className="text-xs text-muted-foreground">Travel Emissions ({selectedVehicleType.charAt(0).toUpperCase() + selectedVehicleType.slice(1)})</p>
+                        <p className="text-xs text-muted-foreground mt-1 break-words">Travel Emissions ({selectedVehicleType.charAt(0).toUpperCase() + selectedVehicleType.slice(1)})</p>
                       </div>
                       <div className={cn(
+                        "min-w-0 overflow-hidden",
                         netCO2e > 0 && "relative"
                       )}>
                         <p className={cn(
-                          "text-2xl font-bold transition-colors",
-                          netCO2e > 0 ? "text-success text-3xl" : netCO2e < 0 ? "text-destructive" : "text-primary"
+                          "text-lg sm:text-2xl sm:text-3xl font-bold transition-colors break-words overflow-hidden leading-tight",
+                          netCO2e > 0 ? "text-success" : netCO2e < 0 ? "text-destructive" : "text-primary"
                         )}>
                           {netCO2e > 0 && "+"}
                           {Math.abs(netCO2e) >= 1000 
@@ -776,7 +777,7 @@ const Booking = () => {
                             : `${netCO2e.toFixed(1)}kg`}
                         </p>
                         <p className={cn(
-                          "text-xs font-medium",
+                          "text-xs font-medium mt-1",
                           netCO2e > 0 ? "text-success/80" : "text-muted-foreground"
                         )}>
                           Net Benefit
@@ -834,81 +835,81 @@ const Booking = () => {
                       <div className="text-sm font-medium mb-2">
                         Select vehicle type to see emissions:
                       </div>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-3 gap-2 sm:gap-3">
                         <button
                           type="button"
                           onClick={() => setSelectedVehicleType('petrol')}
                           className={cn(
-                            "p-3 rounded-lg border bg-background transition-all cursor-pointer text-left",
+                            "p-2 sm:p-3 rounded-lg border bg-background transition-all cursor-pointer text-left min-w-0",
                             selectedVehicleType === 'petrol' 
                               ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
                               : "hover:border-primary/50 hover:bg-muted/50"
                           )}
                         >
-                          <div className="flex items-center gap-2 mb-2">
-                            <Fuel className="h-4 w-4 text-orange-500" />
-                            <span className="text-xs font-semibold text-muted-foreground">Petrol</span>
+                          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+                            <Fuel className="h-3 w-3 sm:h-4 sm:w-4 text-orange-500 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-muted-foreground truncate">Petrol</span>
                             {selectedVehicleType === 'petrol' && (
-                              <CheckCircle2 className="h-3 w-3 text-primary ml-auto" />
+                              <CheckCircle2 className="h-3 w-3 text-primary ml-auto flex-shrink-0" />
                             )}
                           </div>
                           <p className={cn(
-                            "text-xl font-bold",
+                            "text-sm sm:text-xl font-bold overflow-hidden leading-tight",
                             selectedVehicleType === 'petrol' ? "text-primary" : "text-foreground"
                           )}>
                             {distanceKm > 0 ? `${vehicleEmissions.petrol.toFixed(2)}kg` : '—'}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">CO₂e</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 sm:mt-1">CO₂e</p>
                         </button>
                         <button
                           type="button"
                           onClick={() => setSelectedVehicleType('diesel')}
                           className={cn(
-                            "p-3 rounded-lg border bg-background transition-all cursor-pointer text-left",
+                            "p-2 sm:p-3 rounded-lg border bg-background transition-all cursor-pointer text-left min-w-0",
                             selectedVehicleType === 'diesel' 
                               ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
                               : "hover:border-primary/50 hover:bg-muted/50"
                           )}
                         >
-                          <div className="flex items-center gap-2 mb-2">
-                            <Fuel className="h-4 w-4 text-blue-500" />
-                            <span className="text-xs font-semibold text-muted-foreground">Diesel</span>
+                          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+                            <Fuel className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-muted-foreground truncate">Diesel</span>
                             {selectedVehicleType === 'diesel' && (
-                              <CheckCircle2 className="h-3 w-3 text-primary ml-auto" />
+                              <CheckCircle2 className="h-3 w-3 text-primary ml-auto flex-shrink-0" />
                             )}
                           </div>
                           <p className={cn(
-                            "text-xl font-bold",
+                            "text-sm sm:text-xl font-bold overflow-hidden leading-tight",
                             selectedVehicleType === 'diesel' ? "text-primary" : "text-foreground"
                           )}>
                             {distanceKm > 0 ? `${vehicleEmissions.diesel.toFixed(2)}kg` : '—'}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">CO₂e</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 sm:mt-1">CO₂e</p>
                         </button>
                         <button
                           type="button"
                           onClick={() => setSelectedVehicleType('electric')}
                           className={cn(
-                            "p-3 rounded-lg border bg-background transition-all cursor-pointer text-left",
+                            "p-2 sm:p-3 rounded-lg border bg-background transition-all cursor-pointer text-left min-w-0",
                             selectedVehicleType === 'electric' 
                               ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
                               : "hover:border-primary/50 hover:bg-muted/50"
                           )}
                         >
-                          <div className="flex items-center gap-2 mb-2">
-                            <Zap className="h-4 w-4 text-green-500" />
-                            <span className="text-xs font-semibold text-muted-foreground">Electric</span>
+                          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+                            <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-muted-foreground truncate">Electric</span>
                             {selectedVehicleType === 'electric' && (
-                              <CheckCircle2 className="h-3 w-3 text-primary ml-auto" />
+                              <CheckCircle2 className="h-3 w-3 text-primary ml-auto flex-shrink-0" />
                             )}
                           </div>
                           <p className={cn(
-                            "text-xl font-bold",
+                            "text-sm sm:text-xl font-bold overflow-hidden leading-tight",
                             selectedVehicleType === 'electric' ? "text-success" : "text-foreground"
                           )}>
                             {distanceKm > 0 ? '0kg' : '—'}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">CO₂e</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 sm:mt-1">CO₂e</p>
                         </button>
                       </div>
                       {selectedVehicleType && distanceKm > 0 && vehicleEmissions && (
