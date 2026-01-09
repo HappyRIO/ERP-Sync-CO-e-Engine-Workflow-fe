@@ -192,19 +192,21 @@ const Sanitisation = () => {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-4"
+        className="flex flex-col sm:flex-row sm:items-center gap-4"
       >
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/admin/bookings" className="text-inherit no-underline">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-        </Button>
-        <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground">Sanitisation Management</h2>
-          <p className="text-muted-foreground">{booking.bookingNumber} - {booking.organisationName || booking.clientName}</p>
+        <div className="flex items-center gap-4 flex-1">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to="/admin/bookings" className="text-inherit no-underline">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-foreground">Sanitisation Management</h2>
+            <p className="text-muted-foreground">{booking.bookingNumber} - {booking.organisationName || booking.clientName}</p>
+          </div>
         </div>
         {!showForm && (
-          <Button variant="default" onClick={() => setShowForm(true)}>
+          <Button variant="default" onClick={() => setShowForm(true)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Record Sanitisation
           </Button>
@@ -386,7 +388,7 @@ const Sanitisation = () => {
       {allAssetsSanitised && booking.status === 'collected' && (
         <Card className="bg-success/5 border-success/20 border-2">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <p className="font-medium mb-1">All assets sanitised and verified</p>
                 <p className="text-sm text-muted-foreground">
@@ -398,6 +400,7 @@ const Sanitisation = () => {
                 size="lg"
                 onClick={handleMoveToNextStatus}
                 disabled={updateBookingStatus.isPending}
+                className="w-full sm:w-auto"
               >
                 {updateBookingStatus.isPending ? (
                   <>
@@ -407,7 +410,7 @@ const Sanitisation = () => {
                 ) : (
                   <>
                     <ArrowRight className="h-4 w-4 mr-2" />
-                    Approve & Move to Sanitised
+                    Approve & Continue
                   </>
                 )}
               </Button>
