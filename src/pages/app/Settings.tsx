@@ -916,125 +916,129 @@ const Settings = () => {
 
 
       {/* Notifications - All roles with functional toggles */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: isDriver ? 0.2 : 0.3 }}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Bell className="h-5 w-5" />
-              Notifications
-            </CardTitle>
-            <CardDescription>
-              Configure how and when you receive updates. Toggle notifications on or off as needed.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {/* Common notifications - Email */}
-            <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div className="flex-1">
-                <p className="font-medium mb-1">Email notifications</p>
-                <p className="text-sm text-muted-foreground">
-                  {isDriver && "Receive updates about assigned jobs"}
-                  {!isDriver && "Receive updates about job status changes"}
-                </p>
+      {/* Temporarily hidden */}
+      {false && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: isDriver ? 0.2 : 0.3 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Bell className="h-5 w-5" />
+                Notifications
+              </CardTitle>
+              <CardDescription>
+                Configure how and when you receive updates. Toggle notifications on or off as needed.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {/* Common notifications - Email */}
+              <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                <div className="flex-1">
+                  <p className="font-medium mb-1">Email notifications</p>
+                  <p className="text-sm text-muted-foreground">
+                    {isDriver && "Receive updates about assigned jobs"}
+                    {!isDriver && "Receive updates about job status changes"}
+                  </p>
+                </div>
+                <Switch 
+                  checked={notifications.email}
+                  onCheckedChange={(checked) => handleNotificationChange('email', checked)}
+                  className="data-[state=checked]:bg-success"
+                />
               </div>
-              <Switch 
-                checked={notifications.email}
-                onCheckedChange={(checked) => handleNotificationChange('email', checked)}
-                className="data-[state=checked]:bg-success"
-              />
-            </div>
-            
-            {/* Driver-specific notifications */}
-            {isDriver && (
-              <>
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
-                  <div className="flex-1">
-                    <p className="font-medium mb-1">Job assignments</p>
-                    <p className="text-sm text-muted-foreground">Get notified when new jobs are assigned to you</p>
-                  </div>
-                  <Switch 
-                    checked={notifications.jobAssignments}
-                    onCheckedChange={(checked) => handleNotificationChange('jobAssignments', checked)}
-                    className="data-[state=checked]:bg-success"
-                  />
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
-                  <div className="flex-1">
-                    <p className="font-medium mb-1">Route updates</p>
-                    <p className="text-sm text-muted-foreground">Receive updates about route changes or delays</p>
-                  </div>
-                  <Switch 
-                    checked={notifications.routeUpdates}
-                    onCheckedChange={(checked) => handleNotificationChange('routeUpdates', checked)}
-                    className="data-[state=checked]:bg-success"
-                  />
-                </div>
-              </>
-            )}
-            
-            {/* Client/Reseller/Admin notifications */}
-            {!isDriver && (
-              <>
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
-                  <div className="flex-1">
-                    <p className="font-medium mb-1">Collection reminders</p>
-                    <p className="text-sm text-muted-foreground">Get notified 24h before scheduled collections</p>
-                  </div>
-                  <Switch 
-                    checked={notifications.collectionReminders}
-                    onCheckedChange={(checked) => handleNotificationChange('collectionReminders', checked)}
-                    className="data-[state=checked]:bg-success"
-                  />
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
-                  <div className="flex-1">
-                    <p className="font-medium mb-1">Certificate availability</p>
-                    <p className="text-sm text-muted-foreground">Notify when new certificates are ready</p>
-                  </div>
-                  <Switch 
-                    checked={notifications.certificateAvailability}
-                    onCheckedChange={(checked) => handleNotificationChange('certificateAvailability', checked)}
-                    className="data-[state=checked]:bg-success"
-                  />
-                </div>
-                {(isAdmin || isClient) && (
+              
+              {/* Driver-specific notifications */}
+              {isDriver && (
+                <>
                   <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
                     <div className="flex-1">
-                      <p className="font-medium mb-1">ESG report summaries</p>
-                      <p className="text-sm text-muted-foreground">Weekly environmental impact digests</p>
+                      <p className="font-medium mb-1">Job assignments</p>
+                      <p className="text-sm text-muted-foreground">Get notified when new jobs are assigned to you</p>
                     </div>
                     <Switch 
-                      checked={notifications.esgReports}
-                      onCheckedChange={(checked) => handleNotificationChange('esgReports', checked)}
+                      checked={notifications.jobAssignments}
+                      onCheckedChange={(checked) => handleNotificationChange('jobAssignments', checked)}
                       className="data-[state=checked]:bg-success"
                     />
                   </div>
-                )}
-                {isReseller && (
                   <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
                     <div className="flex-1">
-                      <p className="font-medium mb-1">Client activity</p>
-                      <p className="text-sm text-muted-foreground">Get notified about your clients' bookings and jobs</p>
+                      <p className="font-medium mb-1">Route updates</p>
+                      <p className="text-sm text-muted-foreground">Receive updates about route changes or delays</p>
                     </div>
                     <Switch 
-                      checked={notifications.clientActivity}
-                      onCheckedChange={(checked) => handleNotificationChange('clientActivity', checked)}
+                      checked={notifications.routeUpdates}
+                      onCheckedChange={(checked) => handleNotificationChange('routeUpdates', checked)}
                       className="data-[state=checked]:bg-success"
                     />
                   </div>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </motion.div>
+                </>
+              )}
+              
+              {/* Client/Reseller/Admin notifications */}
+              {!isDriver && (
+                <>
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <div className="flex-1">
+                      <p className="font-medium mb-1">Collection reminders</p>
+                      <p className="text-sm text-muted-foreground">Get notified 24h before scheduled collections</p>
+                    </div>
+                    <Switch 
+                      checked={notifications.collectionReminders}
+                      onCheckedChange={(checked) => handleNotificationChange('collectionReminders', checked)}
+                      className="data-[state=checked]:bg-success"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <div className="flex-1">
+                      <p className="font-medium mb-1">Certificate availability</p>
+                      <p className="text-sm text-muted-foreground">Notify when new certificates are ready</p>
+                    </div>
+                    <Switch 
+                      checked={notifications.certificateAvailability}
+                      onCheckedChange={(checked) => handleNotificationChange('certificateAvailability', checked)}
+                      className="data-[state=checked]:bg-success"
+                    />
+                  </div>
+                  {(isAdmin || isClient) && (
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                      <div className="flex-1">
+                        <p className="font-medium mb-1">ESG report summaries</p>
+                        <p className="text-sm text-muted-foreground">Weekly environmental impact digests</p>
+                      </div>
+                      <Switch 
+                        checked={notifications.esgReports}
+                        onCheckedChange={(checked) => handleNotificationChange('esgReports', checked)}
+                        className="data-[state=checked]:bg-success"
+                      />
+                    </div>
+                  )}
+                  {isReseller && (
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                      <div className="flex-1">
+                        <p className="font-medium mb-1">Client activity</p>
+                        <p className="text-sm text-muted-foreground">Get notified about your clients' bookings and jobs</p>
+                      </div>
+                      <Switch 
+                        checked={notifications.clientActivity}
+                        onCheckedChange={(checked) => handleNotificationChange('clientActivity', checked)}
+                        className="data-[state=checked]:bg-success"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Integrations - Admin only */}
-      {isAdmin && (
+      {/* Temporarily hidden */}
+      {false && isAdmin && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

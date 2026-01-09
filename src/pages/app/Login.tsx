@@ -138,17 +138,6 @@ const Login = () => {
                 </p>
               </div>
             </form>
-
-            {/* Demo Credentials */}
-            <div className="mt-6 p-4 rounded-lg bg-secondary/50 border border-dashed">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Demo Credentials:</p>
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p><strong>Admin:</strong> admin@reuse.com / password</p>
-                <p><strong>Client:</strong> client@techcorp.com / password</p>
-                <p><strong>Reseller:</strong> reseller@partner.com / password</p>
-                <p><strong>Driver:</strong> driver@reuse.com / password</p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </motion.div>
