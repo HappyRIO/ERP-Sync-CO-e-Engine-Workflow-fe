@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, ArrowRight, MapPin, Calendar, Package, Loader2 } from "lucide-react";
+import { Search, ArrowRight, MapPin, Calendar, Package, Loader2, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { WorkflowStatus } from "@/types/jobs";
 import { useJobs } from "@/hooks/useJobs";
 import { useAuth } from "@/contexts/AuthContext";
@@ -69,25 +70,46 @@ const Jobs = () => {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row gap-4"
+        className="flex flex-col gap-4"
       >
-        <div className="relative flex-1">
+        <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by client, job number, or site..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-9 w-full"
           />
         </div>
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
+        
+        {/* Mobile: Dropdown Select */}
+        <div className="sm:hidden">
+          <Select value={activeFilter} onValueChange={(value) => setActiveFilter(value as WorkflowStatus | "all")}>
+            <SelectTrigger className="w-full">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue>
+                {getStatusFilters(user?.role).find(f => f.value === activeFilter)?.label || "All"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {getStatusFilters(user?.role).map((filter) => (
+                <SelectItem key={filter.value} value={filter.value}>
+                  {filter.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Desktop: Button Filters */}
+        <div className="hidden sm:flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1">
           {getStatusFilters(user?.role).map((filter) => (
             <Button
               key={filter.value}
               variant={activeFilter === filter.value ? "secondary" : "outline"}
               size="sm"
               onClick={() => setActiveFilter(filter.value)}
-              className="whitespace-nowrap"
+              className="whitespace-nowrap flex-shrink-0"
             >
               {filter.label}
             </Button>

@@ -134,7 +134,7 @@ const BookingDetail = () => {
   const currentIndex = !isCancelled 
     ? timelineSteps.findIndex(step => step.status === booking.status)
     : -1;
-  
+
   // Calculate progress line width to end at the center of the current icon
   // With justify-between, icons are evenly spaced
   // The line should end at the center of the current icon, not at its edge
