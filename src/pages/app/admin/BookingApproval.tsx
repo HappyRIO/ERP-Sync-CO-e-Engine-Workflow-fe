@@ -147,14 +147,14 @@ const BookingApproval = () => {
 
   // Handle bookings that are not in pending or graded status
   if (!isPending && !isGraded) {
-    const statusMessages: Record<string, { message: string; variant: 'default' | 'destructive' | 'success' }> = {
+    const statusMessages: Record<string, { message: string; variant: 'default' | 'destructive' }> = {
       'created': {
         message: 'This booking has already been approved and is now active.',
-        variant: 'success',
+        variant: 'default',
       },
       'completed': {
         message: 'This booking has already been completed.',
-        variant: 'success',
+        variant: 'default',
       },
       'cancelled': {
         message: 'This booking has been cancelled.',
