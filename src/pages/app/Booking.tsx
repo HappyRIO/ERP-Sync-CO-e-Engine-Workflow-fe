@@ -311,7 +311,7 @@ const Booking = () => {
         });
         return;
       }
-      bookingClientName = selectedClient.name;
+      bookingClientName = selectedClient.organisationName || selectedClient.name;
     } else if (isClient && user) {
       // For clients: use their own tenant info (organisation name only)
       bookingClientId = user.tenantId;
@@ -464,7 +464,7 @@ const Booking = () => {
                                 <SelectItem key={client.id} value={client.id}>
                                   <div className="flex items-center gap-2">
                                     <Building2 className="h-4 w-4" />
-                                    <span>{client.name}</span>
+                                    <span>{client.organisationName || client.name}</span>
                                   </div>
                                 </SelectItem>
                               ))
