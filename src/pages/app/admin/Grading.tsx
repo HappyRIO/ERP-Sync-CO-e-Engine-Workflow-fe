@@ -149,19 +149,21 @@ const Grading = () => {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-4"
+        className="flex flex-col sm:flex-row sm:items-center gap-4"
       >
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/admin/bookings" className="text-inherit no-underline">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-        </Button>
-        <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground">Asset Grading</h2>
-          <p className="text-muted-foreground">{booking.bookingNumber} - {booking.organisationName || booking.clientName}</p>
+        <div className="flex items-center gap-4 flex-1">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to="/admin/bookings" className="text-inherit no-underline">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-foreground">Asset Grading</h2>
+            <p className="text-muted-foreground">{booking.bookingNumber} - {booking.organisationName || booking.clientName}</p>
+          </div>
         </div>
         {!showForm && (
-          <Button variant="default" onClick={() => setShowForm(true)}>
+          <Button variant="default" onClick={() => setShowForm(true)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Grade Asset
           </Button>
