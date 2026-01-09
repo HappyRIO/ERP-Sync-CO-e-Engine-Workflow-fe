@@ -107,7 +107,7 @@ function LogoutButton({ isCollapsed }: { isCollapsed: boolean }) {
 
 export function AppSidebar() {
   const location = useLocation();
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { user, logout } = useAuth();
   const { logo } = useTenantTheme();
@@ -117,6 +117,13 @@ export function AppSidebar() {
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
     return location.pathname.startsWith(path);
+  };
+
+  // Close sidebar on mobile when navigation item is clicked
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
   };
 
   const mainNavItems = user ? getMainNavItems(user.role) : [];
@@ -172,7 +179,7 @@ export function AppSidebar() {
                         : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent hover:shadow-sm"
                     )}
                   >
-                    <NavLink to={item.url} className="flex items-center gap-3">
+                    <NavLink to={item.url} className="flex items-center gap-3" onClick={handleNavClick}>
                       <item.icon className="h-5 w-5" />
                       <span className="font-medium">{item.title}</span>
                     </NavLink>
@@ -194,7 +201,7 @@ export function AppSidebar() {
                 tooltip={item.title}
                 className="h-11 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
               >
-                <NavLink to={item.url} className="flex items-center gap-3">
+                <NavLink to={item.url} className="flex items-center gap-3" onClick={handleNavClick}>
                   <item.icon className="h-5 w-5" />
                   <span className="font-medium">{item.title}</span>
                 </NavLink>
