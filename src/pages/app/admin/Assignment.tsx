@@ -63,8 +63,14 @@ const Assignment = () => {
           const postcode = postcodeMatch[0].replace(/\s+/g, ' ').trim().toUpperCase();
           const coordinates = await geocodePostcode(postcode);
           if (coordinates) {
-            const distanceKm = calculateRoundTripDistance(coordinates.lat, coordinates.lng);
-            setRoundTripDistanceKm(distanceKm);
+            try {
+              const distanceKm = await calculateRoundTripDistance(coordinates.lat, coordinates.lng);
+              setRoundTripDistanceKm(distanceKm);
+            } catch (error) {
+              console.error('Error calculating road distance:', error);
+              // Fallback: use default distance estimate
+              setRoundTripDistanceKm(80); // Default 80km round trip
+            }
           } else {
             // Fallback: use default distance estimate
             setRoundTripDistanceKm(80); // Default 80km round trip

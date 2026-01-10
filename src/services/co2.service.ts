@@ -101,17 +101,23 @@ class CO2Service {
     // Calculate reuse savings
     const reuseSavings = calculateReuseCO2e(request.assets, assetCategories);
 
-    // Calculate distance
+    // Calculate distance using road distance (async)
     let distance: number;
     if (request.distanceKm !== undefined) {
       // Use provided distance
       distance = request.distanceKm;
     } else if (request.collectionCoordinates) {
-      // Calculate distance from collection site to warehouse (round trip)
-      distance = calculateRoundTripDistance(
-        request.collectionCoordinates.lat,
-        request.collectionCoordinates.lng
-      );
+      // Calculate road distance from collection site to warehouse (round trip)
+      try {
+        distance = await calculateRoundTripDistance(
+          request.collectionCoordinates.lat,
+          request.collectionCoordinates.lng
+        );
+      } catch (error) {
+        console.error('Error calculating road distance in mock:', error);
+        // Fallback to default distance if routing API fails
+        distance = 80;
+      }
     } else {
       // Default fallback
       distance = 80;

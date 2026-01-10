@@ -67,10 +67,31 @@ export function calculateDistance(
   return R * c;
 }
 
+// Import road distance function
+import { calculateRoundTripRoadDistance } from './routing';
+
 /**
- * Calculate round trip distance from collection site to warehouse
+ * Calculate round trip road distance from collection site to warehouse
+ * Note: This is now async and uses road distance instead of straight-line
+ * For synchronous fallback, use calculateRoundTripDistanceSync
  */
-export function calculateRoundTripDistance(
+export async function calculateRoundTripDistance(
+  collectionLat: number,
+  collectionLng: number
+): Promise<number> {
+  return calculateRoundTripRoadDistance(
+    collectionLat,
+    collectionLng,
+    WAREHOUSE_COORDINATES.lat,
+    WAREHOUSE_COORDINATES.lng
+  );
+}
+
+/**
+ * Calculate round trip distance using straight-line (synchronous fallback)
+ * Use this only when you need synchronous calculation
+ */
+export function calculateRoundTripDistanceSync(
   collectionLat: number,
   collectionLng: number
 ): number {

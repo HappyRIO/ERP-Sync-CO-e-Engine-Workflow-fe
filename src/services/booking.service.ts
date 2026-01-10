@@ -201,18 +201,25 @@ class BookingService {
     let roundTripDistanceMiles = 0;
     
     if (request.coordinates) {
-      // Use provided coordinates
-      roundTripDistanceKm = calculateRoundTripDistance(
-        request.coordinates.lat,
-        request.coordinates.lng
-      );
-      roundTripDistanceMiles = kmToMiles(roundTripDistanceKm);
+      // Use provided coordinates - calculate road distance (async)
+      try {
+        roundTripDistanceKm = await calculateRoundTripDistance(
+          request.coordinates.lat,
+          request.coordinates.lng
+        );
+        roundTripDistanceMiles = kmToMiles(roundTripDistanceKm);
+      } catch (error) {
+        console.error('Error calculating road distance:', error);
+        // Fallback to default
+        roundTripDistanceKm = 80;
+        roundTripDistanceMiles = kmToMiles(80);
+      }
     } else if (request.postcode) {
       // Try to geocode postcode and calculate distance
       try {
         const coordinates = await geocodePostcode(request.postcode);
         if (coordinates) {
-          roundTripDistanceKm = calculateRoundTripDistance(
+          roundTripDistanceKm = await calculateRoundTripDistance(
             coordinates.lat,
             coordinates.lng
           );
@@ -223,7 +230,7 @@ class BookingService {
           roundTripDistanceMiles = kmToMiles(80);
         }
       } catch (error) {
-        console.error('Failed to geocode postcode:', error);
+        console.error('Failed to geocode postcode or calculate distance:', error);
         // Fallback to default
         roundTripDistanceKm = 80;
         roundTripDistanceMiles = kmToMiles(80);
@@ -236,7 +243,7 @@ class BookingService {
           const postcode = postcodeMatch[0].replace(/\s+/g, ' ').trim().toUpperCase();
           const coordinates = await geocodePostcode(postcode);
           if (coordinates) {
-            roundTripDistanceKm = calculateRoundTripDistance(
+            roundTripDistanceKm = await calculateRoundTripDistance(
               coordinates.lat,
               coordinates.lng
             );
@@ -246,7 +253,7 @@ class BookingService {
             roundTripDistanceMiles = kmToMiles(80);
           }
         } catch (error) {
-          console.error('Failed to geocode postcode from address:', error);
+          console.error('Failed to geocode postcode from address or calculate distance:', error);
           roundTripDistanceKm = 80;
           roundTripDistanceMiles = kmToMiles(80);
         }
