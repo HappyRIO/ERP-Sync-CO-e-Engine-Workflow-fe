@@ -147,6 +147,7 @@ export function AppLayout() {
   };
 
   const handleViewAllNotifications = () => {
+    setIsNotificationPopoverOpen(false); // Close the popover
     navigate("/notifications");
   };
 

@@ -102,7 +102,7 @@ const Notifications = () => {
         className="flex items-center justify-between"
       >
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -116,10 +116,11 @@ const Notifications = () => {
           <Button 
             variant="outline" 
             onClick={handleMarkAllAsRead}
-            className="gap-2"
+            className="gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm h-8 sm:h-10"
           >
-            <CheckCheck className="h-4 w-4" />
-            Mark all as read
+            <CheckCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Mark all as read</span>
+            <span className="sm:hidden">Mark all</span>
           </Button>
         )}
       </motion.div>
