@@ -43,7 +43,7 @@ import { useOrganisationProfileComplete } from "@/hooks/useOrganisationProfile";
 import { useAssetCategories } from "@/hooks/useAssets";
 import { useCO2Calculation } from "@/hooks/useCO2";
 import { useCreateBooking } from "@/hooks/useBooking";
-import { geocodePostcode } from "@/lib/calculations";
+import { geocodePostcode, calculateBuybackEstimate } from "@/lib/calculations";
 
 const steps = [
   { id: 1, title: "Site Details", icon: Building2 },
@@ -177,12 +177,10 @@ const Booking = () => {
 
   const totalAssets = selectedAssets.reduce((sum, a) => sum + a.quantity, 0);
   
-  // Calculate buyback estimate using asset categories from service
-  const buybackEstimate = assetCategories.length > 0
-    ? selectedAssets.reduce((total, asset) => {
-        const category = assetCategories.find(c => c.id === asset.categoryId);
-        return total + (category?.avgBuybackValue || 0) * asset.quantity;
-      }, 0)
+  // Calculate buyback estimate using conservative low-end formula
+  // (3-year-old equipment, Grade B, based on category and quantity only)
+  const buybackEstimate = assetCategories.length > 0 && selectedAssets.length > 0
+    ? calculateBuybackEstimate(selectedAssets, assetCategories)
     : 0;
 
   // Use CO2 calculation from service (useCO2Calculation hook)
@@ -768,7 +766,7 @@ const Booking = () => {
                         netCO2e > 0 && "relative"
                       )}>
                         <p className={cn(
-                          "text-lg sm:text-2xl sm:text-3xl font-bold transition-colors break-words overflow-hidden leading-tight",
+                          "text-lg sm:text-3xl font-bold transition-colors break-words overflow-hidden leading-tight",
                           netCO2e > 0 ? "text-success" : netCO2e < 0 ? "text-destructive" : "text-primary"
                         )}>
                           {netCO2e > 0 && "+"}

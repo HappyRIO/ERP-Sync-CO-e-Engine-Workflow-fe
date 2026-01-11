@@ -9,6 +9,7 @@ export function useCO2Calculation(request: CO2CalculationRequest | null) {
     enabled: !!request && request.assets.length > 0,
     staleTime: 30000,
     placeholderData: (previousData) => previousData, // Keep previous data while fetching
+    retry: 1, // Retry once on failure
   });
 }
 
