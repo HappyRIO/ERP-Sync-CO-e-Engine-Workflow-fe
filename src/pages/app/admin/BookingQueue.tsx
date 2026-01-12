@@ -184,6 +184,16 @@ const BookingQueue = () => {
                               <Package className="h-4 w-4" />
                               <span>{booking.assets.reduce((sum, a) => sum + a.quantity, 0)} assets</span>
                             </div>
+                            {booking.roundTripDistanceKm && booking.roundTripDistanceKm > 0 && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Truck className="h-4 w-4" />
+                                <span>
+                                  Return Journey: {booking.roundTripDistanceMiles 
+                                    ? `${booking.roundTripDistanceMiles.toFixed(1)} mi`
+                                    : `${(booking.roundTripDistanceKm * 0.621371).toFixed(1)} mi`}
+                                </span>
+                              </div>
+                            )}
                             {booking.preferredVehicleType && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Truck className="h-4 w-4" />

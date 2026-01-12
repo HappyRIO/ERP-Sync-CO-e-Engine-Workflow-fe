@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, ArrowRight, MapPin, Calendar, Package, Loader2, Filter } from "lucide-react";
+import { Search, ArrowRight, MapPin, Calendar, Package, Loader2, Filter, Truck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -187,6 +187,17 @@ const Jobs = () => {
                     </p>
                     <p className="text-xs text-muted-foreground">Buyback</p>
                   </div>
+                  {job.roundTripDistanceKm && job.roundTripDistanceKm > 0 && (
+                    <div className="text-center">
+                      <p className="font-semibold text-foreground flex items-center justify-center gap-1">
+                        <Truck className="h-3 w-3" />
+                        {job.roundTripDistanceMiles 
+                          ? `${job.roundTripDistanceMiles.toFixed(1)} mi`
+                          : `${(job.roundTripDistanceKm * 0.621371).toFixed(1)} mi`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Return Journey</p>
+                    </div>
+                  )}
                   <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </div>

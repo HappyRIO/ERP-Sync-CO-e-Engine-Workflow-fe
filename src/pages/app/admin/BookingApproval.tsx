@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Shield,
   Award,
-  Download
+  Download,
+  Truck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -366,6 +367,23 @@ const BookingApproval = () => {
               </div>
             </div>
           </div>
+
+          {booking.roundTripDistanceKm && booking.roundTripDistanceKm > 0 && (
+            <div className="flex items-center gap-2 text-sm pt-2 border-t">
+              <Truck className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Return Journey Mileage</p>
+                <p className="text-muted-foreground">
+                  {booking.roundTripDistanceMiles 
+                    ? `${booking.roundTripDistanceMiles.toFixed(1)} miles (${booking.roundTripDistanceKm.toFixed(1)} km)`
+                    : `${(booking.roundTripDistanceKm * 0.621371).toFixed(1)} miles (${booking.roundTripDistanceKm.toFixed(1)} km)`}
+                </p>
+                <p className="text-muted-foreground text-xs mt-1">
+                  From collection site to warehouse and return
+                </p>
+              </div>
+            </div>
+          )}
 
           {booking.preferredVehicleType && (
             <div className="flex items-center gap-2 text-sm">

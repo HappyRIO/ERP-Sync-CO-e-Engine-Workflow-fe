@@ -983,19 +983,105 @@ const Booking = () => {
                     <span className="text-sm text-muted-foreground">Estimated Buyback</span>
                     <span className="text-xl font-bold text-foreground">£{buybackEstimate.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Net CO₂e Benefit</span>
-                    <span className={cn(
-                      "text-xl font-bold transition-colors",
-                      netCO2e > 0 ? "text-success text-2xl" : netCO2e < 0 ? "text-destructive" : "text-foreground"
-                    )}>
-                      {netCO2e > 0 && "+"}
-                      {(netCO2e / 1000).toFixed(1)}t
-                      {netCO2e > 0 && (
-                        <span className="ml-2 text-lg">✓</span>
-                      )}
-                    </span>
+
+                  {/* Return Journey Mileage - Only shown when vehicle is selected */}
+                  {selectedVehicleType && distanceKm > 0 && (
+                    <div className="p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">Return Journey Mileage</span>
+                        </div>
+                        <span className="text-lg font-bold">
+                          {distanceMiles > 0 ? `${distanceMiles.toFixed(1)} miles (${distanceKm.toFixed(1)} km)` : 'Calculating...'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2">
+                        From collection site to warehouse (RM13 8BT) and return
+                        {!siteLocation && (
+                          <span className="ml-2 text-warning">(Estimated - Location not set)</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Environmental Impact - Integrated design */}
+                  <div className="space-y-3 pt-2 border-t">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <TreeDeciduous className="h-4 w-4 text-success" />
+                        <span className="text-sm text-muted-foreground">Reuse Savings</span>
+                      </div>
+                      <span className="text-lg font-bold text-success">
+                        {co2eSaved >= 1000 
+                          ? `${(co2eSaved / 1000).toFixed(1)}t` 
+                          : `${co2eSaved.toFixed(2)}kg`} CO₂e
+                      </span>
+                    </div>
+
+                    {/* Vehicle Emissions - Only shown when vehicle is selected */}
+                    {selectedVehicleType && distanceKm > 0 && (
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <Fuel className={cn(
+                            "h-4 w-4",
+                            selectedVehicleType === 'petrol' ? "text-orange-500" :
+                            selectedVehicleType === 'diesel' ? "text-blue-500" :
+                            "text-green-500"
+                          )} />
+                          <span className="text-sm text-muted-foreground">
+                            Vehicle CO₂ Emissions <span className="text-xs capitalize">({selectedVehicleType})</span>
+                          </span>
+                        </div>
+                        <span className="text-lg font-bold text-foreground">
+                          {selectedVehicleType === 'electric' ? '0kg' : `${travelEmissions.toFixed(2)}kg`} CO₂e
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center pt-2 border-t">
+                      <div className="flex items-center gap-2">
+                        <Leaf className={cn(
+                          "h-4 w-4",
+                          netCO2e > 0 ? "text-success" : 
+                          netCO2e < 0 ? "text-destructive" :
+                          "text-muted-foreground"
+                        )} />
+                        <span className="text-sm font-semibold text-foreground">Net CO₂ Impact</span>
+                      </div>
+                      <div className="text-right">
+                        <span className={cn(
+                          "text-2xl font-bold transition-colors",
+                          netCO2e > 0 ? "text-success" : 
+                          netCO2e < 0 ? "text-destructive" :
+                          "text-foreground"
+                        )}>
+                          {netCO2e > 0 && "+"}
+                          {Math.abs(netCO2e) >= 1000 
+                            ? `${(netCO2e / 1000).toFixed(1)}t` 
+                            : `${netCO2e.toFixed(2)}kg`} CO₂e
+                          {netCO2e > 0 && (
+                            <span className="ml-2 text-lg">✓</span>
+                          )}
+                        </span>
+                        {selectedVehicleType && distanceKm > 0 && (
+                          <p className={cn(
+                            "text-xs mt-1",
+                            netCO2e > 0 ? "text-success/80" : 
+                            netCO2e < 0 ? "text-destructive/80" :
+                            "text-muted-foreground"
+                          )}>
+                            {netCO2e > 0 
+                              ? "Positive environmental benefit" 
+                              : netCO2e < 0 
+                              ? "Travel emissions exceed reuse savings"
+                              : "Neutral impact"}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
+
                   <div className="flex items-center gap-4 text-sm text-muted-foreground pt-2 border-t">
                     <span className="flex items-center gap-1">
                       <TreeDeciduous className="h-4 w-4" />

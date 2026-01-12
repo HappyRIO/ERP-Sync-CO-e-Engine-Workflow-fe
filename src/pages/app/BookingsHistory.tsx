@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, FileText } from "lucide-react";
+import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, FileText, Truck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -168,6 +168,17 @@ const BookingsHistory = () => {
                         <p className="font-semibold text-foreground">{booking.charityPercent}%</p>
                         <p className="text-xs text-muted-foreground">Charity</p>
                       </div>
+                      {booking.roundTripDistanceKm && booking.roundTripDistanceKm > 0 && (
+                        <div className="text-center">
+                          <p className="font-semibold text-foreground flex items-center justify-center gap-1">
+                            <Truck className="h-3 w-3" />
+                            {booking.roundTripDistanceMiles 
+                              ? `${booking.roundTripDistanceMiles.toFixed(1)} mi`
+                              : `${(booking.roundTripDistanceKm * 0.621371).toFixed(1)} mi`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Return Journey</p>
+                        </div>
+                      )}
                       <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </div>
