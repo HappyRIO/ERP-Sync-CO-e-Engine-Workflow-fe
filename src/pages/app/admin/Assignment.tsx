@@ -46,45 +46,80 @@ const Assignment = () => {
     }
   }, [booking]);
 
-  // Calculate round trip distance from booking site address
+  // Use stored round trip distance from booking, or calculate if not available
   useEffect(() => {
     const calculateDistance = async () => {
-      if (!booking?.siteAddress) {
-        setRoundTripDistanceKm(80); // Default fallback
+      // First, check if booking already has stored distance (preferred)
+      if (booking?.roundTripDistanceKm && booking.roundTripDistanceKm > 0) {
+        setRoundTripDistanceKm(booking.roundTripDistanceKm);
+        setIsCalculatingDistance(false);
         return;
       }
       
-      setIsCalculatingDistance(true);
-      try {
-        // Extract postcode from address (UK postcode format: e.g., "SW1A 1AA", "M1 1AA", "B33 8TH")
-        // Pattern matches: 1-2 letters, 1-2 digits, optional letter, space, digit, 2 letters
-        const postcodeMatch = booking.siteAddress.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/i);
-        if (postcodeMatch) {
-          const postcode = postcodeMatch[0].replace(/\s+/g, ' ').trim().toUpperCase();
-          const coordinates = await geocodePostcode(postcode);
-          if (coordinates) {
+      // If no stored distance, try to calculate from coordinates
+      if (booking?.lat && booking?.lng) {
+        setIsCalculatingDistance(true);
+        try {
+          const distanceKm = await calculateRoundTripDistance(booking.lat, booking.lng);
+          setRoundTripDistanceKm(distanceKm);
+        } catch (error) {
+          console.error('Error calculating road distance from coordinates:', error);
+          // Fallback: try postcode geocoding
+          if (booking.siteAddress) {
             try {
+              const postcodeMatch = booking.siteAddress.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/i);
+              if (postcodeMatch) {
+                const postcode = postcodeMatch[0].replace(/\s+/g, ' ').trim().toUpperCase();
+                const coordinates = await geocodePostcode(postcode);
+                if (coordinates) {
+                  const distanceKm = await calculateRoundTripDistance(coordinates.lat, coordinates.lng);
+                  setRoundTripDistanceKm(distanceKm);
+                  return;
+                }
+              }
+            } catch (geocodeError) {
+              console.error('Error geocoding postcode:', geocodeError);
+            }
+          }
+          // Final fallback: use default distance estimate
+          setRoundTripDistanceKm(80); // Default 80km round trip
+        } finally {
+          setIsCalculatingDistance(false);
+        }
+        return;
+      }
+      
+      // If no coordinates, try to geocode from postcode in address
+      if (booking?.siteAddress) {
+        setIsCalculatingDistance(true);
+        try {
+          // Extract postcode from address (UK postcode format: e.g., "SW1A 1AA", "M1 1AA", "B33 8TH")
+          // Pattern matches: 1-2 letters, 1-2 digits, optional letter, space, digit, 2 letters
+          const postcodeMatch = booking.siteAddress.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/i);
+          if (postcodeMatch) {
+            const postcode = postcodeMatch[0].replace(/\s+/g, ' ').trim().toUpperCase();
+            const coordinates = await geocodePostcode(postcode);
+            if (coordinates) {
               const distanceKm = await calculateRoundTripDistance(coordinates.lat, coordinates.lng);
               setRoundTripDistanceKm(distanceKm);
-            } catch (error) {
-              console.error('Error calculating road distance:', error);
-              // Fallback: use default distance estimate
-              setRoundTripDistanceKm(80); // Default 80km round trip
+              setIsCalculatingDistance(false);
+              return;
             }
-          } else {
-            // Fallback: use default distance estimate
-            setRoundTripDistanceKm(80); // Default 80km round trip
           }
-        } else {
-          // No postcode found in address, use default
-          setRoundTripDistanceKm(80);
+          // No postcode found or geocoding failed, use default
+          setRoundTripDistanceKm(80); // Default 80km round trip
+        } catch (error) {
+          console.error('Failed to calculate distance:', error);
+          setRoundTripDistanceKm(80); // Fallback to default
+        } finally {
+          setIsCalculatingDistance(false);
         }
-      } catch (error) {
-        console.error('Failed to calculate distance:', error);
-        setRoundTripDistanceKm(80); // Fallback to default
-      } finally {
-        setIsCalculatingDistance(false);
+        return;
       }
+      
+      // No booking data available, use default
+      setRoundTripDistanceKm(80); // Default fallback
+      setIsCalculatingDistance(false);
     };
 
     if (booking) {
