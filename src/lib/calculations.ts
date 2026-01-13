@@ -35,6 +35,157 @@ export async function geocodePostcode(postcode: string): Promise<{ lat: number; 
   return null;
 }
 
+/**
+ * Geocode a postcode or address to get coordinates and full address details
+ * Returns coordinates and structured address information including house name/number
+ */
+export async function geocodeAddressWithDetails(
+  query: string
+): Promise<{
+  coordinates: { lat: number; lng: number } | null;
+  address: {
+    street?: string;
+    city?: string;
+    county?: string;
+    postcode?: string;
+    country?: string;
+  } | null;
+}> {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=gb&addressdetails=1&extratags=1&namedetails=1`
+    );
+    const data = await response.json();
+    
+    if (data.length > 0) {
+      const result = data[0];
+      const coordinates = {
+        lat: parseFloat(result.lat),
+        lng: parseFloat(result.lon),
+      };
+
+      // Extract address details
+      let address: {
+        street?: string;
+        city?: string;
+        county?: string;
+        postcode?: string;
+        country?: string;
+      } | null = null;
+
+      if (result.address) {
+        // Extract street - try multiple sources including house name/number
+        // Priority: house_name + house_number + road > house_number + road > house_name + road > road > house_number > house_name > fallbacks
+        let street = "";
+        
+        // Get house name from multiple sources
+        // Nominatim can store house names in: extratags.house_name, namedetails.name, or address.name
+        let houseName = result.extratags?.house_name || 
+                       result.namedetails?.name || 
+                       result.address?.house_name || 
+                       result.address?.name || 
+                       "";
+        
+        // If house name not found in structured fields, try to extract from display_name
+        // Nominatim display_name format often starts with house name if present
+        // Example: "Oak Cottage, 123 High Street, London, UK"
+        if (!houseName && result.display_name) {
+          const displayParts = result.display_name.split(',').map(p => p.trim());
+          if (displayParts.length > 0) {
+            const firstPart = displayParts[0];
+            const roadName = result.address?.road || "";
+            
+            // Check if first part is likely a house name
+            // Criteria: not a number, not the road name, not a common road type, reasonable length
+            const roadTypes = ['Street', 'Road', 'Avenue', 'Lane', 'Drive', 'Close', 'Way', 'Place', 'Crescent', 'Grove', 'Terrace', 'Gardens'];
+            const isRoadType = roadTypes.some(type => firstPart.toLowerCase().includes(type.toLowerCase()));
+            const isNumber = /^\d+[A-Za-z]?$/.test(firstPart); // Matches "123" or "123A"
+            const isRoadName = roadName && (firstPart.toLowerCase() === roadName.toLowerCase() || firstPart.toLowerCase().includes(roadName.toLowerCase()));
+            
+            // If first part looks like a house name (not number, not road type, not road name)
+            if (!isNumber && !isRoadType && !isRoadName && firstPart.length > 2 && firstPart.length < 50) {
+              // Additional validation: house names usually don't contain postcodes or city names
+              const hasPostcode = /\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/i.test(firstPart);
+              if (!hasPostcode) {
+                houseName = firstPart;
+              }
+            }
+          }
+        }
+        
+        const houseNumber = result.address.house_number || "";
+        const road = result.address.road || "";
+        
+        // Build street address with priority order
+        if (houseName && houseNumber && road) {
+          // "Oak Cottage, 123 High Street"
+          street = `${houseName}, ${houseNumber} ${road}`.trim();
+        } else if (houseNumber && road) {
+          // "123 High Street"
+          street = `${houseNumber} ${road}`.trim();
+        } else if (houseName && road) {
+          // "Oak Cottage, High Street"
+          street = `${houseName}, ${road}`.trim();
+        } else if (road) {
+          // "High Street"
+          street = road;
+        } else if (houseNumber) {
+          // Just house number
+          street = houseNumber;
+        } else if (houseName) {
+          // Just house name
+          street = houseName;
+        } else if (result.address.suburb) {
+          street = result.address.suburb;
+        } else if (result.address.neighbourhood) {
+          street = result.address.neighbourhood;
+        }
+
+        // Extract city
+        const city = result.address.city || 
+                    result.address.town || 
+                    result.address.village || 
+                    result.address.suburb ||
+                    result.address.locality ||
+                    result.address.neighbourhood ||
+                    "";
+
+        // Extract county
+        const county = result.address.county || 
+                      result.address.state || 
+                      "";
+
+        // Extract postcode
+        let postcode = result.address.postcode || "";
+        if (!postcode && result.display_name) {
+          // Try to extract from display_name if missing
+          const postcodeMatch = result.display_name.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/i);
+          if (postcodeMatch) {
+            postcode = postcodeMatch[0].replace(/\s+/g, ' ').trim().toUpperCase();
+          }
+        }
+
+        // Extract country
+        const country = result.address.country || "United Kingdom";
+
+        address = {
+          street: street || undefined,
+          city: city || undefined,
+          county: county || undefined,
+          postcode: postcode || undefined,
+          country: country || undefined,
+        };
+      }
+
+      return { coordinates, address };
+    }
+  } catch (error) {
+    console.error('Geocoding error:', error);
+  }
+  
+  return { coordinates: null, address: null };
+}
+
 // Import road distance function
 import { calculateRoundTripRoadDistance } from './routing';
 

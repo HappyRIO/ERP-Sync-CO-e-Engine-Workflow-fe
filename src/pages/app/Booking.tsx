@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import * as SelectPrimitive from "@radix-ui/react-select";
 import { 
   Building2, 
   Package, 
@@ -39,12 +40,13 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClients } from "@/hooks/useClients";
+import { useSites, useCreateSite } from "@/hooks/useSites";
 import { useOrganisationProfileComplete } from "@/hooks/useOrganisationProfile";
 import { useAssetCategories } from "@/hooks/useAssets";
 import { useCO2Calculation } from "@/hooks/useCO2";
 import { useBuybackCalculation } from "@/hooks/useBuyback";
 import { useCreateBooking } from "@/hooks/useBooking";
-import { geocodePostcode } from "@/lib/calculations";
+import { geocodePostcode, geocodeAddressWithDetails } from "@/lib/calculations";
 
 const steps = [
   { id: 1, title: "Site Details", icon: Building2 },
@@ -64,7 +66,7 @@ const Booking = () => {
   const [selectedClientId, setSelectedClientId] = useState<string>(""); // For resellers: selected client
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
   const [siteLocation, setSiteLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [selectedSiteId] = useState<string>("new");
+  const [selectedSiteId, setSelectedSiteId] = useState<string>("new");
   const [siteDetails, setSiteDetails] = useState({
     siteName: "",
     street: "",
@@ -78,6 +80,7 @@ const Booking = () => {
   const [selectedAssets, setSelectedAssets] = useState<AssetSelection[]>([]);
   const [charityPercent, setCharityPercent] = useState(10);
   const [selectedVehicleType, setSelectedVehicleType] = useState<'petrol' | 'diesel' | 'electric'>('petrol');
+  const [isGeocodingAddress, setIsGeocodingAddress] = useState(false);
 
   // Determine user roles first (needed for conditional queries)
   const isReseller = user?.role === 'reseller';
@@ -92,8 +95,14 @@ const Booking = () => {
     return allClients.filter(client => client.status === 'active');
   }, [allClients]);
   
+  // Load sites - for admin/reseller: based on selectedClientId, for client: all their sites
+  const { data: sites = [], isLoading: isLoadingSites } = useSites(
+    (isAdmin || isReseller) ? selectedClientId : undefined
+  );
+  
   const { data: assetCategories = [], error: categoriesError, isLoading: isLoadingCategories } = useAssetCategories();
   const createBooking = useCreateBooking();
+  const createSite = useCreateSite();
   
   // Calculate CO2e when assets change - MUST be called before any early returns (React Hooks rule)
   // Use memoized request object to prevent unnecessary query key changes
@@ -126,6 +135,75 @@ const Booking = () => {
   // Reseller organisation profile completion - MUST be called before any early returns (React Hooks rule)
   const { data: isResellerProfileComplete = false } = useOrganisationProfileComplete(isReseller);
   
+  // Reset site selection when client changes (for admin/reseller) - MUST be called before any early returns
+  useEffect(() => {
+    if ((isAdmin || isReseller) && selectedClientId) {
+      setSelectedSiteId("new");
+      setSiteDetails({
+        siteName: "",
+        street: "",
+        city: "",
+        county: "",
+        postcode: "",
+        country: "United Kingdom",
+        contactName: "",
+        contactPhone: "",
+      });
+      setSiteLocation(null);
+    }
+  }, [selectedClientId, isAdmin, isReseller]);
+
+  // Auto-geocode postcode when manually entered (for new addresses only)
+  useEffect(() => {
+    // Only geocode if:
+    // 1. Creating new site (not selecting existing)
+    // 2. Postcode is entered and valid UK format
+    if (selectedSiteId !== 'new' || !siteDetails.postcode.trim()) {
+      return;
+    }
+
+    // Validate UK postcode format
+    const postcodeRegex = /^[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}$/i;
+    if (!postcodeRegex.test(siteDetails.postcode.trim())) {
+      return;
+    }
+
+    // Debounce geocoding
+    const timeoutId = setTimeout(async () => {
+      setIsGeocodingAddress(true);
+      try {
+        // Use enhanced geocoding to get both coordinates and address details
+        const result = await geocodeAddressWithDetails(siteDetails.postcode.trim());
+        
+        if (result.coordinates) {
+          setSiteLocation(result.coordinates);
+        } else {
+          setSiteLocation(null);
+        }
+
+        // Auto-populate address fields if available and not already filled
+        if (result.address) {
+          setSiteDetails(prev => ({
+            ...prev,
+            // Only update fields that are empty to avoid overwriting user input
+            street: prev.street.trim() || result.address?.street || prev.street,
+            city: prev.city.trim() || result.address?.city || prev.city,
+            county: prev.county.trim() || result.address?.county || prev.county,
+            postcode: prev.postcode.trim() || result.address?.postcode || prev.postcode,
+            country: prev.country.trim() || result.address?.country || prev.country,
+          }));
+        }
+      } catch (error) {
+        console.error("Geocoding error:", error);
+        setSiteLocation(null);
+      } finally {
+        setIsGeocodingAddress(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [siteDetails.postcode, selectedSiteId]);
+  
   // Show error if critical data fails to load (AFTER all hooks are called)
   if (categoriesError) {
     return (
@@ -156,12 +234,47 @@ const Booking = () => {
     console.warn('Failed to load clients:', clientsError);
   }
 
-  const handleSiteSelect = (_siteId: string) => {
-    // Site feature has been removed - keep handler as no-op for safety
-    // Users now always enter site details manually
-    setSiteLocation(null);
+  const handleSiteSelect = (siteId: string) => {
+    setSelectedSiteId(siteId);
+    
+    if (siteId === 'new') {
+      // Reset form for new site
+      setSiteDetails({
+        siteName: "",
+        street: "",
+        city: "",
+        county: "",
+        postcode: "",
+        country: "United Kingdom",
+        contactName: "",
+        contactPhone: "",
+      });
+      setSiteLocation(null);
+    } else {
+      // Load selected site details
+      const selectedSite = sites.find(s => s.id === siteId);
+      if (selectedSite) {
+        // Parse address - assume format is "street, city, county, country"
+        const addressParts = selectedSite.address.split(',').map(s => s.trim());
+        setSiteDetails({
+          siteName: selectedSite.name,
+          street: addressParts[0] || "",
+          city: addressParts[1] || "",
+          county: addressParts[2] || "",
+          postcode: selectedSite.postcode,
+          country: addressParts[3] || "United Kingdom",
+          contactName: selectedSite.contactName || "",
+          contactPhone: selectedSite.contactPhone || "",
+        });
+        if (selectedSite.lat && selectedSite.lng) {
+          setSiteLocation({ lat: selectedSite.lat, lng: selectedSite.lng });
+        } else {
+          setSiteLocation(null);
+        }
+      }
+    }
   };
-
+  
   const updateAssetQuantity = (categoryId: string, delta: number) => {
     setSelectedAssets((prev) => {
       const existing = prev.find((a) => a.categoryId === categoryId);
@@ -312,10 +425,39 @@ const Booking = () => {
       bookingClientName = user.tenantName || 'Client Organisation';
     }
     
+    // Handle site creation/selection
+    let siteId: string | undefined;
+    
+    if (selectedSiteId === 'new') {
+      // Create new site
+      try {
+        const newSite = await createSite.mutateAsync({
+          name: siteDetails.siteName,
+          address: fullAddress,
+          postcode: siteDetails.postcode,
+          lat: siteLocation?.lat,
+          lng: siteLocation?.lng,
+          contactName: siteDetails.contactName || undefined,
+          contactPhone: siteDetails.contactPhone || undefined,
+          clientId: (isAdmin || isReseller) ? bookingClientId : undefined,
+        });
+        siteId = newSite.id;
+      } catch (error) {
+        toast.error("Failed to create site", {
+          description: error instanceof Error ? error.message : "Please try again.",
+        });
+        return;
+      }
+    } else {
+      // Use existing site
+      siteId = selectedSiteId;
+    }
+    
     createBooking.mutate(
       {
         clientId: bookingClientId,
         clientName: bookingClientName, // Pass client name explicitly
+        siteId: siteId,
         siteName: siteDetails.siteName,
         address: fullAddress,
         postcode: siteDetails.postcode,
@@ -468,7 +610,74 @@ const Booking = () => {
                     </div>
                   )}
 
-                  {/* Site Selection for Clients Only - removed (sites feature deprecated) */}
+                  {/* Site Selection */}
+                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+                    <Label className="text-sm font-semibold">
+                      Site Address {selectedSiteId === 'new' ? '*' : ''}
+                    </Label>
+                    {isLoadingSites ? (
+                      <div className="flex items-center justify-center py-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <Select
+                        value={selectedSiteId}
+                        onValueChange={handleSiteSelect}
+                      >
+                        <SelectTrigger className="bg-background h-9">
+                          <SelectPrimitive.Value asChild>
+                            <span className="truncate block text-left flex-1">
+                              {selectedSiteId === 'new' 
+                                ? 'New Address' 
+                                : (() => {
+                                    const selectedSite = sites.find(s => s.id === selectedSiteId);
+                                    return selectedSite ? selectedSite.name : 'Select a site or create new';
+                                  })()
+                              }
+                            </span>
+                          </SelectPrimitive.Value>
+                        </SelectTrigger>
+                        <SelectContent className="max-w-[var(--radix-select-trigger-width)]">
+                          <SelectItem value="new">
+                            <div className="flex items-center gap-2">
+                              <Plus className="h-4 w-4 flex-shrink-0" />
+                              <span>New Address</span>
+                            </div>
+                          </SelectItem>
+                          {sites.length > 0 && sites.map((site) => {
+                            // Split address into two lines if it's long
+                            const addressParts = site.address.split(',').map(s => s.trim());
+                            const addressLine1 = addressParts.slice(0, Math.ceil(addressParts.length / 2)).join(', ');
+                            const addressLine2 = addressParts.slice(Math.ceil(addressParts.length / 2)).join(', ');
+                            
+                            return (
+                              <SelectItem key={site.id} value={site.id} textValue={site.name}>
+                                <div className="flex flex-col min-w-0 text-left">
+                                  <span className="font-medium">{site.name}</span>
+                                  <div className="flex flex-col mt-0.5">
+                                    {addressLine2 ? (
+                                      <>
+                                        <span className="text-xs text-muted-foreground leading-relaxed">
+                                          {addressLine1}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground leading-relaxed">
+                                          {addressLine2}, {site.postcode}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground leading-relaxed">
+                                        {site.address}, {site.postcode}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
 
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
@@ -480,6 +689,7 @@ const Booking = () => {
                         onChange={(e) =>
                           setSiteDetails({ ...siteDetails, siteName: e.target.value })
                         }
+                        disabled={selectedSiteId !== 'new'}
                         className="h-9"
                       />
                     </div>
@@ -499,7 +709,8 @@ const Booking = () => {
                   
                   <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
                     <Label className="text-xs font-semibold text-muted-foreground uppercase">Address (use map search or enter manually)</Label>
-                    <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="space-y-3">
+                      {/* Street - Full width */}
                       <div className="space-y-1.5">
                         <Label htmlFor="street" className="text-sm">Street *</Label>
                         <Input
@@ -509,57 +720,66 @@ const Booking = () => {
                           onChange={(e) =>
                             setSiteDetails({ ...siteDetails, street: e.target.value })
                           }
+                          disabled={selectedSiteId !== 'new'}
                           className="h-9"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="city" className="text-sm">City *</Label>
-                        <Input
-                          id="city"
-                          placeholder="London"
-                          value={siteDetails.city}
-                          onChange={(e) =>
-                            setSiteDetails({ ...siteDetails, city: e.target.value })
-                          }
-                          className="h-9"
-                        />
+                      {/* City, County - Side by side */}
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="city" className="text-sm">City *</Label>
+                          <Input
+                            id="city"
+                            placeholder="London"
+                            value={siteDetails.city}
+                            onChange={(e) =>
+                              setSiteDetails({ ...siteDetails, city: e.target.value })
+                            }
+                            disabled={selectedSiteId !== 'new'}
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="county" className="text-sm">County</Label>
+                          <Input
+                            id="county"
+                            placeholder="Greater London"
+                            value={siteDetails.county}
+                            onChange={(e) =>
+                              setSiteDetails({ ...siteDetails, county: e.target.value })
+                            }
+                            disabled={selectedSiteId !== 'new'}
+                            className="h-9"
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="grid sm:grid-cols-3 gap-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="county" className="text-sm">County</Label>
-                        <Input
-                          id="county"
-                          placeholder="Greater London"
-                          value={siteDetails.county}
-                          onChange={(e) =>
-                            setSiteDetails({ ...siteDetails, county: e.target.value })
-                          }
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="postcode" className="text-sm">Postcode *</Label>
-                        <Input
-                          id="postcode"
-                          placeholder="EC1A 1BB"
-                          value={siteDetails.postcode}
-                          onChange={(e) =>
-                            setSiteDetails({ ...siteDetails, postcode: e.target.value })
-                          }
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="country" className="text-sm">Country</Label>
-                        <Input
-                          id="country"
-                          value={siteDetails.country}
-                          onChange={(e) =>
-                            setSiteDetails({ ...siteDetails, country: e.target.value })
-                          }
-                          className="h-9"
-                        />
+                      {/* Postcode, Country - Side by side */}
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="postcode" className="text-sm">Postcode *</Label>
+                          <Input
+                            id="postcode"
+                            placeholder="EC1A 1BB"
+                            value={siteDetails.postcode}
+                            onChange={(e) =>
+                              setSiteDetails({ ...siteDetails, postcode: e.target.value })
+                            }
+                            disabled={selectedSiteId !== 'new'}
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="country" className="text-sm">Country</Label>
+                          <Input
+                            id="country"
+                            value={siteDetails.country}
+                            onChange={(e) =>
+                              setSiteDetails({ ...siteDetails, country: e.target.value })
+                            }
+                            disabled={selectedSiteId !== 'new'}
+                            className="h-9"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -616,7 +836,7 @@ const Booking = () => {
                     }}
                     onAddressDetailsChange={(details) => {
                       // Only auto-fill if creating new site
-                      if (selectedSiteId === 'new' || !selectedSiteId) {
+                      if (selectedSiteId === 'new') {
                         setSiteDetails({
                           ...siteDetails,
                           street: details.street || siteDetails.street,
@@ -629,10 +849,21 @@ const Booking = () => {
                     }}
                     height="450px"
                   />
-                  {siteLocation && (
+                  {isGeocodingAddress && (
+                    <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Geocoding address...
+                    </p>
+                  )}
+                  {siteLocation && !isGeocodingAddress && (
                     <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                       <MapPin className="h-3 w-3" />
                       Location set at {siteLocation.lat.toFixed(4)}, {siteLocation.lng.toFixed(4)}
+                    </p>
+                  )}
+                  {!siteLocation && !isGeocodingAddress && selectedSiteId === 'new' && siteDetails.postcode.trim() && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Enter a valid UK postcode to see location on map
                     </p>
                   )}
                 </CardContent>

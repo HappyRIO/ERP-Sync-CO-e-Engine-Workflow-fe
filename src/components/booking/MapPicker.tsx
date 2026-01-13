@@ -38,13 +38,20 @@ interface GeocodeResult {
   address?: {
     road?: string;
     house_number?: string;
+    house_name?: string;
     city?: string;
     town?: string;
     village?: string;
+    suburb?: string;
+    neighbourhood?: string;
+    locality?: string;
     county?: string;
     state?: string;
     postcode?: string;
     country?: string;
+  };
+  extratags?: {
+    house_name?: string;
   };
 }
 
@@ -76,19 +83,120 @@ function MapClickHandler({
         setIsGeocoding(true);
         try {
           const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${newPosition.lat}&lon=${newPosition.lng}&zoom=18&addressdetails=1`
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${newPosition.lat}&lon=${newPosition.lng}&zoom=18&addressdetails=1&extratags=1&namedetails=1`
           );
           const data = await response.json();
+          
+          // Debug: Log the response to see what fields are available
+          // console.log('Nominatim response:', JSON.stringify(data, null, 2));
           if (data.display_name && onAddressChange) {
             onAddressChange(data.display_name);
           }
           if (data.address && onAddressDetailsChange) {
+            // Extract street - try multiple sources including house name/number
+            // Priority: house_name + house_number + road > house_number + road > house_name + road > road > house_number > house_name > fallbacks
+            let street = "";
+            
+            // Get house name from multiple sources
+            // Nominatim can store house names in: extratags.house_name, namedetails.name, or address.name
+            let houseName = data.extratags?.house_name || 
+                          data.namedetails?.name || 
+                          data.address?.house_name || 
+                          data.address?.name || 
+                          "";
+            
+            // If house name not found in structured fields, try to extract from display_name
+            // Nominatim display_name format often starts with house name if present
+            // Example: "Oak Cottage, 123 High Street, London, UK"
+            if (!houseName && data.display_name) {
+              const displayParts = data.display_name.split(',').map(p => p.trim());
+              if (displayParts.length > 0) {
+                const firstPart = displayParts[0];
+                const roadName = data.address?.road || "";
+                
+                // Check if first part is likely a house name
+                // Criteria: not a number, not the road name, not a common road type, reasonable length
+                const roadTypes = ['Street', 'Road', 'Avenue', 'Lane', 'Drive', 'Close', 'Way', 'Place', 'Crescent', 'Grove', 'Terrace', 'Gardens'];
+                const isRoadType = roadTypes.some(type => firstPart.toLowerCase().includes(type.toLowerCase()));
+                const isNumber = /^\d+[A-Za-z]?$/.test(firstPart); // Matches "123" or "123A"
+                const isRoadName = roadName && (firstPart.toLowerCase() === roadName.toLowerCase() || firstPart.toLowerCase().includes(roadName.toLowerCase()));
+                
+                // If first part looks like a house name (not number, not road type, not road name)
+                if (!isNumber && !isRoadType && !isRoadName && firstPart.length > 2 && firstPart.length < 50) {
+                  // Additional validation: house names usually don't contain postcodes or city names
+                  const hasPostcode = /\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/i.test(firstPart);
+                  if (!hasPostcode) {
+                    houseName = firstPart;
+                  }
+                }
+              }
+            }
+            
+            const houseNumber = data.address.house_number || "";
+            const road = data.address.road || "";
+            
+            // Build street address with priority order
+            if (houseName && houseNumber && road) {
+              // "Oak Cottage, 123 High Street"
+              street = `${houseName}, ${houseNumber} ${road}`.trim();
+            } else if (houseNumber && road) {
+              // "123 High Street"
+              street = `${houseNumber} ${road}`.trim();
+            } else if (houseName && road) {
+              // "Oak Cottage, High Street"
+              street = `${houseName}, ${road}`.trim();
+            } else if (road) {
+              // "High Street"
+              street = road;
+            } else if (houseNumber) {
+              // Just house number
+              street = houseNumber;
+            } else if (houseName) {
+              // Just house name
+              street = houseName;
+            } else if (data.address.suburb) {
+              // Fallback: use suburb if no road name
+              street = data.address.suburb;
+            } else if (data.address.neighbourhood) {
+              // Fallback: use neighbourhood if no road name
+              street = data.address.neighbourhood;
+            }
+
+            // Extract city - try multiple sources with better fallbacks
+            const city = data.address.city || 
+                        data.address.town || 
+                        data.address.village || 
+                        data.address.suburb ||
+                        data.address.locality ||
+                        data.address.neighbourhood ||
+                        "";
+
+            // Extract county
+            const county = data.address.county || 
+                          data.address.state || 
+                          "";
+
+            // Extract postcode - critical for delivery
+            let postcode = data.address.postcode || "";
+            
+            // If postcode is missing, try to extract from display_name
+            if (!postcode && data.display_name) {
+              // UK postcode pattern: 1-2 letters, 1-2 digits, optional letter, space, digit, 2 letters
+              const postcodeMatch = data.display_name.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/i);
+              if (postcodeMatch) {
+                postcode = postcodeMatch[0].replace(/\s+/g, ' ').trim().toUpperCase();
+              }
+            }
+
+            // Extract country with fallback
+            const country = data.address.country || "United Kingdom";
+
             onAddressDetailsChange({
-              street: data.address.road || data.address.house_number ? `${data.address.house_number || ''} ${data.address.road || ''}`.trim() : "",
-              city: data.address.city || data.address.town || data.address.village || "",
-              county: data.address.county || data.address.state || "",
-              postcode: data.address.postcode || "",
-              country: data.address.country || "United Kingdom",
+              street: street,
+              city: city,
+              county: county,
+              postcode: postcode,
+              country: country,
             });
           }
         } catch (error) {

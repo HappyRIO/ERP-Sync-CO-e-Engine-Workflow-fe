@@ -19,6 +19,7 @@ import Documents from "./pages/app/Documents";
 import Settings from "./pages/app/Settings";
 import Users from "./pages/app/Users";
 import Clients from "./pages/app/Clients";
+import Sites from "./pages/app/Sites";
 import Drivers from "./pages/app/admin/Drivers";
 import BookingQueue from "./pages/app/admin/BookingQueue";
 import Assignment from "./pages/app/admin/Assignment";
@@ -232,6 +233,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin', 'client', 'reseller']}>
                       <BookingSummary />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/sites"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'client']}>
+                      <Sites />
                     </ProtectedRoute>
                   }
                 />
