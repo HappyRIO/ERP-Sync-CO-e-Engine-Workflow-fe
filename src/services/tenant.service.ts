@@ -14,7 +14,7 @@ const mockTenants: Tenant[] = [
     name: 'Reuse Connect ITAD Platform',
     slug: 'admin', // Admin subdomain
     logo: '/logo.avif',
-    favicon: '/favicon.ico',
+    favicon: '/favicon.avif',
     primaryColor: '168, 70%, 35%',
     accentColor: '168, 60%, 45%',
     theme: 'auto',

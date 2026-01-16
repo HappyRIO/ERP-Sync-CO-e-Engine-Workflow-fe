@@ -18,7 +18,7 @@ const DEFAULT_THEME = {
   primaryColor: '168, 70%, 35%',
   accentColor: '168, 60%, 45%',
   logo: '/logo.avif',
-  favicon: '/favicon.ico',
+  favicon: '/favicon.avif',
   tenantName: 'Reuse Connect ITAD Platform',
 };
 
@@ -36,7 +36,7 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
       
       const link = document.createElement('link');
       link.rel = 'icon';
-      link.type = 'image/x-icon';
+      link.type = 'image/avif';
       link.href = DEFAULT_THEME.favicon;
       document.head.appendChild(link);
     };
