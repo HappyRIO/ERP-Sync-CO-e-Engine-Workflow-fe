@@ -46,6 +46,11 @@ class UsersService {
   async deleteUser(userId: string): Promise<void> {
     await apiClient.delete(`/users/${userId}`);
   }
+
+  async approveUser(userId: string): Promise<ExtendedUser> {
+    const user = await apiClient.patch<ExtendedUser>(`/users/${userId}/approve`, {});
+    return user;
+  }
 }
 
 export const usersService = new UsersService();
