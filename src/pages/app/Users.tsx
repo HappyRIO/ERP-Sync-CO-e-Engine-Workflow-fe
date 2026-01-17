@@ -40,15 +40,19 @@ const Users = () => {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [roleFilter, setRoleFilter] = useState<string>(searchParams.get("role") || "all");
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") || "all");
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   
-  // Update status filter from URL params when component mounts or URL changes
+  // Update filters from URL params when component mounts or URL changes
   useEffect(() => {
     const statusParam = searchParams.get("status");
     if (statusParam && ["all", "pending", "active", "inactive"].includes(statusParam)) {
       setStatusFilter(statusParam);
+    }
+    const roleParam = searchParams.get("role");
+    if (roleParam && ["all", "admin", "client", "reseller", "driver"].includes(roleParam)) {
+      setRoleFilter(roleParam);
     }
   }, [searchParams]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -372,7 +376,7 @@ const Users = () => {
                   </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0 sm:flex-shrink-0">
-                    {getUserStatus(user) === 'pending' ? (
+                    {getUserStatus(user) === 'pending' && user.role === 'reseller' ? (
                       <Button
                         variant="success"
                         size="sm"
@@ -383,6 +387,10 @@ const Users = () => {
                         <CheckCircle2 className="h-4 w-4 mr-2" />
                         Approve
                       </Button>
+                    ) : getUserStatus(user) === 'pending' && user.role === 'client' ? (
+                      <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                        Approve in Clients page
+                      </Badge>
                     ) : (
                       <Button
                         variant={getUserStatus(user) === 'active' ? "destructive" : "success"}
