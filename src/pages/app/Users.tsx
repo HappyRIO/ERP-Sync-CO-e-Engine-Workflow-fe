@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
 import { Search, Users as UsersIcon, Mail, Building2, Shield, UserCheck, UserX, Loader2, Clock, CheckCircle2, UserPlus, Trash2, Copy, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -37,10 +38,19 @@ const roleColors: Record<UserRole, string> = {
 const Users = () => {
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") || "all");
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  
+  // Update status filter from URL params when component mounts or URL changes
+  useEffect(() => {
+    const statusParam = searchParams.get("status");
+    if (statusParam && ["all", "pending", "active", "inactive"].includes(statusParam)) {
+      setStatusFilter(statusParam);
+    }
+  }, [searchParams]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<'reseller'>('reseller'); // Only resellers can be invited from Users page
   const [isSendingInvite, setIsSendingInvite] = useState(false);
