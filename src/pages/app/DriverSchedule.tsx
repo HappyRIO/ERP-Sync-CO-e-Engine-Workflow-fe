@@ -277,7 +277,10 @@ const DriverSchedule = () => {
                             {(job.status === "routed" || job.status === "en-route") && (
                               <div className="flex items-center gap-1.5">
                                 <Clock className="h-3.5 w-3.5" />
-                                <span>ETA: {job.driver?.eta || "--:--"}</span>
+                                <span className={job.driver?.isEtaDelayed ? "text-destructive" : ""}>
+                                  ETA: {job.driver?.eta || "--:--"}
+                                  {job.driver?.isEtaDelayed && " (Delayed)"}
+                                </span>
                               </div>
                             )}
                           </div>

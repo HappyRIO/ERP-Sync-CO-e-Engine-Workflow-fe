@@ -205,8 +205,15 @@ const Jobs = () => {
               {/* Driver Info (if routed or en-route) */}
               {job.driver && (job.status === "routed" || job.status === "en-route") && (
                 <div className="mt-4 pt-4 border-t border-border/50 flex items-center gap-4 text-sm">
-                  <Badge variant="secondary" className="bg-warning/20 text-warning-foreground">
+                  <Badge 
+                    variant="secondary" 
+                    className={job.driver.isEtaDelayed 
+                      ? "bg-destructive/20 text-destructive border-destructive/50" 
+                      : "bg-warning/20 text-warning-foreground"
+                    }
+                  >
                     ETA: {job.driver.eta || "--:--"}
+                    {job.driver.isEtaDelayed && " (Delayed)"}
                   </Badge>
                   <span className="text-muted-foreground">
                     Driver: <span className="text-foreground">{job.driver.name}</span>

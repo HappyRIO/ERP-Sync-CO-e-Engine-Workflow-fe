@@ -66,6 +66,7 @@ export interface Driver {
   vehicleType: 'van' | 'truck' | 'car';
   vehicleFuelType?: 'petrol' | 'diesel' | 'electric'; // Fuel type of the vehicle
   eta?: string;
+  isEtaDelayed?: boolean; // True if calculated ETA is in the past (driver should have arrived)
   phone: string;
 }
 

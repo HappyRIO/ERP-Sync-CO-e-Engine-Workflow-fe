@@ -174,15 +174,33 @@ export function PhotoCapture({ photos, onPhotosChange, maxPhotos = 10 }: PhotoCa
 
     const remainingSlots = maxPhotos - photos.length;
     const filesToProcess = Array.from(files).slice(0, remainingSlots);
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB in bytes
 
     filesToProcess.forEach((file) => {
       if (file.type.startsWith("image/")) {
+        // Check file size
+        if (file.size > MAX_FILE_SIZE) {
+          toast.error("File too large", {
+            description: `${file.name} exceeds the maximum file size of 50MB. Please choose a smaller image.`,
+          });
+          return;
+        }
+
         const reader = new FileReader();
         reader.onload = (e) => {
           const result = e.target?.result as string;
           onPhotosChange([...photos, result]);
         };
+        reader.onerror = () => {
+          toast.error("Failed to read file", {
+            description: `Could not read ${file.name}. Please try again.`,
+          });
+        };
         reader.readAsDataURL(file);
+      } else {
+        toast.error("Invalid file type", {
+          description: `${file.name} is not a valid image file.`,
+        });
       }
     });
 

@@ -58,6 +58,22 @@ const DriverJobView = () => {
   const [roadWorksPublicEvents, setRoadWorksPublicEvents] = useState("");
   const [manualHandlingRequirements, setManualHandlingRequirements] = useState("");
 
+  // Track previous job ID and status to detect when they actually change
+  const previousJobIdRef = useRef<string | undefined>(undefined);
+  const previousStatusRef = useRef<string | undefined>(undefined);
+  
+  // Track initial journey field values to detect changes
+  const initialJourneyFieldsRef = useRef<{
+    dial2Collection: string;
+    securityRequirements: string;
+    idRequired: string;
+    loadingBayLocation: string;
+    vehicleHeightRestrictions: string;
+    doorLiftSize: string;
+    roadWorksPublicEvents: string;
+    manualHandlingRequirements: string;
+  } | null>(null);
+
   const areJourneyFieldsValid = useMemo(() => {
     return (
       dial2Collection.trim() !== "" &&
@@ -80,9 +96,35 @@ const DriverJobView = () => {
     manualHandlingRequirements,
   ]);
 
-  // Track previous job ID and status to detect when they actually change
-  const previousJobIdRef = useRef<string | undefined>(undefined);
-  const previousStatusRef = useRef<string | undefined>(undefined);
+  // Check if journey fields have been modified from initial values
+  // Returns true if:
+  // - Initial values haven't been set yet (first load, allow saving if valid)
+  // - OR changes have been made from initial values
+  const hasJourneyFieldsChanged = useMemo(() => {
+    // If initial values haven't been set yet, allow saving (user can save on first load)
+    if (!initialJourneyFieldsRef.current) return true;
+    
+    const initial = initialJourneyFieldsRef.current;
+    return (
+      dial2Collection.trim() !== initial.dial2Collection ||
+      securityRequirements.trim() !== initial.securityRequirements ||
+      idRequired.trim() !== initial.idRequired ||
+      loadingBayLocation.trim() !== initial.loadingBayLocation ||
+      vehicleHeightRestrictions.trim() !== initial.vehicleHeightRestrictions ||
+      doorLiftSize.trim() !== initial.doorLiftSize ||
+      roadWorksPublicEvents.trim() !== initial.roadWorksPublicEvents ||
+      manualHandlingRequirements.trim() !== initial.manualHandlingRequirements
+    );
+  }, [
+    dial2Collection,
+    securityRequirements,
+    idRequired,
+    loadingBayLocation,
+    vehicleHeightRestrictions,
+    doorLiftSize,
+    roadWorksPublicEvents,
+    manualHandlingRequirements,
+  ]);
 
   useEffect(() => {
     if (!job) return;
@@ -103,14 +145,28 @@ const DriverJobView = () => {
     // This ensures fields are populated on initial load but preserved after save/refetch
     // When job is refetched after save, jobIdChanged will be false, so fields won't be reset
     if (jobIdChanged && job.status === 'routed') {
-      setDial2Collection(job.dial2Collection || "");
-      setSecurityRequirements(job.securityRequirements || "");
-      setIdRequired(job.idRequired || "");
-      setLoadingBayLocation(job.loadingBayLocation || "");
-      setVehicleHeightRestrictions(job.vehicleHeightRestrictions || "");
-      setDoorLiftSize(job.doorLiftSize || "");
-      setRoadWorksPublicEvents(job.roadWorksPublicEvents || "");
-      setManualHandlingRequirements(job.manualHandlingRequirements || "");
+      const initialValues = {
+        dial2Collection: job.dial2Collection || "",
+        securityRequirements: job.securityRequirements || "",
+        idRequired: job.idRequired || "",
+        loadingBayLocation: job.loadingBayLocation || "",
+        vehicleHeightRestrictions: job.vehicleHeightRestrictions || "",
+        doorLiftSize: job.doorLiftSize || "",
+        roadWorksPublicEvents: job.roadWorksPublicEvents || "",
+        manualHandlingRequirements: job.manualHandlingRequirements || "",
+      };
+      
+      setDial2Collection(initialValues.dial2Collection);
+      setSecurityRequirements(initialValues.securityRequirements);
+      setIdRequired(initialValues.idRequired);
+      setLoadingBayLocation(initialValues.loadingBayLocation);
+      setVehicleHeightRestrictions(initialValues.vehicleHeightRestrictions);
+      setDoorLiftSize(initialValues.doorLiftSize);
+      setRoadWorksPublicEvents(initialValues.roadWorksPublicEvents);
+      setManualHandlingRequirements(initialValues.manualHandlingRequirements);
+      
+      // Store initial values for change detection
+      initialJourneyFieldsRef.current = initialValues;
     }
 
     previousJobIdRef.current = job.id;
@@ -218,7 +274,9 @@ const DriverJobView = () => {
 
   // Evidence must have at least one photo AND signature to be valid
   // Driver can only save if: can edit, has photos/signature, and no evidence exists for current status yet
-  const canSave = canEdit && currentStatusRequiresEvidence && photos.length > 0 && signature && !hasExistingEvidence;
+  // Signature validation: must be a non-empty string (base64 data URL)
+  const hasValidSignature = signature && typeof signature === 'string' && signature.trim().length > 0 && signature.startsWith('data:');
+  const canSave = canEdit && currentStatusRequiresEvidence && photos.length > 0 && hasValidSignature && !hasExistingEvidence;
 
   // Early returns after all hooks
   if (isLoading || (isDriver && isLoadingDriverProfile)) {
@@ -583,6 +641,18 @@ const DriverJobView = () => {
                     setRoadWorksPublicEvents(updatedJob?.roadWorksPublicEvents || savedFields.roadWorksPublicEvents);
                     setManualHandlingRequirements(updatedJob?.manualHandlingRequirements || savedFields.manualHandlingRequirements);
 
+                    // Update initial values after successful save
+                    initialJourneyFieldsRef.current = {
+                      dial2Collection: savedFields.dial2Collection,
+                      securityRequirements: savedFields.securityRequirements,
+                      idRequired: savedFields.idRequired,
+                      loadingBayLocation: savedFields.loadingBayLocation,
+                      vehicleHeightRestrictions: savedFields.vehicleHeightRestrictions,
+                      doorLiftSize: savedFields.doorLiftSize,
+                      roadWorksPublicEvents: savedFields.roadWorksPublicEvents,
+                      manualHandlingRequirements: savedFields.manualHandlingRequirements,
+                    };
+
                     toast.success("Journey information saved successfully!");
                     // Refetch to ensure job data is up to date, but fields are already preserved above
                     refetchJob();
@@ -592,7 +662,7 @@ const DriverJobView = () => {
                     });
                   }
                 }}
-                disabled={updateJourneyFields.isPending || !areJourneyFieldsValid}
+                disabled={updateJourneyFields.isPending || !areJourneyFieldsValid || !hasJourneyFieldsChanged}
                 className="w-full text-sm sm:text-base"
                 size="lg"
               >
@@ -739,7 +809,7 @@ const DriverJobView = () => {
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="text-base sm:text-lg flex items-center gap-2">
               <PenTool className="h-4 w-4 sm:h-5 sm:w-5" />
-              Customer Signature
+              Customer Signature <span className="text-destructive">*</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 pt-0">

@@ -131,6 +131,7 @@ function transformDriver(driver: BackendDriver | null | undefined): Driver | und
     vehicleFuelType: driver.vehicleFuelType || 'diesel',
     phone: driver.phone || driver.email || 'N/A',
     eta: driver.eta,
+    isEtaDelayed: driver.isEtaDelayed,
   };
 }
 

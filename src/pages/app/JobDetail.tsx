@@ -213,8 +213,15 @@ const JobDetail = () => {
                       </Badge>
                     )}
                     {(job.status === "routed" || job.status === "en-route") && (
-                      <Badge variant="secondary" className="bg-warning/20 text-warning-foreground">
+                      <Badge 
+                        variant="secondary" 
+                        className={job.driver.isEtaDelayed 
+                          ? "bg-destructive/20 text-destructive border-destructive/50" 
+                          : "bg-warning/20 text-warning-foreground"
+                        }
+                      >
                         ETA: {job.driver.eta || "--:--"}
+                        {job.driver.isEtaDelayed && " (Delayed)"}
                       </Badge>
                     )}
                   </div>
