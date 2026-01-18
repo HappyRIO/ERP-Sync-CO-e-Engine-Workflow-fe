@@ -74,29 +74,26 @@ const DriverSchedule = () => {
     return grouped;
   }, [upcomingJobs]);
 
-  // Calculate route statistics based on travel emissions (approximate but consistent with dashboard)
+  // Calculate route statistics based on actual distance data from bookings
   const routeStats = useMemo(() => {
     if (upcomingJobs.length === 0) return null;
-
-    // Use same baseline assumption as dashboard stats:
-    // travelEmissions (kg CO2e) ≈ distance_round_trip_km * 0.24 kg/km (van baseline)
-    const avgEmissionsPerKm = 0.24;
 
     let totalDistanceKm = 0;
 
     for (const job of upcomingJobs) {
-      // Guard against zero to avoid division by zero if config changes
-      if (!avgEmissionsPerKm || job.travelEmissions <= 0) continue;
-
-      const roundTripKm = job.travelEmissions / avgEmissionsPerKm;
-      totalDistanceKm += roundTripKm;
+      // Use actual roundTripDistanceKm from booking if available
+      if (job.roundTripDistanceKm && job.roundTripDistanceKm > 0) {
+        totalDistanceKm += job.roundTripDistanceKm;
+      }
+      // Do not use travelEmissions / 0.24 as fallback - this is inaccurate
+      // If distance is not available, skip it (distance remains 0) to show error/warning
     }
 
     // Estimate total time:
     // - Travel time at ~40 km/h average speed
     // - Plus 30 minutes on-site per job
     const averageSpeedKmh = 40;
-    const travelTimeMinutes = averageSpeedKmh > 0
+    const travelTimeMinutes = averageSpeedKmh > 0 && totalDistanceKm > 0
       ? (totalDistanceKm / averageSpeedKmh) * 60
       : 0;
     const onSiteMinutes = upcomingJobs.length * 30;
@@ -158,14 +155,25 @@ const DriverSchedule = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Distance</p>
-                  <p className="text-2xl font-bold">
-                    {routeStats.totalDistanceMiles.toFixed(1)} miles
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    ({routeStats.totalDistanceKm.toFixed(1)} km, estimated)
-                  </p>
+                  {routeStats.totalDistanceKm > 0 ? (
+                    <>
+                      <p className="text-2xl font-bold">
+                        {routeStats.totalDistanceMiles.toFixed(1)} miles
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        ({routeStats.totalDistanceKm.toFixed(1)} km)
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold text-warning">0 km</p>
+                      <p className="text-xs text-warning mt-1">
+                        ⚠️ Distance data unavailable for some jobs
+                      </p>
+                    </>
+                  )}
                 </div>
-                <RouteIcon className="h-8 w-8 text-success/50" />
+                <RouteIcon className={`h-8 w-8 ${routeStats.totalDistanceKm > 0 ? 'text-success/50' : 'text-warning/50'}`} />
               </div>
             </CardContent>
           </Card>

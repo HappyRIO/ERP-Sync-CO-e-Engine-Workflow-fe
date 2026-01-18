@@ -19,17 +19,16 @@ const JobHistory = () => {
 
   // Get jobs with status "warehouse" or later for driver history
   // This includes: warehouse, sanitised, graded, completed
+  // Request with status='warehouse' to trigger history mode in backend
+  // Backend will return all history statuses (warehouse, sanitised, graded, completed) when this is requested
   const { data: allJobs = [], isLoading, error } = useJobs({
+    status: 'warehouse', // This tells the backend to return history jobs
     searchQuery: searchQuery || undefined,
   });
-  
-  // Filter to only show jobs at "warehouse" or later
-  const historyJobs = (allJobs || []).filter(job => 
-    ['warehouse', 'sanitised', 'graded', 'completed'].includes(job.status)
-  );
 
   // Filter jobs for current driver (only show jobs assigned to this driver)
-  const driverJobs = historyJobs.filter(job => 
+  // Backend already filters by driverId, but double-check for safety
+  const driverJobs = (allJobs || []).filter(job => 
     job.driver && (job.driver.id === user?.id || job.driver.name === user?.name)
   );
 

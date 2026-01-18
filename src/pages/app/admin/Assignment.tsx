@@ -81,8 +81,8 @@ const Assignment = () => {
               console.error('Error geocoding postcode:', geocodeError);
             }
           }
-          // Final fallback: use default distance estimate
-          setRoundTripDistanceKm(80); // Default 80km round trip
+          // Final fallback: set to 0 to indicate calculation failed
+          setRoundTripDistanceKm(0); // Set to 0 to show error/warning in UI
         } finally {
           setIsCalculatingDistance(false);
         }
@@ -106,19 +106,19 @@ const Assignment = () => {
               return;
             }
           }
-          // No postcode found or geocoding failed, use default
-          setRoundTripDistanceKm(80); // Default 80km round trip
+          // No postcode found or geocoding failed, set to 0
+          setRoundTripDistanceKm(0); // Set to 0 to show error/warning in UI
         } catch (error) {
           console.error('Failed to calculate distance:', error);
-          setRoundTripDistanceKm(80); // Fallback to default
+          setRoundTripDistanceKm(0); // Set to 0 to show error/warning in UI
         } finally {
           setIsCalculatingDistance(false);
         }
         return;
       }
       
-      // No booking data available, use default
-      setRoundTripDistanceKm(80); // Default fallback
+      // No booking data available, set to 0
+      setRoundTripDistanceKm(0); // Set to 0 to show error/warning in UI
       setIsCalculatingDistance(false);
     };
 
@@ -261,14 +261,23 @@ const Assignment = () => {
                     <p className="text-sm text-muted-foreground">Round Trip Mileage</p>
                     {isCalculatingDistance ? (
                       <p className="text-sm text-muted-foreground">Calculating...</p>
-                    ) : (
+                    ) : roundTripDistanceKm > 0 ? (
                       <p className="font-semibold">
                         {kmToMiles(roundTripDistanceKm).toFixed(1)} miles ({roundTripDistanceKm.toFixed(1)} km)
                       </p>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-warning">0 km</p>
+                        <p className="text-xs text-warning mt-0.5">
+                          ⚠️ Distance calculation failed. Please check location or set distance manually.
+                        </p>
+                      </>
                     )}
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      From collection site to warehouse and return
-                    </p>
+                    {roundTripDistanceKm > 0 && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        From collection site to warehouse and return
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

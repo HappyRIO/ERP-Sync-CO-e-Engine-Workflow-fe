@@ -71,8 +71,8 @@ const JobDetail = () => {
   const totalAssets = job.assets.reduce((sum, a) => sum + a.quantity, 0);
   const netCO2e = job.co2eSaved - job.travelEmissions;
   
-  // Use actual round trip distance from booking if available (more accurate)
-  // Otherwise, calculate from travel emissions as fallback
+  // Use actual round trip distance from booking if available
+  // Do not use travelEmissions / emissionsPerKm as fallback - this is inaccurate
   let roundTripDistanceKm = 0;
   let roundTripDistanceMiles = 0;
   
@@ -80,18 +80,8 @@ const JobDetail = () => {
     // Use actual distance from booking (calculated at booking creation)
     roundTripDistanceKm = job.roundTripDistanceKm;
     roundTripDistanceMiles = job.roundTripDistanceMiles || (roundTripDistanceKm * 0.621371);
-  } else if (job.travelEmissions && job.travelEmissions > 0) {
-    // Fallback: calculate from travel emissions if booking distance not available
-    const vehicleEmissionsPerKm = job.driver?.vehicleFuelType === 'electric' 
-      ? 0 
-      : job.driver?.vehicleFuelType === 'diesel' 
-      ? 0.27 
-      : 0.24; // Default to petrol/van
-    roundTripDistanceKm = vehicleEmissionsPerKm > 0 
-      ? job.travelEmissions / vehicleEmissionsPerKm 
-      : 0;
-    roundTripDistanceMiles = roundTripDistanceKm * 0.621371;
   }
+  // If distance is not available, leave it as 0 to show error/warning in UI
 
   return (
     <div className="space-y-6">
@@ -164,22 +154,30 @@ const JobDetail = () => {
                 </div>
               </div>
 
-              {roundTripDistanceKm > 0 && (
-                <div className="pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Truck className="h-4 w-4 text-muted-foreground" />
-                      <p className="text-sm font-medium text-muted-foreground">Round Trip Mileage</p>
-                    </div>
+              <div className="pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-medium text-muted-foreground">Round Trip Mileage</p>
+                  </div>
+                  {roundTripDistanceKm > 0 ? (
                     <p className="text-lg font-bold">
                       {roundTripDistanceMiles.toFixed(1)} miles ({roundTripDistanceKm.toFixed(1)} km)
                     </p>
-                  </div>
+                  ) : (
+                    <p className="text-lg font-bold text-warning">0 km</p>
+                  )}
+                </div>
+                {roundTripDistanceKm > 0 ? (
                   <p className="text-xs text-muted-foreground mt-1">
                     From collection site to warehouse and return
                   </p>
-                </div>
-              )}
+                ) : (
+                  <p className="text-xs text-warning mt-1">
+                    ⚠️ Distance data unavailable. Distance calculation may have failed.
+                  </p>
+                )}
+              </div>
 
               {job.driver && (
                 <div className="pt-4 border-t">
