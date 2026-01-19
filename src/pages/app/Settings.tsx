@@ -233,6 +233,7 @@ const Settings = () => {
     new: '',
     confirm: '',
   });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const handleNotificationChange = (key: keyof typeof notifications, value: boolean) => {
     setNotifications(prev => ({ ...prev, [key]: value }));
@@ -1222,9 +1223,9 @@ const Settings = () => {
                     {passwordForm.new.length >= 8 ? (
                       <CheckCircle2 className="h-4 w-4 text-success" />
                     ) : (
-                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      <AlertCircle className="h-4 w-4 text-destructive" />
                     )}
-                    <span className={passwordForm.new.length >= 8 ? "text-success" : "text-muted-foreground"}>
+                    <span className={passwordForm.new.length >= 8 ? "text-success font-medium" : "text-destructive"}>
                       At least 8 characters
                     </span>
                   </div>
@@ -1232,9 +1233,9 @@ const Settings = () => {
                     {/[A-Z]/.test(passwordForm.new) ? (
                       <CheckCircle2 className="h-4 w-4 text-success" />
                     ) : (
-                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      <AlertCircle className="h-4 w-4 text-destructive" />
                     )}
-                    <span className={/[A-Z]/.test(passwordForm.new) ? "text-success" : "text-muted-foreground"}>
+                    <span className={/[A-Z]/.test(passwordForm.new) ? "text-success font-medium" : "text-destructive"}>
                       One uppercase letter
                     </span>
                   </div>
@@ -1242,9 +1243,9 @@ const Settings = () => {
                     {/[a-z]/.test(passwordForm.new) ? (
                       <CheckCircle2 className="h-4 w-4 text-success" />
                     ) : (
-                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      <AlertCircle className="h-4 w-4 text-destructive" />
                     )}
-                    <span className={/[a-z]/.test(passwordForm.new) ? "text-success" : "text-muted-foreground"}>
+                    <span className={/[a-z]/.test(passwordForm.new) ? "text-success font-medium" : "text-destructive"}>
                       One lowercase letter
                     </span>
                   </div>
@@ -1252,30 +1253,27 @@ const Settings = () => {
                     {/\d/.test(passwordForm.new) ? (
                       <CheckCircle2 className="h-4 w-4 text-success" />
                     ) : (
-                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      <AlertCircle className="h-4 w-4 text-destructive" />
                     )}
-                    <span className={/\d/.test(passwordForm.new) ? "text-success" : "text-muted-foreground"}>
+                    <span className={/\d/.test(passwordForm.new) ? "text-success font-medium" : "text-destructive"}>
                       One number
                     </span>
                   </div>
+                  {passwordForm.confirm && (
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-primary/10">
+                      {passwordForm.new === passwordForm.confirm ? (
+                        <CheckCircle2 className="h-4 w-4 text-success" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-destructive" />
+                      )}
+                      <span className={passwordForm.new === passwordForm.confirm ? "text-success font-medium" : "text-destructive"}>
+                        Passwords match
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-
-            {/* Admin Warning */}
-            {isAdmin && (
-              <div className="p-4 rounded-lg bg-warning/10 border border-warning/30 flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-warning-foreground mb-1">
-                    Administrator Account
-                  </p>
-                  <p className="text-sm text-warning-foreground/80">
-                    Password changes affect your platform access. Ensure you have alternative access methods configured before updating.
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* Action Button */}
             <div className="flex justify-end pt-4 border-t">
@@ -1283,6 +1281,7 @@ const Settings = () => {
                 variant="default" 
                 size="lg"
                 disabled={
+                  isChangingPassword ||
                   !passwordForm.current?.trim() || 
                   !passwordForm.new?.trim() || 
                   !passwordForm.confirm?.trim() ||
@@ -1292,7 +1291,7 @@ const Settings = () => {
                   !/[a-z]/.test(passwordForm.new) || 
                   !/\d/.test(passwordForm.new)
                 }
-                onClick={() => {
+                onClick={async () => {
                   if (!passwordForm.current) {
                     toast.error("Please enter your current password");
                     return;
@@ -1309,15 +1308,36 @@ const Settings = () => {
                     toast.error("Password does not meet requirements");
                     return;
                   }
-                  toast.success("Password updated successfully", {
-                    description: "Your password has been changed. Please use your new password for future logins.",
-                  });
-                  setPasswordForm({ current: '', new: '', confirm: '' });
+
+                  setIsChangingPassword(true);
+                  try {
+                    await authService.changePassword(passwordForm.current, passwordForm.new);
+                    toast.success("Password updated successfully", {
+                      description: "Your password has been changed. Please use your new password for future logins.",
+                    });
+                    setPasswordForm({ current: '', new: '', confirm: '' });
+                  } catch (error: any) {
+                    const errorMessage = error?.message || "Failed to change password. Please try again.";
+                    toast.error("Failed to change password", {
+                      description: errorMessage,
+                    });
+                  } finally {
+                    setIsChangingPassword(false);
+                  }
                 }}
                 className="min-w-[160px]"
               >
-                <Shield className="h-4 w-4 mr-2" />
-                Update Password
+                {isChangingPassword ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="h-4 w-4 mr-2" />
+                    Update Password
+                  </>
+                )}
               </Button>
             </div>
           </CardContent>

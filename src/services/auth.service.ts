@@ -177,6 +177,13 @@ class AuthService {
   getCurrentTenant(): Tenant | null {
     return this.currentTenant;
   }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await apiClient.post('/auth/change-password', {
+      currentPassword,
+      newPassword,
+    });
+  }
 }
 
 export const authService = new AuthService();
