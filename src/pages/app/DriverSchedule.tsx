@@ -104,15 +104,21 @@ const DriverSchedule = () => {
       totalDistanceKm += avgOneWayDistance; // Add return to warehouse
     }
 
-    // Estimate total time:
+    // Estimate total time: sum travel time of each job
     // - Travel time at ~40 km/h average speed (urban/rural mix)
-    // - Plus 30 minutes on-site per job
+    // - Calculate travel time for each job's roundTripDistanceKm and sum them
     const averageSpeedKmh = 40;
-    const travelTimeMinutes = averageSpeedKmh > 0 && totalDistanceKm > 0
-      ? (totalDistanceKm / averageSpeedKmh) * 60
-      : 0;
-    const onSiteMinutes = upcomingJobs.length * 30;
-    const estimatedTimeMinutes = Math.round(travelTimeMinutes + onSiteMinutes);
+    let totalTravelTimeMinutes = 0;
+
+    for (const job of upcomingJobs) {
+      if (job.roundTripDistanceKm && job.roundTripDistanceKm > 0) {
+        // Calculate travel time for this job's round trip distance
+        const jobTravelTimeMinutes = (job.roundTripDistanceKm / averageSpeedKmh) * 60;
+        totalTravelTimeMinutes += jobTravelTimeMinutes;
+      }
+    }
+
+    const estimatedTimeMinutes = Math.round(totalTravelTimeMinutes);
 
     return {
       totalJobs: upcomingJobs.length,
@@ -204,7 +210,7 @@ const DriverSchedule = () => {
                         {routeStats.estimatedTimeMinutes % 60}m
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Approx. (travel + {upcomingJobs.length * 30}min on-site)
+                        Travel time only
                       </p>
                       {upcomingJobs.length > 1 && (
                         <p className="text-xs text-warning mt-0.5">
