@@ -55,6 +55,14 @@ class DriverService {
   async deleteDriver(driverId: string): Promise<void> {
     await apiClient.delete(`/drivers/${driverId}`);
   }
+
+  /**
+   * Delete driver profile and user account
+   * @param driverId - The ID of the driver to delete
+   */
+  async deleteProfile(driverId: string): Promise<void> {
+    await apiClient.delete(`/drivers/${driverId}/profile`);
+  }
 }
 
 export const driverService = new DriverService();

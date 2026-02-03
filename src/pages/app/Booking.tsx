@@ -473,7 +473,7 @@ const Booking = () => {
       {
         onSuccess: (booking) => {
           toast.success("Booking submitted successfully!", {
-            description: `Booking ${booking.erpJobNumber} has been created.`,
+            description: `Booking ${booking.bookingNumber || booking.id} has been created.`,
           });
           // Redirect to Booking Queue page for admin, or bookings page for others
           if (user?.role === 'admin') {

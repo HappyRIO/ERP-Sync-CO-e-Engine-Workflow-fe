@@ -32,6 +32,10 @@ const Drivers = () => {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [driverToDelete, setDriverToDelete] = useState<string | null>(null);
+  const [isCancelInviteDialogOpen, setIsCancelInviteDialogOpen] = useState(false);
+  const [inviteToCancel, setInviteToCancel] = useState<Invite | null>(null);
 
   const { data: drivers = [], isLoading, error } = useDrivers();
   const { data: invites = [], isLoading: isLoadingInvites } = useInvites(undefined, 'driver');
@@ -94,19 +98,40 @@ const Drivers = () => {
   });
 
 
-  const handleDelete = async (driverId: string) => {
-    if (!confirm("Are you sure you want to delete this driver? This will permanently remove the driver account and all associated data.")) {
-      return;
-    }
+  const handleDeleteClick = (driverId: string) => {
+    setDriverToDelete(driverId);
+    setIsDeleteDialogOpen(true);
+  };
 
-    deleteProfile.mutate(driverId, {
+  const handleDeleteConfirm = () => {
+    if (!driverToDelete) return;
+
+    deleteProfile.mutate(driverToDelete, {
       onSuccess: () => {
         toast.success("Driver deleted successfully");
+        setIsDeleteDialogOpen(false);
+        setDriverToDelete(null);
       },
       onError: (error) => {
         toast.error("Failed to delete driver", {
           description: error instanceof Error ? error.message : "Please try again.",
         });
+      },
+    });
+  };
+
+  const handleCancelInviteClick = (invite: Invite) => {
+    setInviteToCancel(invite);
+    setIsCancelInviteDialogOpen(true);
+  };
+
+  const handleCancelInviteConfirm = () => {
+    if (!inviteToCancel) return;
+
+    cancelInvite.mutate(inviteToCancel.id, {
+      onSuccess: () => {
+        setIsCancelInviteDialogOpen(false);
+        setInviteToCancel(null);
       },
     });
   };
@@ -326,7 +351,7 @@ const Drivers = () => {
                         variant="outline"
                         size="sm"
                         className="flex-1"
-                        onClick={() => handleDelete(driver.id)}
+                        onClick={() => handleDeleteClick(driver.id)}
                         disabled={deleteProfile.isPending}
                       >
                         <Trash2 className="h-3 w-3 mr-1" />
@@ -439,11 +464,7 @@ const Drivers = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => {
-                                if (confirm(`Are you sure you want to cancel the invitation to ${invite.email}?`)) {
-                                  cancelInvite.mutate(invite.id);
-                                }
-                              }}
+                              onClick={() => handleCancelInviteClick(invite)}
                               disabled={cancelInvite.isPending}
                               className="w-full sm:w-auto"
                             >
@@ -461,6 +482,88 @@ const Drivers = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Delete Driver Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Driver</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this driver? This will permanently remove the driver account and all associated data.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDriverToDelete(null);
+              }}
+              disabled={deleteProfile.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleteProfile.isPending}
+            >
+              {deleteProfile.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Driver
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Invite Confirmation Dialog */}
+      <Dialog open={isCancelInviteDialogOpen} onOpenChange={setIsCancelInviteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Invitation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel the invitation to {inviteToCancel?.email}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCancelInviteDialogOpen(false);
+                setInviteToCancel(null);
+              }}
+              disabled={cancelInvite.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelInviteConfirm}
+              disabled={cancelInvite.isPending}
+            >
+              {cancelInvite.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Canceling...
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Cancel Invitation
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
