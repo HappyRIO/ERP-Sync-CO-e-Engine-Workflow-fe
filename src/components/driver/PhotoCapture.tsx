@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Camera, X, Upload, Image as ImageIcon, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Camera, X, Upload, Image as ImageIcon, RotateCcw, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -10,6 +10,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { compressImage, compressBase64Image, MAX_FILE_SIZE, PHOTO_COMPRESSION_OPTIONS } from "@/utils/image-compression";
 
 interface PhotoCaptureProps {
   photos: string[];
@@ -25,6 +26,7 @@ export function PhotoCapture({ photos, onPhotosChange, maxPhotos = 10 }: PhotoCa
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
   const [error, setError] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   // Cleanup stream when component unmounts or camera closes
   useEffect(() => {
@@ -107,7 +109,7 @@ export function PhotoCapture({ photos, onPhotosChange, maxPhotos = 10 }: PhotoCa
     }
   };
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
@@ -126,16 +128,30 @@ export function PhotoCapture({ photos, onPhotosChange, maxPhotos = 10 }: PhotoCa
     // Convert canvas to data URL (base64 image)
     const photoDataUrl = canvas.toDataURL('image/jpeg', 0.9);
     
-    // Add photo to photos array
-    if (photos.length < maxPhotos) {
-      onPhotosChange([...photos, photoDataUrl]);
+    // Check if we can add more photos
+    if (photos.length >= maxPhotos) {
+      setError(`Maximum ${maxPhotos} photos reached.`);
+      return;
+    }
+
+    // Compress the image before adding
+    setIsCompressing(true);
+    try {
+      const compressedPhoto = await compressBase64Image(photoDataUrl, PHOTO_COMPRESSION_OPTIONS);
+      onPhotosChange([...photos, compressedPhoto]);
       
       // Show success feedback briefly before closing
       setTimeout(() => {
         stopCamera();
       }, 500);
-    } else {
-      setError(`Maximum ${maxPhotos} photos reached.`);
+    } catch (error) {
+      console.error('Failed to compress photo:', error);
+      toast.error('Failed to compress photo', {
+        description: error instanceof Error ? error.message : 'Please try again',
+      });
+      setError('Failed to compress photo. Please try again.');
+    } finally {
+      setIsCompressing(false);
     }
   };
 
@@ -168,44 +184,53 @@ export function PhotoCapture({ photos, onPhotosChange, maxPhotos = 10 }: PhotoCa
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
     const remainingSlots = maxPhotos - photos.length;
     const filesToProcess = Array.from(files).slice(0, remainingSlots);
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB in bytes
 
-    filesToProcess.forEach((file) => {
-      if (file.type.startsWith("image/")) {
-        // Check file size
-        if (file.size > MAX_FILE_SIZE) {
-          toast.error("File too large", {
-            description: `${file.name} exceeds the maximum file size of 50MB. Please choose a smaller image.`,
+    setIsCompressing(true);
+    const compressedPhotos: string[] = [];
+
+    try {
+      for (const file of filesToProcess) {
+        if (file.type.startsWith("image/")) {
+          // Check file size before compression
+          if (file.size > MAX_FILE_SIZE) {
+            toast.error("File too large", {
+              description: `${file.name} exceeds the maximum file size of ${MAX_FILE_SIZE / 1024 / 1024}MB. Please choose a smaller image.`,
+            });
+            continue;
+          }
+
+          try {
+            // Compress the image
+            const compressedPhoto = await compressImage(file, PHOTO_COMPRESSION_OPTIONS);
+            compressedPhotos.push(compressedPhoto);
+          } catch (error) {
+            console.error(`Failed to compress ${file.name}:`, error);
+            toast.error("Compression failed", {
+              description: `Failed to compress ${file.name}. ${error instanceof Error ? error.message : 'Please try again.'}`,
+            });
+          }
+        } else {
+          toast.error("Invalid file type", {
+            description: `${file.name} is not a valid image file.`,
           });
-          return;
         }
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          onPhotosChange([...photos, result]);
-        };
-        reader.onerror = () => {
-          toast.error("Failed to read file", {
-            description: `Could not read ${file.name}. Please try again.`,
-          });
-        };
-        reader.readAsDataURL(file);
-      } else {
-        toast.error("Invalid file type", {
-          description: `${file.name} is not a valid image file.`,
-        });
       }
-    });
 
-    // Reset input
-    if (fileInputRef.current) fileInputRef.current.value = "";
+      // Add all compressed photos at once
+      if (compressedPhotos.length > 0) {
+        onPhotosChange([...photos, ...compressedPhotos]);
+      }
+    } finally {
+      setIsCompressing(false);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const removePhoto = (index: number) => {
@@ -237,13 +262,22 @@ export function PhotoCapture({ photos, onPhotosChange, maxPhotos = 10 }: PhotoCa
         <Button
           type="button"
           onClick={openFilePicker}
-          disabled={photos.length >= maxPhotos}
+          disabled={photos.length >= maxPhotos || isCompressing}
           variant="outline"
           className="flex-1"
           size="lg"
         >
-          <Upload className="h-5 w-5 mr-2" />
-          Upload
+          {isCompressing ? (
+            <>
+              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+              Compressing...
+            </>
+          ) : (
+            <>
+              <Upload className="h-5 w-5 mr-2" />
+              Upload
+            </>
+          )}
         </Button>
       </div>
 
@@ -305,11 +339,20 @@ export function PhotoCapture({ photos, onPhotosChange, maxPhotos = 10 }: PhotoCa
             <Button
               type="button"
               onClick={capturePhoto}
-              disabled={photos.length >= maxPhotos}
+              disabled={photos.length >= maxPhotos || isCompressing}
               className="flex-1 bg-primary text-primary-foreground"
             >
-              <CheckCircle2 className="h-4 w-4 mr-2" />
-              Capture Photo
+              {isCompressing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Compressing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Capture Photo
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Pen, X, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { compressBase64Image, SIGNATURE_COMPRESSION_OPTIONS } from "@/utils/image-compression";
 
 interface SignatureCaptureProps {
   signature: string | null;
@@ -207,7 +208,7 @@ export function SignatureCapture({ signature, onSignatureChange }: SignatureCapt
       ctxRef.current.stroke();
     };
 
-    const saveSignatureInternal = () => {
+    const saveSignatureInternal = async () => {
       const canvas = canvasRef.current;
       if (!canvas || !ctxRef.current) return;
       
@@ -224,8 +225,17 @@ export function SignatureCapture({ signature, onSignatureChange }: SignatureCapt
 
         if (hasContent) {
           const dataUrl = canvas.toDataURL("image/png");
-          onSignatureChangeRef.current(dataUrl);
-          setHasSignature(true);
+          // Compress signature before saving
+          try {
+            const compressedSignature = await compressBase64Image(dataUrl, SIGNATURE_COMPRESSION_OPTIONS);
+            onSignatureChangeRef.current(compressedSignature);
+            setHasSignature(true);
+          } catch (error) {
+            console.error("Error compressing signature:", error);
+            // Fallback to uncompressed if compression fails
+            onSignatureChangeRef.current(dataUrl);
+            setHasSignature(true);
+          }
         } else {
           onSignatureChangeRef.current(null);
           setHasSignature(false);
@@ -351,7 +361,7 @@ export function SignatureCapture({ signature, onSignatureChange }: SignatureCapt
     }
   }, [signature, checkCanvasContent]);
 
-  const saveSignature = useCallback(() => {
+  const saveSignature = useCallback(async () => {
     const canvas = canvasRef.current;
     if (!canvas || !ctxRef.current) return;
 
@@ -367,8 +377,17 @@ export function SignatureCapture({ signature, onSignatureChange }: SignatureCapt
 
     if (hasContent) {
       const dataUrl = canvas.toDataURL("image/png");
-      onSignatureChange(dataUrl);
-      setHasSignature(true);
+      // Compress signature before saving
+      try {
+        const compressedSignature = await compressBase64Image(dataUrl, SIGNATURE_COMPRESSION_OPTIONS);
+        onSignatureChange(compressedSignature);
+        setHasSignature(true);
+      } catch (error) {
+        console.error("Error compressing signature:", error);
+        // Fallback to uncompressed if compression fails
+        onSignatureChange(dataUrl);
+        setHasSignature(true);
+      }
     } else {
       onSignatureChange(null);
       setHasSignature(false);
