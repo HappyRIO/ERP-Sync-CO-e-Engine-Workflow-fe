@@ -32,13 +32,18 @@ class AuthService {
       apiClient.setCsrfToken(response.csrfToken);
     } else {
       // If CSRF token not in response, try to fetch it
+      // Note: This should rarely happen as login response includes CSRF token
       try {
         const csrfResponse = await apiClient.get<{ csrfToken: string }>('/auth/csrf-token');
         if (csrfResponse.csrfToken) {
           apiClient.setCsrfToken(csrfResponse.csrfToken);
         }
       } catch (error) {
-        console.warn('Failed to fetch CSRF token after login:', error);
+        // Silently handle - CSRF token will be fetched on next state-changing request
+        // Only log in development for debugging
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('CSRF token not available after login (will be fetched on next request)');
+        }
       }
     }
 
@@ -165,7 +170,17 @@ class AuthService {
     // Just try to get current user - if cookie is valid, it will work
     
     try {
-      const response = await apiClient.get<{ user: User; csrfToken?: string }>('/auth/me');
+      // Backend now returns 200 with null user if not authenticated (to avoid console errors)
+      const response = await apiClient.get<{ user: User | null; csrfToken?: string }>('/auth/me');
+      
+      // If user is null, user is not authenticated
+      if (!response.user) {
+        this.currentUser = null;
+        this.currentTenant = null;
+        apiClient.setCsrfToken(null); // Clear CSRF token
+        return null;
+      }
+      
       const user = response.user;
       
       // Store CSRF token if provided
@@ -173,14 +188,19 @@ class AuthService {
         apiClient.setCsrfToken(response.csrfToken);
       } else {
         // If CSRF token not in response, try to fetch it separately
+        // Note: This should rarely happen as getCurrentUser response includes CSRF token if authenticated
         try {
-          const csrfResponse = await apiClient.get<{ csrfToken: string }>('/auth/csrf-token');
+          const csrfResponse = await apiClient.get<{ csrfToken: string | null }>('/auth/csrf-token');
           if (csrfResponse.csrfToken) {
             apiClient.setCsrfToken(csrfResponse.csrfToken);
           }
         } catch (csrfError) {
           // If we can't get CSRF token, it's okay - we'll get it on next POST request
-          console.warn('Failed to fetch CSRF token:', csrfError);
+          // Silently handle - 401 is expected if not authenticated
+          // Only log in development for debugging
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('CSRF token not available (will be fetched on next request)');
+          }
         }
       }
       
@@ -203,13 +223,11 @@ class AuthService {
         isAuthenticated: true,
       };
     } catch (error) {
-      // If unauthorized, clear local state
-      // Cookie will be automatically rejected by browser if invalid
-      if (error instanceof ApiError && error.statusCode === 401) {
-        this.currentUser = null;
-        this.currentTenant = null;
-        apiClient.setCsrfToken(null); // Clear CSRF token on logout
-      }
+      // If any error occurs, clear local state
+      // Backend should return 200 with null user, but handle errors just in case
+      this.currentUser = null;
+      this.currentTenant = null;
+      apiClient.setCsrfToken(null); // Clear CSRF token
       return null;
     }
   }

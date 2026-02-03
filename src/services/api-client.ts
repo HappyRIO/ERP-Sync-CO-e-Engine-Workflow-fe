@@ -48,19 +48,18 @@ class ApiClient {
 
       if (response.ok) {
         const data = await response.json();
+        // Backend now returns 200 with null token if not authenticated (to avoid console errors)
         if (data.success && data.data?.csrfToken) {
           this.csrfToken = data.data.csrfToken;
           return this.csrfToken;
         }
-      } else if (response.status === 401) {
-        // Not authenticated - CSRF protection won't be required anyway
-        // Return null silently
+        // If csrfToken is null, user is not authenticated - return null silently
         return null;
       }
+      // Other errors are silently ignored - CSRF token will be fetched on next attempt
     } catch (error) {
-      // If we can't get CSRF token, return null (will fail CSRF check)
-      // This is okay - if we're not authenticated, CSRF won't be required
-      console.warn('Failed to get CSRF token:', error);
+      // Network errors are silently ignored - CSRF token will be fetched on next attempt
+      // 401 is expected when not authenticated, so we don't log it
     }
 
     return null;
