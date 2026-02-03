@@ -7,17 +7,63 @@ export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+  fields?: Record<string, string>; // Field-specific validation errors
 }
 
 class ApiClient {
   private baseUrl: string;
+  private csrfToken: string | null = null;
 
   constructor() {
     this.baseUrl = API_BASE_URL;
   }
 
-  private getAuthToken(): string | null {
-    return localStorage.getItem('auth_token');
+  /**
+   * Set CSRF token (called after login/signup)
+   */
+  setCsrfToken(token: string | null) {
+    this.csrfToken = token;
+  }
+
+  /**
+   * Get CSRF token from server if not available
+   * Only attempts to fetch if we're likely authenticated (have cookies)
+   */
+  private async ensureCsrfToken(): Promise<string | null> {
+    if (this.csrfToken) {
+      return this.csrfToken;
+    }
+
+    // Don't try to fetch CSRF token if we're not authenticated
+    // CSRF protection only applies to authenticated requests
+    // If the request fails with 401, it means we're not authenticated anyway
+    // and CSRF protection won't be required
+    
+    // Try to get CSRF token from server (requires authentication)
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/csrf-token`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.csrfToken) {
+          this.csrfToken = data.data.csrfToken;
+          return this.csrfToken;
+        }
+      } else if (response.status === 401) {
+        // Not authenticated - CSRF protection won't be required anyway
+        // Return null silently
+        return null;
+      }
+    } catch (error) {
+      // If we can't get CSRF token, return null (will fail CSRF check)
+      // This is okay - if we're not authenticated, CSRF won't be required
+      console.warn('Failed to get CSRF token:', error);
+    }
+
+    return null;
   }
 
   private async request<T>(
@@ -25,24 +71,103 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    const token = this.getAuthToken();
+
+    // Determine if this is a state-changing request that needs CSRF protection
+    const isStateChanging = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method || 'GET');
+
+    // Get CSRF token for state-changing requests
+    let csrfToken = this.csrfToken;
+    if (isStateChanging && !csrfToken) {
+      csrfToken = await this.ensureCsrfToken();
+    }
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    // Add CSRF token to headers for state-changing requests
+    if (isStateChanging && csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
     }
+
+    // Cookies are automatically sent with credentials: 'include'
+    // No need to manually add Authorization header anymore
 
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        credentials: 'include', // Include cookies (httpOnly auth_token) in requests
       });
 
       const data: ApiResponse<T> = await response.json();
+
+      // Handle CSRF token errors - try to refresh token and retry once
+      if (response.status === 403 && isStateChanging && data.error && 
+          (data.error.includes('CSRF') || data.error.includes('csrf'))) {
+        // Clear current token and try to get a new one
+        this.csrfToken = null;
+        const newToken = await this.ensureCsrfToken();
+        
+        if (newToken) {
+          // Retry the request with new CSRF token
+          const retryHeaders: HeadersInit = {
+            'Content-Type': 'application/json',
+            ...options.headers,
+            'X-CSRF-Token': newToken,
+          };
+          
+          const retryResponse = await fetch(url, {
+            ...options,
+            headers: retryHeaders,
+            credentials: 'include',
+          });
+          
+          const retryData: ApiResponse<T> = await retryResponse.json();
+          
+          if (!retryResponse.ok) {
+            // Handle error response
+            const errorMessage = retryData.error || retryData.message || 'Request failed';
+            let errorType = ApiErrorType.SERVER_ERROR;
+
+            switch (retryResponse.status) {
+              case 400:
+                errorType = ApiErrorType.VALIDATION_ERROR;
+                break;
+              case 401:
+                errorType = ApiErrorType.UNAUTHORIZED;
+                break;
+              case 403:
+                errorType = ApiErrorType.FORBIDDEN;
+                break;
+              case 404:
+                errorType = ApiErrorType.NOT_FOUND;
+                break;
+              case 429:
+                errorType = ApiErrorType.RATE_LIMIT;
+                break;
+              case 408:
+                errorType = ApiErrorType.TIMEOUT;
+                break;
+            }
+
+            throw new ApiError(errorType, errorMessage, retryResponse.status, undefined, retryData.fields);
+          }
+
+          if (!retryData.success) {
+            throw new ApiError(
+              ApiErrorType.SERVER_ERROR,
+              retryData.error || 'Request failed',
+              retryResponse.status,
+              undefined,
+              retryData.fields
+            );
+          }
+
+          return retryData.data as T;
+        }
+      }
 
       if (!response.ok) {
         // Handle error response
@@ -70,14 +195,16 @@ class ApiClient {
             break;
         }
 
-        throw new ApiError(errorType, errorMessage, response.status);
+        throw new ApiError(errorType, errorMessage, response.status, undefined, data.fields);
       }
 
       if (!data.success) {
         throw new ApiError(
           ApiErrorType.SERVER_ERROR,
           data.error || 'Request failed',
-          response.status
+          response.status,
+          undefined,
+          data.fields
         );
       }
 

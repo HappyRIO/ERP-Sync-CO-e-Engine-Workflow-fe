@@ -99,7 +99,29 @@ const AcceptInvite = () => {
         navigate("/");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to accept invite. Please try again.");
+      // Extract error message, prioritizing field-specific errors (especially password)
+      let errorMessage = "Failed to accept invite. Please try again.";
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        
+        // Check if it's an ApiError with field-specific errors
+        if ('fields' in err && err.fields) {
+          const fields = err.fields as Record<string, string>;
+          // Prioritize password error if present
+          if (fields.password) {
+            errorMessage = fields.password;
+          } else {
+            // Use the first field error if no password error
+            const firstFieldError = Object.values(fields)[0];
+            if (firstFieldError) {
+              errorMessage = firstFieldError;
+            }
+          }
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

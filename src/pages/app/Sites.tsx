@@ -1176,15 +1176,15 @@ const Sites = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="county">County</Label>
-                  <div className="min-h-[14px]">
-                    {/* Reserved space for county messages if needed in future */}
-                  </div>
                   <Input
                     id="county"
                     placeholder="Greater London"
                     value={formData.county}
                     onChange={(e) => setFormData({ ...formData, county: e.target.value })}
                   />
+                  <div className="min-h-[14px] -mb-1">
+                    {/* Reserved space for county messages if needed in future */}
+                  </div>
                 </div>
               </div>
 

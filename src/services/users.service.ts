@@ -38,7 +38,17 @@ class UsersService {
     }
   }
 
-  async updateUserStatus(userId: string, status: 'pending' | 'active' | 'inactive'): Promise<ExtendedUser> {
+  async updateUserStatus(userId: string, statusOrIsActive: 'pending' | 'active' | 'inactive' | boolean): Promise<ExtendedUser> {
+    // Support both status string and isActive boolean for backward compatibility
+    let status: 'pending' | 'active' | 'inactive';
+    
+    if (typeof statusOrIsActive === 'boolean') {
+      // Convert boolean to status: true -> 'active', false -> 'inactive'
+      status = statusOrIsActive ? 'active' : 'inactive';
+    } else {
+      status = statusOrIsActive;
+    }
+    
     const user = await apiClient.patch<ExtendedUser>(`/users/${userId}/status`, { status });
     return user;
   }

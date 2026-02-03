@@ -55,14 +55,11 @@ class DocumentsService {
   async downloadDocument(documentId: string, fileName?: string): Promise<void> {
 
     try {
-      const token = localStorage.getItem('auth_token');
       const url = `${API_BASE_URL}/documents/${documentId}/download`;
       
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include', // Include httpOnly cookie (auth_token) automatically
       });
 
       if (!response.ok) {

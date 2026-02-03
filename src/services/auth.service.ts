@@ -14,26 +14,41 @@ import { apiClient } from './api-client';
 class AuthService {
   private currentUser: User | null = null;
   private currentTenant: Tenant | null = null;
-  private token: string | null = null;
 
   async login(credentials: LoginCredentials): Promise<AuthState> {
     const response = await apiClient.post<{
       user: User;
       tenant: Tenant;
-      token: string;
+      csrfToken?: string;
+      // Token is now in httpOnly cookie, not in response
     }>('/auth/login', credentials);
 
     this.currentUser = response.user;
     this.currentTenant = response.tenant;
-    this.token = response.token;
 
-    localStorage.setItem('auth_token', response.token);
-    localStorage.setItem('user_id', response.user.id);
+    // Store CSRF token for subsequent requests
+    // The response structure is: { user, tenant, csrfToken }
+    if (response.csrfToken) {
+      apiClient.setCsrfToken(response.csrfToken);
+    } else {
+      // If CSRF token not in response, try to fetch it
+      try {
+        const csrfResponse = await apiClient.get<{ csrfToken: string }>('/auth/csrf-token');
+        if (csrfResponse.csrfToken) {
+          apiClient.setCsrfToken(csrfResponse.csrfToken);
+        }
+      } catch (error) {
+        console.warn('Failed to fetch CSRF token after login:', error);
+      }
+    }
+
+    // Token is stored in httpOnly cookie automatically by backend
+    // No need to store in localStorage (more secure)
 
     return {
       user: response.user,
       tenant: response.tenant,
-      token: response.token,
+      token: null, // Token is in httpOnly cookie, not accessible to JavaScript
       isAuthenticated: true,
     };
   }
@@ -42,20 +57,25 @@ class AuthService {
     const response = await apiClient.post<{
       user: User;
       tenant: Tenant;
-      token: string;
+      csrfToken?: string;
+      // Token is now in httpOnly cookie, not in response
     }>('/auth/signup', data);
 
     this.currentUser = response.user;
     this.currentTenant = response.tenant;
-    this.token = response.token;
 
-    localStorage.setItem('auth_token', response.token);
-    localStorage.setItem('user_id', response.user.id);
+    // Store CSRF token for subsequent requests
+    if (response.csrfToken) {
+      apiClient.setCsrfToken(response.csrfToken);
+    }
+
+    // Token is stored in httpOnly cookie automatically by backend
+    // No need to store in localStorage (more secure)
 
     return {
       user: response.user,
       tenant: response.tenant,
-      token: response.token,
+      token: null, // Token is in httpOnly cookie, not accessible to JavaScript
       isAuthenticated: true,
     };
   }
@@ -63,8 +83,9 @@ class AuthService {
   async acceptInvite(inviteData: InviteData): Promise<AuthState> {
     const result = await apiClient.post<{
       user: User;
-      token: string;
       tenant: Tenant;
+      csrfToken?: string;
+      // Token is now in httpOnly cookie, not in response
     }>('/invites/accept', {
       inviteToken: inviteData.inviteToken,
       email: inviteData.email,
@@ -74,15 +95,19 @@ class AuthService {
 
     this.currentUser = result.user;
     this.currentTenant = result.tenant;
-    this.token = result.token;
 
-    localStorage.setItem('auth_token', this.token);
-    localStorage.setItem('user_id', result.user.id);
+    // Store CSRF token for subsequent requests
+    if (result.csrfToken) {
+      apiClient.setCsrfToken(result.csrfToken);
+    }
+
+    // Token is stored in httpOnly cookie automatically by backend
+    // No need to store in localStorage (more secure)
 
     return {
       user: result.user,
       tenant: result.tenant,
-      token: this.token,
+      token: null, // Token is in httpOnly cookie, not accessible to JavaScript
       isAuthenticated: true,
     };
   }
@@ -121,22 +146,43 @@ class AuthService {
   }
 
   async logout(): Promise<void> {
+    // Call backend logout endpoint to clear httpOnly cookie
+    try {
+      await apiClient.post('/auth/logout', {});
+    } catch (error) {
+      // Even if logout fails, clear local state
+      console.error('Logout error:', error);
+    }
+    
     this.currentUser = null;
     this.currentTenant = null;
-    this.token = null;
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_id');
+    apiClient.setCsrfToken(null); // Clear CSRF token on logout
+    // No need to clear localStorage - we're not using it anymore
   }
 
   async getCurrentAuth(): Promise<AuthState | null> {
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      return null;
-    }
-
+    // No need to check localStorage - token is in httpOnly cookie
+    // Just try to get current user - if cookie is valid, it will work
+    
     try {
-      const response = await apiClient.get<{ user: User }>('/auth/me');
+      const response = await apiClient.get<{ user: User; csrfToken?: string }>('/auth/me');
       const user = response.user;
+      
+      // Store CSRF token if provided
+      if (response.csrfToken) {
+        apiClient.setCsrfToken(response.csrfToken);
+      } else {
+        // If CSRF token not in response, try to fetch it separately
+        try {
+          const csrfResponse = await apiClient.get<{ csrfToken: string }>('/auth/csrf-token');
+          if (csrfResponse.csrfToken) {
+            apiClient.setCsrfToken(csrfResponse.csrfToken);
+          }
+        } catch (csrfError) {
+          // If we can't get CSRF token, it's okay - we'll get it on next POST request
+          console.warn('Failed to fetch CSRF token:', csrfError);
+        }
+      }
       
       // Get tenant info (would be included in response in real implementation)
       // For now, we'll need to get it from the user object or make another call
@@ -149,22 +195,20 @@ class AuthService {
 
       this.currentUser = user;
       this.currentTenant = tenant;
-      this.token = token;
 
       return {
         user,
         tenant,
-        token,
+        token: null, // Token is in httpOnly cookie, not accessible to JavaScript
         isAuthenticated: true,
       };
     } catch (error) {
-      // If unauthorized, clear stored auth
+      // If unauthorized, clear local state
+      // Cookie will be automatically rejected by browser if invalid
       if (error instanceof ApiError && error.statusCode === 401) {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('user_id');
         this.currentUser = null;
         this.currentTenant = null;
-        this.token = null;
+        apiClient.setCsrfToken(null); // Clear CSRF token on logout
       }
       return null;
     }

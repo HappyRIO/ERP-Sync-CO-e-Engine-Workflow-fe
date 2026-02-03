@@ -1317,7 +1317,28 @@ const Settings = () => {
                     });
                     setPasswordForm({ current: '', new: '', confirm: '' });
                   } catch (error: any) {
-                    const errorMessage = error?.message || "Failed to change password. Please try again.";
+                    // Extract error message, prioritizing field-specific errors (especially password)
+                    let errorMessage = "Failed to change password. Please try again.";
+                    
+                    if (error?.message) {
+                      errorMessage = error.message;
+                      
+                      // Check if it's an ApiError with field-specific errors
+                      if (error.fields) {
+                        const fields = error.fields as Record<string, string>;
+                        // Prioritize newPassword error if present
+                        if (fields.newPassword) {
+                          errorMessage = fields.newPassword;
+                        } else {
+                          // Use the first field error if no newPassword error
+                          const firstFieldError = Object.values(fields)[0];
+                          if (firstFieldError) {
+                            errorMessage = firstFieldError;
+                          }
+                        }
+                      }
+                    }
+                    
                     toast.error("Failed to change password", {
                       description: errorMessage,
                     });

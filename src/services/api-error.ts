@@ -15,7 +15,8 @@ export class ApiError extends Error {
     public type: ApiErrorType,
     message: string,
     public statusCode?: number,
-    public details?: Record<string, unknown>
+    public details?: Record<string, unknown>,
+    public fields?: Record<string, string> // Field-specific validation errors
   ) {
     super(message);
     this.name = 'ApiError';
