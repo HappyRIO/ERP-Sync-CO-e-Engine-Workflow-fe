@@ -38,6 +38,7 @@ import { useAssetCategories } from "@/hooks/useAssets";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { canDriverEditJob } from "@/utils/job-helpers";
+import { getAuthenticatedFileUrl } from "@/utils/file-url";
 
 const JobDetail = () => {
   const { id } = useParams();
@@ -551,24 +552,37 @@ const JobDetail = () => {
                                         </Badge>
                                       </div>
                                       <div className="grid grid-cols-2 gap-2">
-                                        {evidence.photos.map((photo: string, photoIdx: number) => (
-                                          <div
-                                            key={photoIdx}
-                                            className="relative group cursor-pointer rounded overflow-hidden border border-border/50 hover:border-primary/50 transition-all"
-                                            onClick={() => window.open(photo, '_blank')}
-                                          >
-                                            <img
-                                              src={photo}
-                                              alt={`Photo ${photoIdx + 1}`}
-                                              className="w-full h-20 object-cover group-hover:scale-105 transition-transform duration-200"
-                                            />
+                                        {evidence.photos.map((photo: string, photoIdx: number) => {
+                                          // Use regular URL for img src (data URLs work fine here)
+                                          const imgUrl = getAuthenticatedFileUrl(photo, false);
+                                          // Use blob URL for new tab opening (data URLs are blocked)
+                                          const handleClick = () => {
+                                            const newTabUrl = getAuthenticatedFileUrl(photo, true);
+                                            if (newTabUrl && newTabUrl !== '#') {
+                                              window.open(newTabUrl, '_blank');
+                                            } else {
+                                              console.error('Invalid photo URL:', photo);
+                                            }
+                                          };
+                                          return (
+                                            <div
+                                              key={photoIdx}
+                                              className="relative group cursor-pointer rounded overflow-hidden border border-border/50 hover:border-primary/50 transition-all"
+                                              onClick={handleClick}
+                                            >
+                                              <img
+                                                src={imgUrl}
+                                                alt={`Photo ${photoIdx + 1}`}
+                                                className="w-full h-20 object-cover group-hover:scale-105 transition-transform duration-200"
+                                              />
                                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
                                               <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <FileCheck className="h-4 w-4 text-white drop-shadow-lg" />
                                               </div>
                                             </div>
                                           </div>
-                                        ))}
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   )}
@@ -582,10 +596,18 @@ const JobDetail = () => {
                                       </div>
                                       <div 
                                         className="inline-block border border-border rounded p-1.5 bg-white cursor-pointer hover:border-primary/50 transition-colors"
-                                        onClick={() => window.open(evidence.signature, '_blank')}
+                                        onClick={() => {
+                                          // Use blob URL for new tab opening (data URLs are blocked)
+                                          const newTabUrl = getAuthenticatedFileUrl(evidence.signature, true);
+                                          if (newTabUrl && newTabUrl !== '#') {
+                                            window.open(newTabUrl, '_blank');
+                                          } else {
+                                            console.error('Invalid signature URL:', evidence.signature);
+                                          }
+                                        }}
                                       >
                                         <img
-                                          src={evidence.signature}
+                                          src={getAuthenticatedFileUrl(evidence.signature, false)}
                                           alt="Signature"
                                           className="h-16 w-auto object-contain"
                                         />
