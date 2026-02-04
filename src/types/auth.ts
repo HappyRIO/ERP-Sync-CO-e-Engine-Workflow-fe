@@ -1,7 +1,7 @@
 // Authentication and User Types
 
 export type UserRole = 'admin' | 'client' | 'reseller' | 'driver';
-export type UserStatus = 'pending' | 'active' | 'inactive';
+export type UserStatus = 'pending' | 'active' | 'inactive' | 'declined';
 
 export interface User {
   id: string;

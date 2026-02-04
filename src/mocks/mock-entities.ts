@@ -3,7 +3,7 @@ import type { BookingLifecycleStatus } from '@/types/booking-lifecycle';
 
 export interface ExtendedUser extends User {
   isActive: boolean;
-  status?: 'pending' | 'active' | 'inactive';
+  status?: 'pending' | 'active' | 'inactive' | 'declined';
   lastLogin?: string;
   invitedBy?: string;
 }

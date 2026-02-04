@@ -46,3 +46,14 @@ export function useApproveUser() {
   });
 }
 
+export function useDeclineUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => usersService.declineUser(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['auth'] });
+    },
+  });
+}

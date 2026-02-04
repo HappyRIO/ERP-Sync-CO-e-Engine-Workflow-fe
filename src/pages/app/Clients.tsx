@@ -1,21 +1,13 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
-import { Search, Building2, Mail, Phone, Package, PoundSterling, Loader2, CheckCircle2, Clock, XCircle, MoreVertical, UserPlus, X, AlertCircle, Trash2, Copy, Users as UsersIcon } from "lucide-react";
+import { Search, Building2, Mail, Phone, Package, PoundSterling, Loader2, CheckCircle2, Clock, XCircle, UserPlus, X, AlertCircle, Trash2, Copy, Users as UsersIcon, UserCheck, UserX } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -25,9 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { useClients, useUpdateClientStatus } from "@/hooks/useClients";
+import { useClients } from "@/hooks/useClients";
 import { useInvites, useCancelInvite } from "@/hooks/useInvites";
-import { useApproveUser } from "@/hooks/useUsers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -40,6 +31,7 @@ const statusConfig: Record<string, { label: string; icon: typeof CheckCircle2; c
   active: { label: "Active", icon: CheckCircle2, color: "bg-success/10 text-success" },
   inactive: { label: "Inactive", icon: XCircle, color: "bg-destructive/10 text-destructive" },
   pending: { label: "Pending", icon: Clock, color: "bg-warning/10 text-warning" },
+  declined: { label: "Declined", icon: XCircle, color: "bg-destructive/10 text-destructive" },
 };
 
 const Clients = () => {
@@ -52,7 +44,7 @@ const Clients = () => {
   // Update status filter from URL params when component mounts or URL changes
   useEffect(() => {
     const statusParam = searchParams.get("status");
-    if (statusParam && ["all", "pending", "active", "inactive"].includes(statusParam)) {
+    if (statusParam && ["all", "pending", "active", "inactive", "declined"].includes(statusParam)) {
       setStatusFilter(statusParam);
     }
   }, [searchParams]);
@@ -60,9 +52,7 @@ const Clients = () => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [inviteStatusFilter, setInviteStatusFilter] = useState<string>("all");
-  const updateStatus = useUpdateClientStatus();
   const cancelInvite = useCancelInvite();
-  const approveUser = useApproveUser();
   const isReseller = user?.role === 'reseller';
   const isAdmin = user?.role === 'admin';
   
@@ -144,48 +134,6 @@ const Clients = () => {
       </div>
     );
   }
-
-  const handleStatusChange = (clientId: string, clientName: string, newStatus: 'active' | 'inactive') => {
-    updateStatus.mutate(
-      { clientId, status: newStatus },
-      {
-        onSuccess: () => {
-          toast.success("Client status updated", {
-            description: `${clientName} is now ${newStatus}`,
-          });
-        },
-        onError: (error) => {
-          toast.error("Failed to update client status", {
-            description: error instanceof Error ? error.message : "Please try again.",
-          });
-        },
-      }
-    );
-  };
-
-  const handleApproveClient = (userId: string, clientName: string) => {
-    if (!userId) {
-      toast.error("Cannot approve client", {
-        description: "User ID not found for this client",
-      });
-      return;
-    }
-    
-    approveUser.mutate(userId, {
-      onSuccess: () => {
-        toast.success("Client approved successfully", {
-          description: `${clientName} has been approved and can now access the platform`,
-        });
-        // Refresh clients list to update status
-        queryClient.invalidateQueries({ queryKey: ['clients'] });
-      },
-      onError: (error) => {
-        toast.error("Failed to approve client", {
-          description: error instanceof Error ? error.message : "Please try again.",
-        });
-      },
-    });
-  };
 
   const filteredClients = clients.filter((client) => {
     const matchesSearch =
@@ -363,6 +311,7 @@ const Clients = () => {
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="declined">Declined</SelectItem>
           </SelectContent>
         </Select>
           </motion.div>
@@ -380,9 +329,6 @@ const Clients = () => {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredClients.map((client, index) => {
-            const statusInfo = statusConfig[client.status] || statusConfig.active;
-            const StatusIcon = statusInfo.icon;
-
             return (
               <motion.div
                 key={client.id}
@@ -397,51 +343,26 @@ const Clients = () => {
                         <Building2 className="h-6 w-6" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge className={cn("text-xs", statusInfo.color)}>
-                          <StatusIcon className="h-3 w-3 mr-1" />
-                          {statusInfo.label}
-                        </Badge>
-                        {user?.role === 'admin' && (
-                          <>
-                            {client.status === 'pending' && (client as any).userId ? (
-                              <Button
-                                variant="success"
-                                size="sm"
-                                onClick={() => handleApproveClient((client as any).userId, client.name)}
-                                disabled={approveUser.isPending}
-                                className="h-8"
-                              >
-                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                Approve
-                              </Button>
-                            ) : (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuLabel>Update Status</DropdownMenuLabel>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => handleStatusChange(client.id, client.name, 'active')}
-                                    disabled={client.status === 'active'}
-                                  >
-                                    <CheckCircle2 className="h-4 w-4 mr-2 text-success" />
-                                    Set Active
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleStatusChange(client.id, client.name, 'inactive')}
-                                    disabled={client.status === 'inactive'}
-                                  >
-                                    <XCircle className="h-4 w-4 mr-2 text-destructive" />
-                                    Set Inactive
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
-                          </>
+                        {client.status === 'pending' ? (
+                          <Badge variant="secondary" className="bg-warning/10 text-warning text-xs">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Pending
+                          </Badge>
+                        ) : client.status === 'active' ? (
+                          <Badge variant="secondary" className="bg-success/10 text-success text-xs">
+                            <UserCheck className="h-3 w-3 mr-1" />
+                            Active
+                          </Badge>
+                        ) : client.status === 'declined' ? (
+                          <Badge variant="secondary" className="bg-destructive/10 text-destructive text-xs">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Declined
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-destructive/10 text-destructive text-xs">
+                            <UserX className="h-3 w-3 mr-1" />
+                            Inactive
+                          </Badge>
                         )}
                       </div>
                     </div>

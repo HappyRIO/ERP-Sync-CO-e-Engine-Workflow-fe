@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { useUsers, useUpdateUserStatus, useApproveUser } from "@/hooks/useUsers";
+import { useUsers, useUpdateUserStatus, useApproveUser, useDeclineUser } from "@/hooks/useUsers";
 import { useInvites, useCancelInvite } from "@/hooks/useInvites";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -47,7 +47,7 @@ const Users = () => {
   // Update filters from URL params when component mounts or URL changes
   useEffect(() => {
     const statusParam = searchParams.get("status");
-    if (statusParam && ["all", "pending", "active", "inactive"].includes(statusParam)) {
+    if (statusParam && ["all", "pending", "active", "inactive", "declined"].includes(statusParam)) {
       setStatusFilter(statusParam);
     }
     const roleParam = searchParams.get("role");
@@ -59,6 +59,8 @@ const Users = () => {
   const [inviteRole, setInviteRole] = useState<'reseller'>('reseller'); // Only resellers can be invited from Users page
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [inviteStatusFilter, setInviteStatusFilter] = useState<string>("all");
+  const [isDeclineDialogOpen, setIsDeclineDialogOpen] = useState(false);
+  const [userToDecline, setUserToDecline] = useState<{ id: string; name: string } | null>(null);
 
   const { data: users = [], isLoading, error } = useUsers({
     role: roleFilter !== "all" ? roleFilter : undefined,
@@ -66,6 +68,7 @@ const Users = () => {
   });
   const updateStatus = useUpdateUserStatus();
   const approveUser = useApproveUser();
+  const declineUser = useDeclineUser();
   const cancelInvite = useCancelInvite();
 
   // Fetch reseller invitations only
@@ -157,6 +160,28 @@ const Users = () => {
     });
   };
 
+  const handleDeclineUser = (userId: string, userName: string) => {
+    setUserToDecline({ id: userId, name: userName });
+    setIsDeclineDialogOpen(true);
+  };
+
+  const handleConfirmDecline = () => {
+    if (!userToDecline) return;
+    
+    declineUser.mutate(userToDecline.id, {
+      onSuccess: () => {
+        toast.success("User signup request declined");
+        setIsDeclineDialogOpen(false);
+        setUserToDecline(null);
+      },
+      onError: (error) => {
+        toast.error("Failed to decline user", {
+          description: error instanceof Error ? error.message : "Please try again.",
+        });
+      },
+    });
+  };
+
   const getUserStatus = (user: typeof users[0]) => {
     return user.status || (user.isActive ? 'active' : 'inactive');
   };
@@ -188,6 +213,49 @@ const Users = () => {
           Invite Reseller
         </Button>
       </motion.div>
+
+      {/* Decline User Confirmation Dialog */}
+      <Dialog open={isDeclineDialogOpen} onOpenChange={setIsDeclineDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Decline User Signup Request</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to decline {userToDecline?.name}'s signup request? This will reject their application and they will not be able to access the platform.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsDeclineDialogOpen(false);
+                setUserToDecline(null);
+              }}
+              disabled={declineUser.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmDecline}
+              disabled={declineUser.isPending}
+            >
+              {declineUser.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Declining...
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Decline
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Invite Reseller Dialog */}
       <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
@@ -306,6 +374,7 @@ const Users = () => {
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="declined">Declined</SelectItem>
           </SelectContent>
         </Select>
           </motion.div>
@@ -351,6 +420,11 @@ const Users = () => {
                           <UserCheck className="h-3 w-3 mr-1" />
                           Active
                         </Badge>
+                      ) : getUserStatus(user) === 'declined' ? (
+                          <Badge variant="secondary" className="bg-destructive/10 text-destructive flex-shrink-0">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Declined
+                        </Badge>
                       ) : (
                           <Badge variant="secondary" className="bg-destructive/10 text-destructive flex-shrink-0">
                           <UserX className="h-3 w-3 mr-1" />
@@ -377,6 +451,53 @@ const Users = () => {
                   </div>
                   <div className="flex gap-2 flex-shrink-0 sm:flex-shrink-0">
                     {getUserStatus(user) === 'pending' && user.role === 'reseller' ? (
+                      <>
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => handleApproveUser(user.id)}
+                          disabled={approveUser.isPending || declineUser.isPending}
+                          className="w-full sm:w-auto"
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          Approve
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeclineUser(user.id, user.name)}
+                          disabled={approveUser.isPending || declineUser.isPending}
+                          className="w-full sm:w-auto"
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Decline
+                        </Button>
+                      </>
+                    ) : getUserStatus(user) === 'pending' && user.role === 'client' ? (
+                      <>
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => handleApproveUser(user.id)}
+                          disabled={approveUser.isPending || declineUser.isPending}
+                          className="w-full sm:w-auto"
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          Approve
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeclineUser(user.id, user.name)}
+                          disabled={approveUser.isPending || declineUser.isPending}
+                          className="w-full sm:w-auto"
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Decline
+                        </Button>
+                      </>
+                    ) : getUserStatus(user) === 'declined' ? (
+                      // For declined users, show "Approve" button (treats them like a new signup approval)
                       <Button
                         variant="success"
                         size="sm"
@@ -387,11 +508,8 @@ const Users = () => {
                         <CheckCircle2 className="h-4 w-4 mr-2" />
                         Approve
                       </Button>
-                    ) : getUserStatus(user) === 'pending' && user.role === 'client' ? (
-                      <Badge variant="secondary" className="bg-muted text-muted-foreground">
-                        Approve in Clients page
-                      </Badge>
                     ) : (
+                      // For inactive users, show "Activate" button (reactivating previously active user)
                       <Button
                         variant={getUserStatus(user) === 'active' ? "destructive" : "success"}
                         size="sm"

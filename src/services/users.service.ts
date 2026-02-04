@@ -61,6 +61,11 @@ class UsersService {
     const user = await apiClient.patch<ExtendedUser>(`/users/${userId}/approve`, {});
     return user;
   }
+
+  async declineUser(userId: string): Promise<ExtendedUser> {
+    const user = await apiClient.patch<ExtendedUser>(`/users/${userId}/decline`, {});
+    return user;
+  }
 }
 
 export const usersService = new UsersService();
