@@ -1259,6 +1259,16 @@ const Settings = () => {
                       One number
                     </span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    {/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(passwordForm.new) ? (
+                      <CheckCircle2 className="h-4 w-4 text-success" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                    )}
+                    <span className={/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(passwordForm.new) ? "text-success font-medium" : "text-destructive"}>
+                      One special character
+                    </span>
+                  </div>
                   {passwordForm.confirm && (
                     <div className="flex items-center gap-2 mt-3 pt-3 border-t border-primary/10">
                       {passwordForm.new === passwordForm.confirm ? (

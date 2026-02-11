@@ -318,7 +318,7 @@ const AcceptInvite = () => {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Must be at least 8 characters long.
+                  Must be at least 8 characters with uppercase, lowercase, number, and special character.
                 </p>
               </div>
 
