@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { UserPlus, Mail, Lock, User, Building2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, Building2, AlertCircle, Eye, EyeOff, CheckCircle2, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -154,6 +154,65 @@ const Signup = () => {
                       <Eye className="h-4 w-4 text-muted-foreground" />
                     )}
                   </Button>
+                </div>
+                {/* Password Requirements */}
+                <div className="mt-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <div className="flex items-start gap-2 mb-2">
+                    <Shield className="h-3.5 w-3.5 text-primary mt-0.5" />
+                    <p className="text-xs font-semibold text-foreground">Password Requirements</p>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      {formData.password.length >= 8 ? (
+                        <CheckCircle2 className="h-3 w-3 text-success" />
+                      ) : (
+                        <AlertCircle className="h-3 w-3 text-destructive" />
+                      )}
+                      <span className={formData.password.length >= 8 ? "text-success" : "text-muted-foreground"}>
+                        At least 8 characters
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {/[A-Z]/.test(formData.password) ? (
+                        <CheckCircle2 className="h-3 w-3 text-success" />
+                      ) : (
+                        <AlertCircle className="h-3 w-3 text-destructive" />
+                      )}
+                      <span className={/[A-Z]/.test(formData.password) ? "text-success" : "text-muted-foreground"}>
+                        One uppercase letter
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {/[a-z]/.test(formData.password) ? (
+                        <CheckCircle2 className="h-3 w-3 text-success" />
+                      ) : (
+                        <AlertCircle className="h-3 w-3 text-destructive" />
+                      )}
+                      <span className={/[a-z]/.test(formData.password) ? "text-success" : "text-muted-foreground"}>
+                        One lowercase letter
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {/\d/.test(formData.password) ? (
+                        <CheckCircle2 className="h-3 w-3 text-success" />
+                      ) : (
+                        <AlertCircle className="h-3 w-3 text-destructive" />
+                      )}
+                      <span className={/\d/.test(formData.password) ? "text-success" : "text-muted-foreground"}>
+                        One number
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(formData.password) ? (
+                        <CheckCircle2 className="h-3 w-3 text-success" />
+                      ) : (
+                        <AlertCircle className="h-3 w-3 text-destructive" />
+                      )}
+                      <span className={/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(formData.password) ? "text-success" : "text-muted-foreground"}>
+                        One special character
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
