@@ -4,7 +4,9 @@ import type { AuthState, LoginCredentials, SignupData, InviteData } from '@/type
 import { authService } from '@/services/auth.service';
 
 interface AuthContextType extends AuthState {
-  login: (credentials: LoginCredentials) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<AuthState | { requiresTwoFactor: true; userId: string; email: string; message: string }>;
+  verifyTwoFactor: (userId: string, code: string) => Promise<AuthState>;
+  resendTwoFactorCode: (userId: string) => Promise<{ message: string }>;
   signup: (data: SignupData) => Promise<void>;
   acceptInvite: (data: InviteData) => Promise<void>;
   logout: () => Promise<void>;
@@ -35,9 +37,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (credentials: LoginCredentials) => {
     try {
-      const auth = await authService.login(credentials);
+      const result = await authService.login(credentials);
+      
+      // Check if 2FA is required
+      if ('requiresTwoFactor' in result && result.requiresTwoFactor) {
+        // Return 2FA info instead of setting auth state
+        return result;
+      }
+      
+      // Normal login - set auth state
+      setAuthState(result);
+      // Navigation handled by the Login component
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const verifyTwoFactor = async (userId: string, code: string) => {
+    try {
+      const auth = await authService.verifyTwoFactor(userId, code);
       setAuthState(auth);
       // Navigation handled by the Login component
+      return auth;
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const resendTwoFactorCode = async (userId: string) => {
+    try {
+      const result = await authService.resendTwoFactorCode(userId);
+      return result;
     } catch (error) {
       throw error;
     }
@@ -85,6 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         ...authState,
         login,
+        verifyTwoFactor,
+        resendTwoFactorCode,
         signup,
         acceptInvite,
         logout,

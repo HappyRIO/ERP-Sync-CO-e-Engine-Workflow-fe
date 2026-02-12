@@ -15,13 +15,32 @@ class AuthService {
   private currentUser: User | null = null;
   private currentTenant: Tenant | null = null;
 
-  async login(credentials: LoginCredentials): Promise<AuthState> {
+  async login(credentials: LoginCredentials): Promise<AuthState | { requiresTwoFactor: true; userId: string; email: string; message: string }> {
     const response = await apiClient.post<{
-      user: User;
-      tenant: Tenant;
+      user?: User;
+      tenant?: Tenant;
       csrfToken?: string;
+      requiresTwoFactor?: boolean;
+      userId?: string;
+      email?: string;
+      message?: string;
       // Token is now in httpOnly cookie, not in response
     }>('/auth/login', credentials);
+
+    // Check if 2FA is required
+    if (response.requiresTwoFactor && response.userId && response.email) {
+      return {
+        requiresTwoFactor: true,
+        userId: response.userId,
+        email: response.email,
+        message: response.message || 'A verification code has been sent to your email address.',
+      };
+    }
+
+    // No 2FA required - proceed with normal login
+    if (!response.user || !response.tenant) {
+      throw new Error('Invalid login response');
+    }
 
     this.currentUser = response.user;
     this.currentTenant = response.tenant;
@@ -56,6 +75,41 @@ class AuthService {
       token: null, // Token is in httpOnly cookie, not accessible to JavaScript
       isAuthenticated: true,
     };
+  }
+
+  async verifyTwoFactor(userId: string, code: string): Promise<AuthState> {
+    const response = await apiClient.post<{
+      user: User;
+      tenant: Tenant;
+      csrfToken?: string;
+      // Token is now in httpOnly cookie, not in response
+    }>('/auth/verify-2fa', { userId, code });
+
+    this.currentUser = response.user;
+    this.currentTenant = response.tenant;
+
+    // Store CSRF token for subsequent requests
+    if (response.csrfToken) {
+      apiClient.setCsrfToken(response.csrfToken);
+    }
+
+    // Token is stored in httpOnly cookie automatically by backend
+    // No need to store in localStorage (more secure)
+
+    return {
+      user: response.user,
+      tenant: response.tenant,
+      token: null, // Token is in httpOnly cookie, not accessible to JavaScript
+      isAuthenticated: true,
+    };
+  }
+
+  async resendTwoFactorCode(userId: string): Promise<{ message: string }> {
+    const response = await apiClient.post<{
+      message: string;
+    }>('/auth/resend-2fa', { userId });
+
+    return response;
   }
 
   async signup(data: SignupData): Promise<AuthState> {
