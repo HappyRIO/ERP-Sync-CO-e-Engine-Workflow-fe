@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Calendar, MapPin, Package, Truck, Loader2, CheckCircle2, Shield, Award, FileCheck, User, Phone, Smartphone } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Package, Truck, Route, Fuel, Loader2, CheckCircle2, Shield, Award, FileCheck, User, Phone, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,9 +42,9 @@ const BookingDetail = () => {
   const driverDetails: Driver | null = driverDetailsData ? {
     id: driverDetailsData.id,
     name: driverDetailsData.name,
-    vehicleReg: driverDetailsData.vehicleReg,
-    vehicleType: driverDetailsData.vehicleType,
-    vehicleFuelType: driverDetailsData.vehicleFuelType,
+    vehicleReg: driverDetailsData.vehicleReg || 'N/A',
+    vehicleType: (driverDetailsData.vehicleType || 'van') as 'van' | 'truck' | 'car',
+    vehicleFuelType: (driverDetailsData.vehicleFuelType || 'diesel') as 'petrol' | 'diesel' | 'electric',
     phone: driverDetailsData.phone || '',
     // eta is optional and not available from driver service
   } : null;
@@ -326,7 +326,7 @@ const BookingDetail = () => {
               </div>
               {roundTripDistanceKm > 0 && (
                 <div className="flex items-center gap-3">
-                  <Truck className="h-5 w-5 text-muted-foreground" />
+                  <Route className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Round Trip Mileage</p>
                     <p className="font-medium">
@@ -340,7 +340,7 @@ const BookingDetail = () => {
               )}
               {booking.preferredVehicleType && (
                 <div className="flex items-center gap-3">
-                  <Truck className="h-5 w-5 text-muted-foreground" />
+                  <Fuel className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Client Preferred Vehicle</p>
                     <p className="font-medium capitalize">{booking.preferredVehicleType}</p>
@@ -373,7 +373,7 @@ const BookingDetail = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <Truck className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-mono">{driver.vehicleReg}</span>
+                          <span className="font-mono">{driver.vehicleReg || 'N/A'}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-muted-foreground" />
@@ -463,7 +463,7 @@ const BookingDetail = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <Truck className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-mono">{driver.vehicleReg}</span>
+                          <span className="font-mono">{driver.vehicleReg || 'N/A'}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-muted-foreground" />

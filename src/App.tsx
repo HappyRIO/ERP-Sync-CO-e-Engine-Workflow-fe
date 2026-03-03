@@ -21,6 +21,7 @@ import Users from "./pages/app/Users";
 import Clients from "./pages/app/Clients";
 import Sites from "./pages/app/Sites";
 import Drivers from "./pages/app/admin/Drivers";
+import Vehicles from "./pages/app/admin/Vehicles";
 import BookingQueue from "./pages/app/admin/BookingQueue";
 import Assignment from "./pages/app/admin/Assignment";
 import Sanitisation from "./pages/app/admin/Sanitisation";
@@ -153,6 +154,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin']}>
                       <Drivers />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/vehicles"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <Vehicles />
                     </ProtectedRoute>
                   }
                 />

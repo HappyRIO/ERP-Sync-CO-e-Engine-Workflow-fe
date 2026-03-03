@@ -1,13 +1,25 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, Truck, UserPlus } from "lucide-react";
+import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, Truck, Route, Fuel, User, UserPlus, UserCog } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useBookings, useUpdateBookingStatus } from "@/hooks/useBookings";
+import { useJob } from "@/hooks/useJobs";
+import { useDrivers } from "@/hooks/useDrivers";
+import { useReassignDriver } from "@/hooks/useJobs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getStatusLabelExtended, getStatusColor } from "@/types/booking-lifecycle";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
@@ -25,9 +37,20 @@ const statusGroups: { label: string; statuses: (BookingLifecycleStatus | 'cancel
 const BookingQueue = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusGroup, setStatusGroup] = useState<string>("all");
+  const [reassignBookingId, setReassignBookingId] = useState<string | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<string>("");
 
   const { data: bookings = [], isLoading, error } = useBookings();
+  const { data: drivers = [] } = useDrivers();
   const updateBookingStatus = useUpdateBookingStatus();
+  const reassignDriver = useReassignDriver();
+  
+  // Filter out drivers without allocated vehicles
+  const driversWithVehicles = drivers.filter(driver => driver.hasVehicle && driver.vehicleReg);
+  
+  // Get job for the booking being re-assigned
+  const bookingToReassign = bookings.find(b => b.id === reassignBookingId);
+  const { data: relatedJob } = useJob(bookingToReassign?.jobId || null);
 
   const handleMoveToSanitisation = (bookingId: string) => {
     updateBookingStatus.mutate(
@@ -186,7 +209,7 @@ const BookingQueue = () => {
                             </div>
                             {booking.roundTripDistanceKm && booking.roundTripDistanceKm > 0 && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Truck className="h-4 w-4" />
+                                <Route className="h-4 w-4" />
                                 <span>
                                   Return Journey: {booking.roundTripDistanceMiles 
                                     ? `${booking.roundTripDistanceMiles.toFixed(1)} mi`
@@ -196,15 +219,31 @@ const BookingQueue = () => {
                             )}
                             {booking.preferredVehicleType && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Truck className="h-4 w-4" />
+                                <Fuel className="h-4 w-4" />
                                 <span>Preferred: {booking.preferredVehicleType.charAt(0).toUpperCase() + booking.preferredVehicleType.slice(1)}</span>
                               </div>
                             )}
                             {booking.driverName && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Truck className="h-4 w-4" />
+                                <User className="h-4 w-4" />
                                 <span>Driver: {booking.driverName}</span>
                               </div>
+                            )}
+                            {/* Show Re-assign button only when booking is scheduled, has a job, and job status is 'routed' */}
+                            {booking.status === 'scheduled' && booking.jobId && booking.jobStatus === 'routed' && (
+                              <Button 
+                                variant="outline" 
+                                className="w-full mt-2" 
+                                size="sm"
+                                onClick={() => {
+                                  setReassignBookingId(booking.id);
+                                  setSelectedDriverId("");
+                                }}
+                                disabled={reassignDriver.isPending}
+                              >
+                                <UserCog className="h-4 w-4 mr-2" />
+                                Re-assign Driver
+                              </Button>
                             )}
                             {booking.status === 'pending' && (
                               <Button variant="default" asChild className="w-full mt-2" size="sm">
@@ -259,6 +298,151 @@ const BookingQueue = () => {
           })}
         </div>
       )}
+
+      {/* Re-assign Driver Dialog */}
+      <Dialog open={!!reassignBookingId} onOpenChange={(open) => !open && setReassignBookingId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Re-assign Driver</DialogTitle>
+            <DialogDescription>
+              Select a new driver to assign to this job, or choose to unassign the current driver. The current driver will be notified of the change.
+              Only jobs with status 'routed' can be re-assigned or unassigned.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {relatedJob && relatedJob.status !== 'routed' && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  Cannot re-assign driver. Job status must be 'routed' to re-assign. Current status: {relatedJob.status}
+                </AlertDescription>
+              </Alert>
+            )}
+            {relatedJob && relatedJob.driver && (
+              <div className="space-y-2">
+                <Label>Current Driver</Label>
+                <div className="p-2 rounded-md bg-muted">
+                  <p className="text-sm font-medium">{relatedJob.driver.name}</p>
+                  {relatedJob.driver.vehicleReg && (
+                    <p className="text-xs text-muted-foreground font-mono">{relatedJob.driver.vehicleReg}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="newDriver">New Driver</Label>
+              <Select 
+                value={selectedDriverId} 
+                onValueChange={setSelectedDriverId}
+                disabled={!relatedJob || relatedJob.status !== 'routed'}
+              >
+                <SelectTrigger id="newDriver">
+                  <SelectValue placeholder="Select a driver or unassign..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassign">
+                    <div className="flex items-center gap-2 text-destructive">
+                      <span>Unassign Driver</span>
+                    </div>
+                  </SelectItem>
+                  {driversWithVehicles
+                    .filter(driver => !relatedJob?.driver || driver.id !== relatedJob.driver?.id)
+                    .map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{driver.name}</span>
+                          {driver.vehicleReg && (
+                            <span className="text-xs text-muted-foreground">
+                              ({driver.vehicleReg} - {driver.vehicleType} {driver.vehicleFuelType})
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReassignBookingId(null);
+                setSelectedDriverId("");
+              }}
+              disabled={reassignDriver.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!relatedJob) {
+                  toast.error("Job not found");
+                  return;
+                }
+
+                if (relatedJob.status !== 'routed') {
+                  toast.error("Can only re-assign/unassign driver when job status is 'routed'");
+                  return;
+                }
+
+                if (selectedDriverId === 'unassign') {
+                  // Unassign driver
+                  reassignDriver.mutate(
+                    { jobId: relatedJob.id, driverId: null },
+                    {
+                      onSuccess: () => {
+                        toast.success("Driver unassigned successfully");
+                        setReassignBookingId(null);
+                        setSelectedDriverId("");
+                      },
+                      onError: (error) => {
+                        toast.error("Failed to unassign driver", {
+                          description: error instanceof Error ? error.message : "Please try again.",
+                        });
+                      },
+                    }
+                  );
+                } else if (selectedDriverId) {
+                  // Re-assign to new driver
+                  reassignDriver.mutate(
+                    { jobId: relatedJob.id, driverId: selectedDriverId },
+                    {
+                      onSuccess: () => {
+                        toast.success("Driver re-assigned successfully");
+                        setReassignBookingId(null);
+                        setSelectedDriverId("");
+                      },
+                      onError: (error) => {
+                        toast.error("Failed to re-assign driver", {
+                          description: error instanceof Error ? error.message : "Please try again.",
+                        });
+                      },
+                    }
+                  );
+                } else {
+                  toast.error("Please select a driver or choose to unassign");
+                }
+              }}
+              disabled={
+                !selectedDriverId || 
+                reassignDriver.isPending || 
+                !relatedJob || 
+                relatedJob.status !== 'routed' ||
+                (selectedDriverId !== 'unassign' && selectedDriverId === relatedJob?.driver?.id)
+              }
+            >
+              {reassignDriver.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {selectedDriverId === 'unassign' ? 'Unassigning...' : 'Re-assigning...'}
+                </>
+              ) : (
+                selectedDriverId === 'unassign' ? 'Unassign Driver' : 'Re-assign Driver'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

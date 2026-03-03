@@ -12,7 +12,8 @@ import {
   EyeOff,
   CheckCircle2,
   AlertCircle,
-  Loader2
+  Loader2,
+  Truck
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,17 +70,11 @@ const Settings = () => {
     name: '',
     email: '',
     phone: '',
-    vehicleReg: '',
-    vehicleType: 'van' as 'van' | 'truck' | 'car',
-    vehicleFuelType: 'diesel' as 'petrol' | 'diesel' | 'electric',
   });
   const [driverInitialFormData, setDriverInitialFormData] = useState({
     name: '',
     email: '',
     phone: '',
-    vehicleReg: '',
-    vehicleType: 'van' as 'van' | 'truck' | 'car',
-    vehicleFuelType: 'diesel' as 'petrol' | 'diesel' | 'electric',
   });
 
   // Client profile form state
@@ -125,9 +120,6 @@ const Settings = () => {
         name: user?.name || '',
         email: user?.email || '',
         phone: driverProfile.phone || '',
-        vehicleReg: driverProfile.vehicleReg || '',
-        vehicleType: driverProfile.vehicleType || 'van',
-        vehicleFuelType: driverProfile.vehicleFuelType || 'diesel',
       };
       setDriverFormData(next);
       setDriverInitialFormData(next);
@@ -137,9 +129,6 @@ const Settings = () => {
         name: user?.name || '',
         email: user?.email || '',
         phone: '',
-        vehicleReg: '',
-        vehicleType: 'van' as 'van' | 'truck' | 'car',
-        vehicleFuelType: 'diesel' as 'petrol' | 'diesel' | 'electric',
       };
       setDriverFormData(next);
       setDriverInitialFormData(next);
@@ -246,10 +235,7 @@ const Settings = () => {
     (
       driverFormData.name.trim() !== driverInitialFormData.name.trim() ||
       driverFormData.email.trim() !== driverInitialFormData.email.trim() ||
-      driverFormData.phone.trim() !== driverInitialFormData.phone.trim() ||
-      driverFormData.vehicleReg.trim() !== driverInitialFormData.vehicleReg.trim() ||
-      driverFormData.vehicleType !== driverInitialFormData.vehicleType ||
-      driverFormData.vehicleFuelType !== driverInitialFormData.vehicleFuelType
+      driverFormData.phone.trim() !== driverInitialFormData.phone.trim()
     );
 
   const hasClientProfileChanges =
@@ -284,10 +270,6 @@ const Settings = () => {
       toast.error("Phone number is required");
       return;
     }
-    if (!driverFormData.vehicleReg.trim()) {
-      toast.error("Vehicle registration number is required");
-      return;
-    }
 
     updateDriverProfile.mutate(
       {
@@ -296,9 +278,6 @@ const Settings = () => {
           name: driverFormData.name.trim(),
           email: driverFormData.email.trim(),
           phone: driverFormData.phone.trim(),
-          vehicleReg: driverFormData.vehicleReg,
-          vehicleType: driverFormData.vehicleType,
-          vehicleFuelType: driverFormData.vehicleFuelType,
         },
       },
       {
@@ -307,9 +286,6 @@ const Settings = () => {
             name: driverFormData.name.trim(),
             email: driverFormData.email.trim(),
             phone: driverFormData.phone.trim(),
-            vehicleReg: driverFormData.vehicleReg.trim(),
-            vehicleType: driverFormData.vehicleType,
-            vehicleFuelType: driverFormData.vehicleFuelType,
           };
           setDriverInitialFormData(updatedData);
           toast.success("Driver profile updated successfully");
@@ -460,55 +436,6 @@ const Settings = () => {
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicleReg">Vehicle Registration *</Label>
-                      <Input 
-                        id="vehicleReg" 
-                        className="font-mono uppercase"
-                        placeholder="AB12 CDE"
-                        value={driverFormData.vehicleReg}
-                        onChange={(e) => setDriverFormData(prev => ({ ...prev, vehicleReg: e.target.value.toUpperCase() }))}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicleType">Vehicle Type *</Label>
-                      <Select
-                        value={driverFormData.vehicleType}
-                        onValueChange={(value: 'van' | 'truck' | 'car') => 
-                          setDriverFormData(prev => ({ ...prev, vehicleType: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select vehicle type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="van">Van</SelectItem>
-                          <SelectItem value="truck">Truck</SelectItem>
-                          <SelectItem value="car">Car</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicleFuelType">Fuel Type *</Label>
-                      <Select
-                        value={driverFormData.vehicleFuelType}
-                        onValueChange={(value: 'petrol' | 'diesel' | 'electric') => 
-                          setDriverFormData(prev => ({ ...prev, vehicleFuelType: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select fuel type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="petrol">Petrol</SelectItem>
-                          <SelectItem value="diesel">Diesel</SelectItem>
-                          <SelectItem value="electric">Electric</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
 
                   <div className="flex justify-end pt-4">
@@ -521,7 +448,6 @@ const Settings = () => {
                         !driverFormData.name.trim() ||
                         !driverFormData.email.trim() ||
                         !driverFormData.phone.trim() ||
-                        !driverFormData.vehicleReg.trim() ||
                         !hasDriverProfileChanges
                       }
                     >
@@ -539,6 +465,69 @@ const Settings = () => {
                     </Button>
                   </div>
                 </>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Vehicle Information - For Drivers (Read-only) */}
+      {isDriver && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Truck className="h-5 w-5" />
+                Vehicle Information
+              </CardTitle>
+              <CardDescription>
+                Your allocated vehicle details (managed by administrator)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoadingDriver ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : driverProfile?.hasVehicle && driverProfile.vehicleReg ? (
+                <div className="space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Vehicle Registration</Label>
+                      <div className="flex items-center gap-2 p-3 bg-muted rounded-md border">
+                        <Truck className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-mono font-medium">{driverProfile.vehicleReg}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Vehicle Type</Label>
+                      <div className="flex items-center gap-2 p-3 bg-muted rounded-md border">
+                        <Truck className="h-4 w-4 text-muted-foreground" />
+                        <span className="capitalize">{driverProfile.vehicleType || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Fuel Type</Label>
+                      <div className="flex items-center gap-2 p-3 bg-muted rounded-md border">
+                        <Truck className="h-4 w-4 text-muted-foreground" />
+                        <span className="capitalize">{driverProfile.vehicleFuelType || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    No vehicle has been allocated to you yet. Please contact your administrator to have a vehicle assigned.
+                  </AlertDescription>
+                </Alert>
               )}
             </CardContent>
           </Card>

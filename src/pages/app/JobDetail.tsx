@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
@@ -6,6 +7,7 @@ import {
   Calendar, 
   User, 
   Truck, 
+  Route,
   Phone,
   FileText,
   Download,
@@ -33,18 +35,38 @@ import {
 import { WorkflowTimeline } from "@/components/jobs/WorkflowTimeline";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
 import { co2eEquivalencies } from "@/lib/constants";
-import { useJob } from "@/hooks/useJobs";
+import { useJob, useReassignDriver } from "@/hooks/useJobs";
 import { useAssetCategories } from "@/hooks/useAssets";
+import { useDrivers } from "@/hooks/useDrivers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { canDriverEditJob } from "@/utils/job-helpers";
 import { getAuthenticatedFileUrl } from "@/utils/file-url";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { UserPlus } from "lucide-react";
 
 const JobDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const { data: job, isLoading, error } = useJob(id);
   const { data: assetCategories } = useAssetCategories();
+  const { data: drivers = [] } = useDrivers();
+  const reassignDriver = useReassignDriver();
+  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
+  const [selectedDriverId, setSelectedDriverId] = useState<string>("");
+  
+  // Filter out drivers without allocated vehicles
+  const driversWithVehicles = drivers.filter(driver => driver.hasVehicle && driver.vehicleReg);
 
   if (isLoading) {
     return (
@@ -158,7 +180,7 @@ const JobDetail = () => {
               <div className="pt-4 border-t">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Truck className="h-4 w-4 text-muted-foreground" />
+                    <Route className="h-4 w-4 text-muted-foreground" />
                     <p className="text-sm font-medium text-muted-foreground">Round Trip Mileage</p>
                   </div>
                   {roundTripDistanceKm > 0 ? (
@@ -184,15 +206,32 @@ const JobDetail = () => {
                 <div className="pt-4 border-t">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm font-medium text-muted-foreground">Driver Assignment</p>
-                    {/* Only show Driver View button to driver role, and only if job is editable */}
-                    {user?.role === 'driver' && canDriverEditJob(job) && (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to={`/driver/jobs/${job.id}`} className="text-inherit no-underline">
-                          <Smartphone className="h-4 w-4 mr-2" />
-                          Driver View
-                        </Link>
-                      </Button>
-                    )}
+                    <div className="flex gap-2">
+                      {/* Re-assign driver button (admin only, only for routed status) */}
+                      {user?.role === 'admin' && job.status === 'routed' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedDriverId(job.driver?.id || "");
+                            setIsReassignDialogOpen(true);
+                          }}
+                          disabled={reassignDriver.isPending}
+                        >
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Re-assign Driver
+                        </Button>
+                      )}
+                      {/* Only show Driver View button to driver role, and only if job is editable */}
+                      {user?.role === 'driver' && canDriverEditJob(job) && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/driver/jobs/${job.id}`} className="text-inherit no-underline">
+                            <Smartphone className="h-4 w-4 mr-2" />
+                            Driver View
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-4">
                     <div className="flex items-center gap-2">
@@ -713,6 +752,132 @@ const JobDetail = () => {
           </div>
         )}
       </div>
+
+      {/* Re-assign Driver Dialog */}
+      <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Re-assign Driver</DialogTitle>
+            <DialogDescription>
+              Select a new driver to assign to this job, or choose to unassign the current driver. The current driver will be notified of the change.
+              Only jobs with status 'routed' can be re-assigned or unassigned.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Current Driver</Label>
+              <div className="p-2 rounded-md bg-muted">
+                <p className="text-sm font-medium">{job?.driver?.name}</p>
+                {job?.driver?.vehicleReg && (
+                  <p className="text-xs text-muted-foreground font-mono">{job.driver.vehicleReg}</p>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newDriver">New Driver</Label>
+              <Select value={selectedDriverId} onValueChange={setSelectedDriverId}>
+                <SelectTrigger id="newDriver">
+                  <SelectValue placeholder="Select a driver or unassign..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassign">
+                    <div className="flex items-center gap-2 text-destructive">
+                      <span>Unassign Driver</span>
+                    </div>
+                  </SelectItem>
+                  {driversWithVehicles
+                    .filter(driver => driver.id !== job?.driver?.id)
+                    .map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{driver.name}</span>
+                          {driver.vehicleReg && (
+                            <span className="text-xs text-muted-foreground">
+                              ({driver.vehicleReg} - {driver.vehicleType} {driver.vehicleFuelType})
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsReassignDialogOpen(false);
+                setSelectedDriverId("");
+              }}
+              disabled={reassignDriver.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!job) {
+                  toast.error("Job not found");
+                  return;
+                }
+
+                if (job.status !== 'routed') {
+                  toast.error("Can only re-assign/unassign driver when job status is 'routed'");
+                  return;
+                }
+
+                if (selectedDriverId === 'unassign') {
+                  // Unassign driver
+                  reassignDriver.mutate(
+                    { jobId: job.id, driverId: null },
+                    {
+                      onSuccess: () => {
+                        toast.success("Driver unassigned successfully");
+                        setIsReassignDialogOpen(false);
+                        setSelectedDriverId("");
+                      },
+                      onError: (error) => {
+                        toast.error("Failed to unassign driver", {
+                          description: error instanceof Error ? error.message : "Please try again.",
+                        });
+                      },
+                    }
+                  );
+                } else if (selectedDriverId) {
+                  // Re-assign to new driver
+                  reassignDriver.mutate(
+                    { jobId: job.id, driverId: selectedDriverId },
+                    {
+                      onSuccess: () => {
+                        toast.success("Driver re-assigned successfully");
+                        setIsReassignDialogOpen(false);
+                        setSelectedDriverId("");
+                      },
+                      onError: (error) => {
+                        toast.error("Failed to re-assign driver", {
+                          description: error instanceof Error ? error.message : "Please try again.",
+                        });
+                      },
+                    }
+                  );
+                } else {
+                  toast.error("Please select a driver or choose to unassign");
+                }
+              }}
+              disabled={!selectedDriverId || reassignDriver.isPending || (selectedDriverId !== 'unassign' && selectedDriverId === job?.driver?.id)}
+            >
+              {reassignDriver.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {selectedDriverId === 'unassign' ? 'Unassigning...' : 'Re-assigning...'}
+                </>
+              ) : (
+                selectedDriverId === 'unassign' ? 'Unassign Driver' : 'Re-assign Driver'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

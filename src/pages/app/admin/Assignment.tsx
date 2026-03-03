@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, UserPlus, Truck, Calendar, MapPin, Package, Loader2, CheckCircle2, Car, AlertTriangle } from "lucide-react";
+import { ArrowLeft, UserPlus, Truck, Calendar, MapPin, Package, Loader2, CheckCircle2, Car, AlertTriangle, Route, Fuel } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,14 +25,17 @@ const Assignment = () => {
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const assignMutation = useAssignDriver();
   
-  const selectedDriver = drivers.find(d => d.id === selectedDriverId);
+  // Filter out drivers without allocated vehicles
+  const driversWithVehicles = drivers.filter(driver => driver.hasVehicle && driver.vehicleReg);
+  
+  const selectedDriver = driversWithVehicles.find(d => d.id === selectedDriverId);
   const selectedDriverVehicle = selectedDriver ? {
     vehicleReg: selectedDriver.vehicleReg,
     vehicleType: selectedDriver.vehicleType,
     vehicleFuelType: selectedDriver.vehicleFuelType,
   } : null;
   
-  const assignedDriver = booking?.driverId ? drivers.find(d => d.id === booking.driverId) : null;
+  const assignedDriver = booking?.driverId ? driversWithVehicles.find(d => d.id === booking.driverId) || drivers.find(d => d.id === booking.driverId) : null;
   const assignedDriverVehicle = assignedDriver ? {
     vehicleReg: assignedDriver.vehicleReg,
     vehicleType: assignedDriver.vehicleType,
@@ -256,7 +259,7 @@ const Assignment = () => {
               </div>
               {roundTripDistanceKm !== null && (
                 <div className="flex items-center gap-2 pt-2 border-t">
-                  <Truck className="h-4 w-4 text-muted-foreground" />
+                  <Route className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Round Trip Mileage</p>
                     {isCalculatingDistance ? (
@@ -283,7 +286,7 @@ const Assignment = () => {
               )}
               {booking.preferredVehicleType && (
                 <div className="flex items-center gap-2 pt-2 border-t">
-                  <Car className="h-4 w-4 text-muted-foreground" />
+                  <Fuel className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Client Preferred Vehicle</p>
                     <p className="font-semibold capitalize">{booking.preferredVehicleType}</p>
@@ -341,14 +344,14 @@ const Assignment = () => {
                       <SelectContent>
                         {isLoadingDrivers ? (
                           <SelectItem value="loading" disabled>Loading drivers...</SelectItem>
-                        ) : drivers.length === 0 ? (
-                          <SelectItem value="none" disabled>No drivers available</SelectItem>
+                        ) : driversWithVehicles.length === 0 ? (
+                          <SelectItem value="none" disabled>No drivers with vehicles available</SelectItem>
                         ) : (
-                          drivers.map((driver) => (
+                          driversWithVehicles.map((driver) => (
                             <SelectItem key={driver.id} value={driver.id}>
                               <div className="flex items-center gap-2">
                                 <span>{driver.name}</span>
-                                {driver.hasProfile && (
+                                {driver.vehicleReg && (
                                   <span className="text-xs text-muted-foreground">
                                     ({driver.vehicleReg} - {driver.vehicleType} {driver.vehicleFuelType})
                                   </span>
@@ -359,9 +362,9 @@ const Assignment = () => {
                         )}
                       </SelectContent>
                     </Select>
-                    {drivers.length === 0 && (
+                    {driversWithVehicles.length === 0 && (
                       <p className="text-sm text-muted-foreground">
-                        No active drivers found. Please add drivers in user management.
+                        No drivers with allocated vehicles found. Please allocate vehicles to drivers first.
                       </p>
                     )}
                   </div>

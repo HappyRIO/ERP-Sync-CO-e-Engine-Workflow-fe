@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Truck, Car, Trash2, Loader2, CheckCircle2, XCircle, AlertCircle, Phone, Mail, UserPlus, Clock, Copy } from "lucide-react";
+import { Search, Truck, Trash2, Loader2, CheckCircle2, XCircle, AlertCircle, Phone, Mail, UserPlus, Clock, Copy, X } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDrivers, useDeleteDriverProfile } from "@/hooks/useDrivers";
 import { useInvites, useCancelInvite } from "@/hooks/useInvites";
+import { useVehicles, useAllocateVehicle } from "@/hooks/useVehicles";
 import { useAuth } from "@/contexts/AuthContext";
 import { authService } from "@/services/auth.service";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -39,8 +47,10 @@ const Drivers = () => {
 
   const { data: drivers = [], isLoading, error } = useDrivers();
   const { data: invites = [], isLoading: isLoadingInvites } = useInvites(undefined, 'driver');
+  const { data: vehicles = [] } = useVehicles();
   const deleteProfile = useDeleteDriverProfile();
   const cancelInvite = useCancelInvite();
+  const allocateVehicle = useAllocateVehicle();
 
   // Create invite mutation
   const createInvite = useMutation({
@@ -89,13 +99,96 @@ const Drivers = () => {
     }
   };
 
+  const [isAllocateDialogOpen, setIsAllocateDialogOpen] = useState(false);
+  const [driverToAllocate, setDriverToAllocate] = useState<string | null>(null);
+
   const filteredDrivers = drivers.filter((driver) => {
     const matchesSearch =
       driver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       driver.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      driver.vehicleReg.toLowerCase().includes(searchQuery.toLowerCase());
+      (driver.vehicleReg?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
     return matchesSearch;
   });
+
+  const handleAllocateVehicle = (driverId: string) => {
+    setDriverToAllocate(driverId);
+    setIsAllocateDialogOpen(true);
+  };
+
+  const handleAllocateConfirm = (vehicleId: string | null) => {
+    if (!driverToAllocate) return;
+
+    const currentDriver = drivers.find(d => d.id === driverToAllocate);
+    
+    // If unallocating (vehicleId is null), we need the current vehicle's ID
+    if (vehicleId === null) {
+      if (!currentDriver?.vehicleId) {
+        toast.error("No vehicle allocated to unallocate");
+        return;
+      }
+      
+      // Unallocate: use current vehicle ID, set driverId to null
+      allocateVehicle.mutate(
+        { vehicleId: currentDriver.vehicleId, driverId: null },
+        {
+          onSuccess: () => {
+            toast.success("Vehicle unallocated successfully");
+            setIsAllocateDialogOpen(false);
+            setDriverToAllocate(null);
+          },
+          onError: (error) => {
+            toast.error("Failed to unallocate vehicle", {
+              description: error instanceof Error ? error.message : "Please try again.",
+            });
+          },
+        }
+      );
+      return;
+    }
+
+    // Allocating or changing vehicle
+    const selectedVehicle = vehicles.find(v => v.id === vehicleId);
+    const isSwitching = selectedVehicle?.driverId && selectedVehicle.driverId !== driverToAllocate;
+    const isChangingVehicle = currentDriver?.hasVehicle && currentDriver.vehicleId !== vehicleId;
+
+    allocateVehicle.mutate(
+      { vehicleId, driverId: driverToAllocate },
+      {
+        onSuccess: () => {
+          if (isSwitching) {
+            toast.success("Vehicle switched successfully");
+          } else if (isChangingVehicle) {
+            toast.success("Vehicle changed successfully");
+          } else {
+            toast.success("Vehicle allocated successfully");
+          }
+          setIsAllocateDialogOpen(false);
+          setDriverToAllocate(null);
+        },
+        onError: (error) => {
+          toast.error("Failed to allocate vehicle", {
+            description: error instanceof Error ? error.message : "Please try again.",
+          });
+        },
+      }
+    );
+  };
+
+  const handleUnallocateVehicle = (driverId: string, vehicleId: string) => {
+    allocateVehicle.mutate(
+      { vehicleId, driverId: null },
+      {
+        onSuccess: () => {
+          toast.success("Vehicle unallocated successfully");
+        },
+        onError: (error) => {
+          toast.error("Failed to unallocate vehicle", {
+            description: error instanceof Error ? error.message : "Please try again.",
+          });
+        },
+      }
+    );
+  };
 
 
   const handleDeleteClick = (driverId: string) => {
@@ -274,7 +367,7 @@ const Drivers = () => {
               {searchQuery ? "No drivers found matching your search." : "No drivers with profiles found."}
             </p>
             <p className="text-sm text-muted-foreground mt-2">
-              Click "Invite Driver" to send an invitation. After the driver accepts, they can add their vehicle profile.
+              Click "Invite Driver" to send an invitation. After the driver accepts, you can allocate a vehicle to them.
             </p>
           </CardContent>
         </Card>
@@ -324,12 +417,12 @@ const Drivers = () => {
                     )}
                   </div>
 
-                  {driver.hasProfile ? (
+                  {driver.hasVehicle ? (
                     <div className="pt-3 border-t space-y-2">
                       <div className="flex items-center gap-2">
-                        <Car className="h-4 w-4 text-muted-foreground" />
+                        <Truck className="h-4 w-4 text-muted-foreground" />
                         <div className="flex-1">
-                          <p className="font-medium text-sm">{driver.vehicleReg}</p>
+                          <p className="font-medium text-sm font-mono">{driver.vehicleReg}</p>
                           <p className="text-xs text-muted-foreground capitalize">
                             {driver.vehicleType} • {driver.vehicleFuelType}
                           </p>
@@ -340,22 +433,53 @@ const Drivers = () => {
                     <Alert className="bg-warning/10 border-warning/20">
                       <AlertCircle className="h-4 w-4 text-warning" />
                       <AlertDescription className="text-xs">
-                        No vehicle profile. Add vehicle information to enable assignment.
+                        No vehicle allocated. Allocate a vehicle to enable job assignment.
                       </AlertDescription>
                     </Alert>
                   )}
 
                   <div className="flex gap-2 pt-2">
-                    {driver.hasProfile && (
+                    {driver.hasVehicle && driver.vehicleId ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleAllocateVehicle(driver.id)}
+                          disabled={allocateVehicle.isPending || driver.status !== 'active'}
+                        >
+                          <Truck className="h-3 w-3 mr-1" />
+                          Change Vehicle
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleUnallocateVehicle(driver.id, driver.vehicleId!)}
+                          disabled={allocateVehicle.isPending || driver.status !== 'active'}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </>
+                    ) : (
                       <Button
                         variant="outline"
                         size="sm"
                         className="flex-1"
+                        onClick={() => handleAllocateVehicle(driver.id)}
+                        disabled={allocateVehicle.isPending || driver.status !== 'active'}
+                      >
+                        <Truck className="h-3 w-3 mr-1" />
+                        Allocate Vehicle
+                      </Button>
+                    )}
+                    {driver.hasProfile && (
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleDeleteClick(driver.id)}
                         disabled={deleteProfile.isPending}
                       >
-                        <Trash2 className="h-3 w-3 mr-1" />
-                        Delete
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     )}
                   </div>
@@ -482,6 +606,62 @@ const Drivers = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Allocate Vehicle Dialog */}
+      <Dialog open={isAllocateDialogOpen} onOpenChange={setIsAllocateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Allocate Vehicle</DialogTitle>
+            <DialogDescription>
+              Select a vehicle to allocate to this driver. If the vehicle is already allocated to another driver, it will be automatically switched. Select "Unallocated" to remove the current vehicle.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Vehicle</Label>
+              <Select
+                value={drivers.find(d => d.id === driverToAllocate)?.vehicleId || "unallocated"}
+                onValueChange={(value) => {
+                  if (value === "unallocated") {
+                    handleAllocateConfirm(null);
+                  } else {
+                    handleAllocateConfirm(value);
+                  }
+                }}
+                disabled={allocateVehicle.isPending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unallocated">Unallocated</SelectItem>
+                  {vehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.vehicleReg} ({vehicle.vehicleType} • {vehicle.vehicleFuelType})
+                      {vehicle.driverId && vehicle.driverId !== driverToAllocate && (
+                        <span className="text-muted-foreground"> - Allocated to {vehicle.driver?.name || 'another driver'}</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsAllocateDialogOpen(false);
+                setDriverToAllocate(null);
+              }}
+              disabled={allocateVehicle.isPending}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Driver Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

@@ -10,9 +10,11 @@ export interface Driver {
   email: string;
   phone?: string;
   status: string;
-  vehicleReg: string;
-  vehicleType: 'van' | 'truck' | 'car';
-  vehicleFuelType: 'petrol' | 'diesel' | 'electric';
+  vehicleId?: string | null;
+  vehicleReg?: string | null;
+  vehicleType?: 'van' | 'truck' | 'car' | null;
+  vehicleFuelType?: 'petrol' | 'diesel' | 'electric' | null;
+  hasVehicle: boolean;
   hasProfile: boolean;
 }
 
@@ -20,9 +22,6 @@ export interface DriverProfileRequest {
   userId?: string;
   name?: string;
   email?: string;
-  vehicleReg: string;
-  vehicleType: 'van' | 'truck' | 'car';
-  vehicleFuelType: 'petrol' | 'diesel' | 'electric';
   phone?: string;
 }
 

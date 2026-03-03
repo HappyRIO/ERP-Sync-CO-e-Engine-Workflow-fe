@@ -97,3 +97,21 @@ export function useUpdateJobJourneyFields() {
   });
 }
 
+export function useReassignDriver() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ jobId, driverId }: { jobId: string; driverId: string | null }) =>
+      jobsService.reassignDriver(jobId, driverId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['job', variables.jobId] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      // Also refresh bookings so booking queue / details reflect unassignment
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['booking'] });
+      queryClient.invalidateQueries({ queryKey: ['drivers'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+    },
+  });
+}

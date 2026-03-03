@@ -12,8 +12,11 @@ import {
   UserPlus,
   Clock,
   Route as RouteIcon,
-  MapPin
+  MapPin,
+  Icon,
+  Briefcase
 } from "lucide-react";
+import { steeringWheel } from "@lucide/lab";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,12 +49,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
+// Steering Wheel Icon Component (from @lucide/lab)
+const SteeringWheelIcon = ({ className }: { className?: string }) => {
+  return <Icon iconNode={steeringWheel} className={className} />;
+};
+
 // Role-based navigation items
 const getMainNavItems = (role: string) => {
   const baseItems = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard, roles: ['admin', 'client', 'reseller', 'driver'] },
     { title: "New Booking", url: "/booking", icon: Plus, roles: ['admin', 'client'] },
-    { title: "Jobs", url: "/jobs", icon: Truck, roles: ['admin', 'client', 'reseller', 'driver'] },
+    { title: "Jobs", url: "/jobs", icon: Briefcase, roles: ['admin', 'client', 'reseller', 'driver'] },
     { title: "Route & Schedule", url: "/driver/schedule", icon: RouteIcon, roles: ['driver'] },
     { title: "Job History", url: "/jobs/history", icon: Clock, roles: ['driver'] },
     { title: "Bookings", url: "/bookings", icon: FileText, roles: ['admin', 'client', 'reseller'] },
@@ -59,7 +67,8 @@ const getMainNavItems = (role: string) => {
     { title: "Users", url: "/users", icon: Users, roles: ['admin'] },
     { title: "Clients", url: "/clients", icon: Building2, roles: ['admin', 'reseller'] },
     { title: "Sites", url: "/sites", icon: MapPin, roles: ['admin', 'client'] },
-    { title: "Drivers", url: "/admin/drivers", icon: Truck, roles: ['admin'] },
+    { title: "Drivers", url: "/admin/drivers", icon: SteeringWheelIcon, roles: ['admin'] },
+    { title: "Vehicles", url: "/admin/vehicles", icon: Truck, roles: ['admin'] },
     { title: "CO₂e Dashboard", url: "/co2e", icon: Leaf, roles: ['admin', 'client', 'reseller'] },
     { title: "Documents", url: "/documents", icon: FileText, roles: ['admin', 'client', 'reseller'] },
   ];

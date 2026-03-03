@@ -50,6 +50,7 @@ export interface Booking {
   roundTripDistanceKm?: number;
   roundTripDistanceMiles?: number;
   jobId?: string;
+  jobStatus?: string;
   driverId?: string;
   driverName?: string;
   createdAt: string;

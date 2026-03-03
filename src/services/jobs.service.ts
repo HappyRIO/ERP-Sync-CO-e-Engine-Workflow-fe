@@ -114,6 +114,11 @@ class JobsService {
     const backendJob = await apiClient.patch<any>(`/jobs/${jobId}/journey-fields`, fields);
     return transformJob(backendJob);
   }
+
+  async reassignDriver(jobId: string, driverId: string | null): Promise<Job> {
+    const backendJob = await apiClient.post<any>(`/jobs/${jobId}/reassign-driver`, { driverId });
+    return transformJob(backendJob);
+  }
 }
 
 export const jobsService = new JobsService();
