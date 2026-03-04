@@ -25,8 +25,8 @@ export function useAssignDriver() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: ({ bookingId, driverId }: { bookingId: string; driverId: string }) =>
-      bookingService.assignDriver(bookingId, driverId, user?.id || ''),
+    mutationFn: ({ bookingId, driverId, vehicleId }: { bookingId: string; driverId: string; vehicleId?: string }) =>
+      bookingService.assignDriver(bookingId, driverId, user?.id || '', vehicleId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       // Refresh notifications and unread count, as driver assignment triggers notifications

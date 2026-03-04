@@ -20,34 +20,37 @@ const Assignment = () => {
 
   const { data: booking, isLoading: isLoadingBooking } = useBooking(bookingId);
   const { data: drivers = [], isLoading: isLoadingDrivers } = useDrivers();
-  const [selectedDriverId, setSelectedDriverId] = useState<string>("");
+  const [selectedDriverVehicle, setSelectedDriverVehicle] = useState<{ driverId: string; vehicleId: string } | null>(null);
   const [roundTripDistanceKm, setRoundTripDistanceKm] = useState<number | null>(null);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const assignMutation = useAssignDriver();
   
   // Filter out drivers without allocated vehicles
-  const driversWithVehicles = drivers.filter(driver => driver.hasVehicle && driver.vehicleReg);
-  
-  const selectedDriver = driversWithVehicles.find(d => d.id === selectedDriverId);
-  const selectedDriverVehicle = selectedDriver ? {
-    vehicleReg: selectedDriver.vehicleReg,
-    vehicleType: selectedDriver.vehicleType,
-    vehicleFuelType: selectedDriver.vehicleFuelType,
-  } : null;
+  const driversWithVehicles = drivers.filter(driver => driver.hasVehicle && (driver.vehicleReg || (driver.vehicles && driver.vehicles.length > 0)));
   
   const assignedDriver = booking?.driverId ? driversWithVehicles.find(d => d.id === booking.driverId) || drivers.find(d => d.id === booking.driverId) : null;
-  const assignedDriverVehicle = assignedDriver ? {
-    vehicleReg: assignedDriver.vehicleReg,
-    vehicleType: assignedDriver.vehicleType,
-    vehicleFuelType: assignedDriver.vehicleFuelType,
-  } : null;
+  const assignedDriverVehicles = assignedDriver?.vehicles && assignedDriver.vehicles.length > 0
+    ? assignedDriver.vehicles
+    : assignedDriver?.vehicleReg
+      ? [{ id: assignedDriver.vehicleId || '', vehicleReg: assignedDriver.vehicleReg, vehicleType: assignedDriver.vehicleType || 'van', vehicleFuelType: assignedDriver.vehicleFuelType || 'diesel' }]
+      : [];
 
-  // Set selected driver if booking already has one
+  // Set selected driver-vehicle if booking already has one
   useEffect(() => {
     if (booking?.driverId) {
-      setSelectedDriverId(booking.driverId);
+      const driver = drivers.find(d => d.id === booking.driverId);
+      if (driver) {
+        const firstVehicle = driver.vehicles && driver.vehicles.length > 0 
+          ? driver.vehicles[0] 
+          : driver.vehicleId 
+            ? { id: driver.vehicleId, vehicleReg: driver.vehicleReg || '', vehicleType: driver.vehicleType || 'van', vehicleFuelType: driver.vehicleFuelType || 'diesel' }
+            : null;
+        if (firstVehicle) {
+          setSelectedDriverVehicle({ driverId: booking.driverId, vehicleId: firstVehicle.id });
+        }
+      }
     }
-  }, [booking]);
+  }, [booking, drivers]);
 
   // Use stored round trip distance from booking, or calculate if not available
   useEffect(() => {
@@ -131,8 +134,8 @@ const Assignment = () => {
   }, [booking]);
 
   const handleAssign = () => {
-    if (!bookingId || !selectedDriverId) {
-      toast.error("Please select a driver");
+    if (!bookingId || !selectedDriverVehicle) {
+      toast.error("Please select a driver and vehicle");
       return;
     }
 
@@ -142,10 +145,10 @@ const Assignment = () => {
     }
 
     assignMutation.mutate(
-      { bookingId, driverId: selectedDriverId },
+      { bookingId, driverId: selectedDriverVehicle.driverId, vehicleId: selectedDriverVehicle.vehicleId },
       {
         onSuccess: () => {
-          toast.success("Driver assigned successfully!", {
+          toast.success("Driver and vehicle assigned successfully!", {
             description: "Booking has been scheduled and driver has been notified.",
           });
           navigate("/admin/bookings");
@@ -318,14 +321,21 @@ const Assignment = () => {
                       <Truck className="h-4 w-4" />
                       <span className="font-medium">{booking.driverName}</span>
                     </div>
-                    {assignedDriverVehicle && (
-                      <div className="flex items-center gap-2 pt-2 border-t border-muted-foreground/20">
-                        <Car className="h-4 w-4 text-muted-foreground" />
-                        <div className="text-sm">
-                          <p className="font-medium">{assignedDriverVehicle.vehicleType.charAt(0).toUpperCase() + assignedDriverVehicle.vehicleType.slice(1)}</p>
-                          <p className="text-muted-foreground font-mono">{assignedDriverVehicle.vehicleReg}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{assignedDriverVehicle.vehicleFuelType}</p>
-                        </div>
+                    {assignedDriverVehicles.length > 0 && (
+                      <div className="pt-2 border-t border-muted-foreground/20 space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          {assignedDriverVehicles.length === 1 ? 'Vehicle' : `Vehicles (${assignedDriverVehicles.length})`}
+                        </p>
+                        {assignedDriverVehicles.map((vehicle, idx) => (
+                          <div key={vehicle.id || idx} className="flex items-center gap-2">
+                            <Car className="h-4 w-4 text-muted-foreground" />
+                            <div className="text-sm">
+                              <p className="font-medium">{vehicle.vehicleType.charAt(0).toUpperCase() + vehicle.vehicleType.slice(1)}</p>
+                              <p className="text-muted-foreground font-mono">{vehicle.vehicleReg}</p>
+                              <p className="text-xs text-muted-foreground capitalize">{vehicle.vehicleFuelType}</p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -337,29 +347,65 @@ const Assignment = () => {
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="driver">Select Driver</Label>
-                    <Select value={selectedDriverId} onValueChange={setSelectedDriverId}>
+                    <Select 
+                      value={selectedDriverVehicle ? `${selectedDriverVehicle.driverId}:${selectedDriverVehicle.vehicleId}` : ""} 
+                      onValueChange={(value) => {
+                        if (value) {
+                          const [driverId, vehicleId] = value.split(':');
+                          setSelectedDriverVehicle({ driverId, vehicleId });
+                        } else {
+                          setSelectedDriverVehicle(null);
+                        }
+                      }}
+                    >
                       <SelectTrigger id="driver">
-                        <SelectValue placeholder="Choose a driver..." />
+                        <SelectValue placeholder="Choose a driver and vehicle..." />
                       </SelectTrigger>
                       <SelectContent>
                         {isLoadingDrivers ? (
                           <SelectItem value="loading" disabled>Loading drivers...</SelectItem>
                         ) : driversWithVehicles.length === 0 ? (
                           <SelectItem value="none" disabled>No drivers with vehicles available</SelectItem>
-                        ) : (
-                          driversWithVehicles.map((driver) => (
-                            <SelectItem key={driver.id} value={driver.id}>
-                              <div className="flex items-center gap-2">
-                                <span>{driver.name}</span>
-                                {driver.vehicleReg && (
-                                  <span className="text-xs text-muted-foreground">
-                                    ({driver.vehicleReg} - {driver.vehicleType} {driver.vehicleFuelType})
-                                  </span>
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))
-                        )}
+                        ) : (() => {
+                          // Create separate entries for each driver-vehicle combination
+                          const driverVehicleCombinations: Array<{
+                            driverId: string;
+                            driverName: string;
+                            vehicle: { id: string; vehicleReg: string; vehicleType: string; vehicleFuelType: string };
+                          }> = [];
+                          
+                          driversWithVehicles.forEach((driver) => {
+                            const driverVehicles = driver.vehicles && driver.vehicles.length > 0 
+                              ? driver.vehicles 
+                              : driver.vehicleReg 
+                                ? [{ id: driver.vehicleId || '', vehicleReg: driver.vehicleReg, vehicleType: driver.vehicleType || 'van', vehicleFuelType: driver.vehicleFuelType || 'diesel' }]
+                                : [];
+                            
+                            driverVehicles.forEach((vehicle) => {
+                              driverVehicleCombinations.push({
+                                driverId: driver.id,
+                                driverName: driver.name,
+                                vehicle,
+                              });
+                            });
+                          });
+                          
+                          return driverVehicleCombinations.map((combo) => {
+                            // Use vehicle.id if available, otherwise use a fallback
+                            const vehicleId = combo.vehicle.id || combo.driverId; // Fallback to driverId if vehicle has no id
+                            const value = `${combo.driverId}:${vehicleId}`;
+                            return (
+                              <SelectItem key={value} value={value}>
+                                <div className="flex flex-col gap-1">
+                                  <span>{combo.driverName}</span>
+                                  <div className="text-xs text-muted-foreground">
+                                    {combo.vehicle.vehicleReg} - {combo.vehicle.vehicleType} {combo.vehicle.vehicleFuelType}
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            );
+                          });
+                        })()}
                       </SelectContent>
                     </Select>
                     {driversWithVehicles.length === 0 && (
@@ -369,43 +415,50 @@ const Assignment = () => {
                     )}
                   </div>
                   
-                  {selectedDriver && selectedDriverVehicle && (
-                    <div className="space-y-3">
-                    <div className="p-3 rounded-lg bg-muted/50 border border-muted space-y-2">
-                      <p className="text-sm font-medium">Driver Information</p>
-                      <div className="flex items-center gap-2">
-                        <Truck className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{selectedDriver.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2 pt-2 border-t border-muted-foreground/20">
-                        <Car className="h-4 w-4 text-muted-foreground" />
-                        <div className="text-sm">
-                          <p className="font-medium">{selectedDriverVehicle.vehicleType.charAt(0).toUpperCase() + selectedDriverVehicle.vehicleType.slice(1)}</p>
-                          <p className="text-muted-foreground font-mono">{selectedDriverVehicle.vehicleReg}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{selectedDriverVehicle.vehicleFuelType}</p>
+                  {selectedDriverVehicle && (() => {
+                    const driver = driversWithVehicles.find(d => d.id === selectedDriverVehicle.driverId);
+                    const vehicle = driver?.vehicles?.find(v => v.id === selectedDriverVehicle.vehicleId) 
+                      || (driver?.vehicleId === selectedDriverVehicle.vehicleId && driver.vehicleReg 
+                        ? { id: driver.vehicleId, vehicleReg: driver.vehicleReg, vehicleType: driver.vehicleType || 'van', vehicleFuelType: driver.vehicleFuelType || 'diesel' }
+                        : null);
+                    return driver && vehicle ? (
+                      <div className="space-y-3">
+                        <div className="p-3 rounded-lg bg-muted/50 border border-muted space-y-2">
+                          <p className="text-sm font-medium">Selected Driver & Vehicle</p>
+                          <div className="flex items-center gap-2">
+                            <Truck className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm">{driver.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 pt-2 border-t border-muted-foreground/20">
+                            <Car className="h-4 w-4 text-muted-foreground" />
+                            <div className="text-sm">
+                              <p className="font-medium">{vehicle.vehicleType.charAt(0).toUpperCase() + vehicle.vehicleType.slice(1)}</p>
+                              <p className="text-muted-foreground font-mono">{vehicle.vehicleReg}</p>
+                              <p className="text-xs text-muted-foreground capitalize">{vehicle.vehicleFuelType}</p>
+                            </div>
+                          </div>
                         </div>
+                        
+                        {/* Vehicle Mismatch Warning */}
+                        {booking.preferredVehicleType && 
+                         vehicle.vehicleFuelType !== booking.preferredVehicleType && (
+                          <Alert className="bg-warning/10 border-warning/20">
+                            <AlertTriangle className="h-4 w-4 text-warning" />
+                            <AlertDescription className="text-sm">
+                              <strong>Vehicle Type Mismatch:</strong> Client preferred {booking.preferredVehicleType} vehicle, 
+                              but selected vehicle is {vehicle.vehicleFuelType}. 
+                              Consider selecting a {booking.preferredVehicleType} vehicle if available.
+                            </AlertDescription>
+                          </Alert>
+                        )}
                       </div>
-                      </div>
-                      
-                      {/* Vehicle Mismatch Warning */}
-                      {booking.preferredVehicleType && 
-                       booking.preferredVehicleType !== selectedDriverVehicle.vehicleFuelType && (
-                        <Alert className="bg-warning/10 border-warning/20">
-                          <AlertTriangle className="h-4 w-4 text-warning" />
-                          <AlertDescription className="text-sm">
-                            <strong>Vehicle Type Mismatch:</strong> Client preferred {booking.preferredVehicleType} vehicle, 
-                            but selected driver has {selectedDriverVehicle.vehicleFuelType} vehicle. 
-                            Consider assigning a driver with a {booking.preferredVehicleType} vehicle if available.
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                    </div>
-                  )}
+                    ) : null;
+                  })()}
 
                   <Button
                     variant="default"
                     onClick={handleAssign}
-                    disabled={!selectedDriverId || assignMutation.isPending}
+                    disabled={!selectedDriverVehicle || assignMutation.isPending}
                     className="w-full"
                   >
                     {assignMutation.isPending ? (

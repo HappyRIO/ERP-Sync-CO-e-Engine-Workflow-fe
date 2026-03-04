@@ -8,13 +8,17 @@ export interface Vehicle {
   vehicleReg: string;
   vehicleType: 'van' | 'truck' | 'car';
   vehicleFuelType: 'petrol' | 'diesel' | 'electric';
-  driverId?: string | null;
-  driver?: {
+  drivers?: Array<{
     id: string;
-    name: string;
-    email: string;
-    status: string;
-  } | null;
+    driverId: string;
+    vehicleId: string;
+    driver: {
+      id: string;
+      name: string;
+      email: string;
+      status: string;
+    };
+  }>;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -48,9 +52,9 @@ class VehicleService {
     return response;
   }
 
-  async getVehicleByDriver(driverId: string): Promise<Vehicle | null> {
-    const response = await apiClient.get<Vehicle | null>(`/vehicles/driver/${driverId}`);
-    return response;
+  async getVehicleByDriver(driverId: string): Promise<Vehicle[]> {
+    const response = await apiClient.get<Vehicle[]>(`/vehicles/driver/${driverId}`);
+    return response || [];
   }
 
   async createVehicle(data: CreateVehicleData): Promise<Vehicle> {
@@ -67,6 +71,11 @@ class VehicleService {
     const response = await apiClient.post<Vehicle>(`/vehicles/${vehicleId}/allocate`, {
       driverId,
     });
+    return response;
+  }
+
+  async removeDriverFromVehicle(vehicleId: string, driverId: string): Promise<Vehicle> {
+    const response = await apiClient.delete<Vehicle>(`/vehicles/${vehicleId}/drivers/${driverId}`);
     return response;
   }
 

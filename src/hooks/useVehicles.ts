@@ -24,7 +24,7 @@ export function useVehicle(id: string | null) {
 export function useVehicleByDriver(driverId: string | null) {
   return useQuery({
     queryKey: ['vehicles', 'driver', driverId],
-    queryFn: () => driverId ? vehicleService.getVehicleByDriver(driverId) : null,
+    queryFn: () => driverId ? vehicleService.getVehicleByDriver(driverId) : [],
     enabled: !!driverId,
     retry: false,
     refetchOnWindowFocus: false,
@@ -62,6 +62,20 @@ export function useAllocateVehicle() {
   return useMutation({
     mutationFn: ({ vehicleId, driverId }: { vehicleId: string; driverId: string | null }) =>
       vehicleService.allocateVehicle(vehicleId, driverId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['drivers'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles', 'driver'] });
+    },
+  });
+}
+
+export function useRemoveDriverFromVehicle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ vehicleId, driverId }: { vehicleId: string; driverId: string }) =>
+      vehicleService.removeDriverFromVehicle(vehicleId, driverId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['drivers'] });

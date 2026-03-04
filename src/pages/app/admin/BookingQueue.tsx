@@ -46,7 +46,7 @@ const BookingQueue = () => {
   const reassignDriver = useReassignDriver();
   
   // Filter out drivers without allocated vehicles
-  const driversWithVehicles = drivers.filter(driver => driver.hasVehicle && driver.vehicleReg);
+  const driversWithVehicles = drivers.filter(driver => driver.hasVehicle && (driver.vehicleReg || (driver.vehicles && driver.vehicles.length > 0)));
   
   // Get job for the booking being re-assigned
   const bookingToReassign = bookings.find(b => b.id === reassignBookingId);
@@ -323,7 +323,13 @@ const BookingQueue = () => {
                 <div className="p-2 rounded-md bg-muted">
                   <p className="text-sm font-medium">{relatedJob.driver.name}</p>
                   {relatedJob.driver.vehicleReg && (
-                    <p className="text-xs text-muted-foreground font-mono">{relatedJob.driver.vehicleReg}</p>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">Vehicle:</p>
+                      <p className="text-xs text-muted-foreground font-mono">{relatedJob.driver.vehicleReg}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {relatedJob.driver.vehicleType} • {relatedJob.driver.vehicleFuelType}
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -338,26 +344,61 @@ const BookingQueue = () => {
                 <SelectTrigger id="newDriver">
                   <SelectValue placeholder="Select a driver or unassign..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" side="bottom" sideOffset={5}>
                   <SelectItem value="unassign">
                     <div className="flex items-center gap-2 text-destructive">
                       <span>Unassign Driver</span>
                     </div>
                   </SelectItem>
-                  {driversWithVehicles
-                    .filter(driver => !relatedJob?.driver || driver.id !== relatedJob.driver?.id)
-                    .map((driver) => (
-                      <SelectItem key={driver.id} value={driver.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{driver.name}</span>
-                          {driver.vehicleReg && (
-                            <span className="text-xs text-muted-foreground">
-                              ({driver.vehicleReg} - {driver.vehicleType} {driver.vehicleFuelType})
-                            </span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
+                  {(() => {
+                    // Get current driver and vehicle info
+                    const currentDriverId = relatedJob?.driver?.id;
+                    const currentVehicleReg = relatedJob?.driver?.vehicleReg;
+                    
+                    // Create separate entries for each driver-vehicle combination
+                    // Exclude the current driver-vehicle combination
+                    const driverVehicleCombinations: Array<{
+                      driverId: string;
+                      driverName: string;
+                      vehicle: { id: string; vehicleReg: string; vehicleType: string; vehicleFuelType: string };
+                    }> = [];
+                    
+                    driversWithVehicles.forEach((driver) => {
+                      const driverVehicles = driver.vehicles && driver.vehicles.length > 0 
+                        ? driver.vehicles 
+                        : driver.vehicleReg 
+                          ? [{ id: driver.vehicleId || '', vehicleReg: driver.vehicleReg, vehicleType: driver.vehicleType || 'van', vehicleFuelType: driver.vehicleFuelType || 'diesel' }]
+                          : [];
+                      
+                      driverVehicles.forEach((vehicle) => {
+                        // Exclude current driver-vehicle combination
+                        const isCurrent = currentDriverId === driver.id && currentVehicleReg === vehicle.vehicleReg;
+                        if (!isCurrent) {
+                          driverVehicleCombinations.push({
+                            driverId: driver.id,
+                            driverName: driver.name,
+                            vehicle,
+                          });
+                        }
+                      });
+                    });
+                    
+                    return driverVehicleCombinations.map((combo) => {
+                      // Use vehicle.id if available, otherwise use a fallback
+                      const vehicleId = combo.vehicle.id || combo.driverId;
+                      const value = `${combo.driverId}:${vehicleId}`;
+                      return (
+                        <SelectItem key={value} value={value}>
+                          <div className="flex flex-col gap-1">
+                            <span>{combo.driverName}</span>
+                            <div className="text-xs text-muted-foreground">
+                              {combo.vehicle.vehicleReg} - {combo.vehicle.vehicleType} {combo.vehicle.vehicleFuelType}
+                            </div>
+                          </div>
+                        </SelectItem>
+                      );
+                    });
+                  })()}
                 </SelectContent>
               </Select>
             </div>
@@ -403,9 +444,11 @@ const BookingQueue = () => {
                     }
                   );
                 } else if (selectedDriverId) {
-                  // Re-assign to new driver
+                  // Re-assign to new driver-vehicle combination
+                  // Parse driverId:vehicleId format
+                  const [driverId, vehicleId] = selectedDriverId.split(':');
                   reassignDriver.mutate(
-                    { jobId: relatedJob.id, driverId: selectedDriverId },
+                    { jobId: relatedJob.id, driverId, vehicleId },
                     {
                       onSuccess: () => {
                         toast.success("Driver re-assigned successfully");
@@ -428,7 +471,7 @@ const BookingQueue = () => {
                 reassignDriver.isPending || 
                 !relatedJob || 
                 relatedJob.status !== 'routed' ||
-                (selectedDriverId !== 'unassign' && selectedDriverId === relatedJob?.driver?.id)
+                (selectedDriverId !== 'unassign' && selectedDriverId.split(':')[0] === relatedJob?.driver?.id)
               }
             >
               {reassignDriver.isPending ? (

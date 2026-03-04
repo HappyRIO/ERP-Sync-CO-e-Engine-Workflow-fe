@@ -10,10 +10,16 @@ export interface Driver {
   email: string;
   phone?: string;
   status: string;
-  vehicleId?: string | null;
-  vehicleReg?: string | null;
-  vehicleType?: 'van' | 'truck' | 'car' | null;
-  vehicleFuelType?: 'petrol' | 'diesel' | 'electric' | null;
+  vehicleId?: string | null; // First vehicle ID (for backward compatibility)
+  vehicleReg?: string | null; // First vehicle reg (for backward compatibility)
+  vehicleType?: 'van' | 'truck' | 'car' | null; // First vehicle type (for backward compatibility)
+  vehicleFuelType?: 'petrol' | 'diesel' | 'electric' | null; // First vehicle fuel type (for backward compatibility)
+  vehicles?: Array<{
+    id: string;
+    vehicleReg: string;
+    vehicleType: 'van' | 'truck' | 'car';
+    vehicleFuelType: 'petrol' | 'diesel' | 'electric';
+  }>; // All vehicles assigned to this driver
   hasVehicle: boolean;
   hasProfile: boolean;
 }

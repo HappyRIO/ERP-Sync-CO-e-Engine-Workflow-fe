@@ -101,8 +101,8 @@ export function useReassignDriver() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ jobId, driverId }: { jobId: string; driverId: string | null }) =>
-      jobsService.reassignDriver(jobId, driverId),
+    mutationFn: ({ jobId, driverId, vehicleId }: { jobId: string; driverId: string | null; vehicleId?: string }) =>
+      jobsService.reassignDriver(jobId, driverId, vehicleId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['job', variables.jobId] });
       queryClient.invalidateQueries({ queryKey: ['jobs'] });

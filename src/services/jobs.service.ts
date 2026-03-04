@@ -115,8 +115,8 @@ class JobsService {
     return transformJob(backendJob);
   }
 
-  async reassignDriver(jobId: string, driverId: string | null): Promise<Job> {
-    const backendJob = await apiClient.post<any>(`/jobs/${jobId}/reassign-driver`, { driverId });
+  async reassignDriver(jobId: string, driverId: string | null, vehicleId?: string): Promise<Job> {
+    const backendJob = await apiClient.post<any>(`/jobs/${jobId}/reassign-driver`, { driverId, vehicleId });
     return transformJob(backendJob);
   }
 }

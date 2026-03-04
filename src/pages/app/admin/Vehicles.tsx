@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useVehicles, useCreateVehicle, useUpdateVehicle, useDeleteVehicle, useAllocateVehicle } from "@/hooks/useVehicles";
+import { useVehicles, useCreateVehicle, useUpdateVehicle, useDeleteVehicle, useAllocateVehicle, useRemoveDriverFromVehicle } from "@/hooks/useVehicles";
 import { useDrivers } from "@/hooks/useDrivers";
 import { toast } from "sonner";
 
@@ -53,18 +53,21 @@ const Vehicles = () => {
   const updateVehicle = useUpdateVehicle();
   const deleteVehicle = useDeleteVehicle();
   const allocateVehicle = useAllocateVehicle();
+  const removeDriver = useRemoveDriverFromVehicle();
 
   const filteredVehicles = vehicles.filter((vehicle) => {
+    const driverNames = vehicle.drivers?.map(vd => vd.driver.name).join(' ') || '';
     const matchesSearch =
       vehicle.vehicleReg.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vehicle.vehicleType.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vehicle.vehicleFuelType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (vehicle.driver?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+      driverNames.toLowerCase().includes(searchQuery.toLowerCase());
     
+    const hasDrivers = vehicle.drivers && vehicle.drivers.length > 0;
     const matchesAllocation =
       allocationFilter === "all" ||
-      (allocationFilter === "allocated" && vehicle.driverId !== null) ||
-      (allocationFilter === "unallocated" && vehicle.driverId === null);
+      (allocationFilter === "allocated" && hasDrivers) ||
+      (allocationFilter === "unallocated" && !hasDrivers);
     
     return matchesSearch && matchesAllocation;
   });
@@ -149,21 +152,21 @@ const Vehicles = () => {
 
     const vehicle = vehicles.find((v) => v.id === selectedVehicle);
     const selectedDriver = driverId ? drivers.find((d) => d.id === driverId) : null;
-    const isSwitching = vehicle?.driverId && vehicle.driverId !== driverId;
-    const isUnallocating = vehicle?.driverId && !driverId;
+    const isAlreadyAssigned = vehicle?.drivers?.some(vd => vd.driverId === driverId);
+    
+    if (driverId && isAlreadyAssigned) {
+      toast.error("Driver is already assigned to this vehicle");
+      return;
+    }
 
     allocateVehicle.mutate(
       { vehicleId: selectedVehicle, driverId },
       {
         onSuccess: () => {
           if (driverId) {
-            if (isSwitching) {
-              toast.success("Vehicle switched successfully");
-            } else {
-              toast.success("Vehicle allocated successfully");
-            }
-          } else if (isUnallocating) {
-            toast.success("Vehicle unallocated successfully");
+            toast.success("Driver added to vehicle successfully");
+          } else {
+            toast.success("All drivers removed from vehicle successfully");
           }
           setIsAllocateDialogOpen(false);
           setSelectedVehicle(null);
@@ -177,12 +180,31 @@ const Vehicles = () => {
     );
   };
 
-  const handleUnallocateClick = (vehicleId: string) => {
+  const handleUnallocateClick = (vehicleId: string, driverId?: string) => {
+    if (driverId) {
+      // Remove specific driver from vehicle
+      removeDriver.mutate(
+        { vehicleId, driverId },
+        {
+          onSuccess: () => {
+            toast.success("Driver removed from vehicle successfully");
+          },
+          onError: (error) => {
+            toast.error("Failed to remove driver from vehicle", {
+              description: error instanceof Error ? error.message : "Please try again.",
+            });
+          },
+        }
+      );
+      return;
+    }
+    
+    // Remove all drivers from vehicle
     allocateVehicle.mutate(
       { vehicleId, driverId: null },
       {
         onSuccess: () => {
-          toast.success("Vehicle unallocated successfully");
+          toast.success("All drivers removed from vehicle successfully");
         },
         onError: (error) => {
           toast.error("Failed to unallocate vehicle", {
@@ -266,10 +288,10 @@ const Vehicles = () => {
           <TabsList>
             <TabsTrigger value="all">All Vehicles ({vehicles.length})</TabsTrigger>
             <TabsTrigger value="allocated">
-              Allocated ({vehicles.filter(v => v.driverId !== null).length})
+              Allocated ({vehicles.filter(v => v.drivers && v.drivers.length > 0).length})
             </TabsTrigger>
             <TabsTrigger value="unallocated">
-              Unallocated ({vehicles.filter(v => v.driverId === null).length})
+              Unallocated ({vehicles.filter(v => !v.drivers || v.drivers.length === 0).length})
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -303,7 +325,7 @@ const Vehicles = () => {
               <Card
                 className={cn(
                   "transition-all",
-                  vehicle.driverId
+                  vehicle.drivers && vehicle.drivers.length > 0
                     ? "bg-success/5"
                     : "bg-warning/5"
                 )}
@@ -313,17 +335,17 @@ const Vehicles = () => {
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-lg font-mono">{vehicle.vehicleReg}</CardTitle>
                       <Badge
-                        variant={vehicle.driverId ? "default" : "secondary"}
+                        variant={vehicle.drivers && vehicle.drivers.length > 0 ? "default" : "secondary"}
                         className={cn(
-                          vehicle.driverId
+                          vehicle.drivers && vehicle.drivers.length > 0
                             ? "bg-success/10 text-success border-success/20"
                             : "bg-warning/10 text-warning border-warning/20"
                         )}
                       >
-                        {vehicle.driverId ? (
+                        {vehicle.drivers && vehicle.drivers.length > 0 ? (
                           <>
                             <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Allocated
+                            Allocated ({vehicle.drivers.length})
                           </>
                         ) : (
                           <>
@@ -361,12 +383,29 @@ const Vehicles = () => {
                       <span className="text-muted-foreground">•</span>
                       <span className="capitalize">{vehicle.vehicleFuelType}</span>
                     </div>
-                    {vehicle.driver ? (
-                      <div className="flex items-center gap-2">
-                        <SteeringWheelIcon className="h-4 w-4 text-success" />
-                        <span className="text-muted-foreground">
-                          Allocated to: <span className="font-medium text-foreground">{vehicle.driver.name}</span>
-                        </span>
+                    {vehicle.drivers && vehicle.drivers.length > 0 ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <SteeringWheelIcon className="h-4 w-4 text-success" />
+                          <span className="text-muted-foreground text-sm font-medium">Allocated to:</span>
+                        </div>
+                        <div className="pl-6 space-y-1">
+                          {vehicle.drivers.map((vd) => (
+                            <div key={vd.id} className="flex items-center justify-between group">
+                              <span className="font-medium text-foreground text-sm">{vd.driver.name}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                                onClick={() => handleUnallocateClick(vehicle.id, vd.driverId)}
+                                disabled={removeDriver.isPending}
+                                title="Remove driver from vehicle"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-warning">
@@ -377,39 +416,16 @@ const Vehicles = () => {
                   </div>
 
                   <div className="flex gap-2 pt-2">
-                    {vehicle.driverId ? (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => handleAllocateClick(vehicle.id)}
-                          disabled={allocateVehicle.isPending}
-                        >
-                          <SteeringWheelIcon className="h-3 w-3 mr-1" />
-                          Change Driver
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUnallocateClick(vehicle.id)}
-                          disabled={allocateVehicle.isPending}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleAllocateClick(vehicle.id)}
-                        disabled={allocateVehicle.isPending}
-                      >
-                        <SteeringWheelIcon className="h-3 w-3 mr-1" />
-                        Allocate Driver
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleAllocateClick(vehicle.id)}
+                      disabled={allocateVehicle.isPending}
+                    >
+                      <SteeringWheelIcon className="h-3 w-3 mr-1" />
+                      {vehicle.drivers && vehicle.drivers.length > 0 ? "Add Driver" : "Allocate Driver"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -593,16 +609,14 @@ const Vehicles = () => {
           <DialogHeader>
             <DialogTitle>Allocate Driver</DialogTitle>
             <DialogDescription>
-              Select a driver to allocate this vehicle to. If the vehicle is already allocated to another driver, it will be automatically switched. Select "Unallocated" to remove the current driver.
+              Select a driver to add to this vehicle. You can assign multiple drivers to the same vehicle. Select "Unallocated" to remove all drivers from this vehicle.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Driver</Label>
               <Select
-                value={
-                  vehicles.find((v) => v.id === selectedVehicle)?.driverId || "unallocated"
-                }
+                value=""
                 onValueChange={(value) => {
                   if (value === "unallocated") {
                     handleAllocateConfirm(null);
@@ -613,12 +627,17 @@ const Vehicles = () => {
                 disabled={allocateVehicle.isPending}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select driver" />
+                  <SelectValue placeholder="Select driver to add" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unallocated">Unallocated</SelectItem>
+                  <SelectItem value="unallocated">Remove All Drivers</SelectItem>
                   {drivers
-                    .filter((driver) => driver.status === "active")
+                    .filter((driver) => {
+                      // Filter out drivers already assigned to this vehicle
+                      const vehicle = vehicles.find((v) => v.id === selectedVehicle);
+                      const isAssigned = vehicle?.drivers?.some(vd => vd.driverId === driver.id);
+                      return driver.status === "active" && !isAssigned;
+                    })
                     .map((driver) => (
                       <SelectItem key={driver.id} value={driver.id}>
                         {driver.name} ({driver.email})

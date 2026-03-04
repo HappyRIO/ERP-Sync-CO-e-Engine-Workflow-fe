@@ -97,8 +97,8 @@ class BookingService {
     }
   }
 
-  async assignDriver(bookingId: string, driverId: string, scheduledBy: string): Promise<Booking> {
-    const booking = await apiClient.post<Booking>(`/bookings/${bookingId}/assign-driver`, { driverId });
+  async assignDriver(bookingId: string, driverId: string, scheduledBy: string, vehicleId?: string): Promise<Booking> {
+    const booking = await apiClient.post<Booking>(`/bookings/${bookingId}/assign-driver`, { driverId, vehicleId });
     return booking;
   }
 
