@@ -34,10 +34,13 @@ import {
 } from "@/components/ui/accordion";
 import { WorkflowTimeline } from "@/components/jobs/WorkflowTimeline";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
+import { BookingTypeBadge } from "@/components/bookings/BookingTypeBadge";
 import { co2eEquivalencies } from "@/lib/constants";
 import { useJob, useReassignDriver } from "@/hooks/useJobs";
 import { useAssetCategories } from "@/hooks/useAssets";
 import { useDrivers } from "@/hooks/useDrivers";
+import { useBooking } from "@/hooks/useBookings";
+import { useMemo } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { canDriverEditJob } from "@/utils/job-helpers";
@@ -65,6 +68,77 @@ const JobDetail = () => {
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState<string>("");
   
+  // Fetch booking if bookingId exists to get device details from status history
+  const { data: booking } = useBooking(job?.bookingId || null);
+  
+  // Extract device details from booking status history notes
+  const deviceDetailsMap = useMemo(() => {
+    const map = new Map<string, { make: string; model: string; deviceType?: string }>();
+    
+    if (!booking) return map;
+    
+    // Type assertion: statusHistory exists in API response but not in type definition
+    const statusHistory = (booking as any).statusHistory as Array<{
+      id: string;
+      status: string;
+      changedBy?: string;
+      notes?: string;
+      createdAt: string;
+    }> | undefined;
+    
+    if (statusHistory && statusHistory.length > 0) {
+      const creationHistory = statusHistory.find(h => 
+        h.notes && h.notes.includes('Device details:')
+      );
+      
+      if (creationHistory && creationHistory.notes) {
+        try {
+          const deviceDetailsMatch = creationHistory.notes.match(/Device details: (\[.*\])/);
+          if (deviceDetailsMatch) {
+            const deviceDetails = JSON.parse(deviceDetailsMatch[1]);
+            deviceDetails.forEach((device: any) => {
+              // Use category name as key, store device info
+              map.set(device.category, {
+                make: device.make,
+                model: device.model,
+                deviceType: device.deviceType,
+              });
+            });
+          }
+        } catch (error) {
+          // If parsing fails, return empty map
+          console.error('Failed to parse device details from booking status history:', error);
+        }
+      }
+    }
+    
+    return map;
+  }, [booking]);
+
+  // Helper function to check if Device Type should be shown for a category
+  const shouldShowDeviceType = (category: string): boolean => {
+    const categoryLower = category.toLowerCase();
+    // Only show Device Type for categories where Windows/Apple distinction is meaningful
+    // Hide for: Smart Phones, Tablets, Networking, Server, Storage (these don't use Windows/Apple)
+    return categoryLower.includes('laptop') || categoryLower.includes('desktop');
+  };
+
+  // Enrich assets with device details
+  const enrichedAssets = useMemo(() => {
+    if (!job?.assets) return [];
+    return job.assets.map(asset => {
+      const categoryName = asset.categoryName || asset.category;
+      const deviceInfo = deviceDetailsMap.get(categoryName);
+      const showDeviceType = shouldShowDeviceType(categoryName);
+      return {
+        ...asset,
+        deviceMake: deviceInfo?.make,
+        deviceModel: deviceInfo?.model,
+        deviceType: showDeviceType ? deviceInfo?.deviceType : undefined,
+      };
+    });
+  }, [job?.assets, deviceDetailsMap]);
+  
   // Filter out drivers without allocated vehicles
   const driversWithVehicles = drivers.filter(driver => driver.hasVehicle && (driver.vehicleReg || (driver.vehicles && driver.vehicles.length > 0)));
 
@@ -90,6 +164,8 @@ const JobDetail = () => {
       </div>
     );
   }
+
+  // console.log(job.assets);
 
   const totalAssets = job.assets.reduce((sum, a) => sum + a.quantity, 0);
   const netCO2e = job.co2eSaved - job.travelEmissions;
@@ -121,8 +197,13 @@ const JobDetail = () => {
           </Link>
         </Button>
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
             <h2 className="text-2xl font-bold text-foreground">{job.organisationName || job.clientName}</h2>
+            <BookingTypeBadge 
+              bookingType={job.bookingType} 
+              jmlSubType={job.jmlSubType}
+              size="sm"
+            />
             <JobStatusBadge status={job.status} />
           </div>
           <p className="text-muted-foreground font-mono">{job.erpJobNumber}</p>
@@ -135,7 +216,11 @@ const JobDetail = () => {
           <CardTitle className="text-base">Workflow Progress</CardTitle>
         </CardHeader>
         <CardContent>
-          <WorkflowTimeline currentStatus={job.status} />
+          <WorkflowTimeline 
+            currentStatus={job.status} 
+            bookingType={job.bookingType}
+            jmlSubType={job.jmlSubType}
+          />
         </CardContent>
       </Card>
 
@@ -149,16 +234,39 @@ const JobDetail = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid sm:grid-cols-2 gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-secondary">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                {job.jmlSubType === 'mover' && job.currentAddress ? (
+                  <>
+                    {/* Current Address (From) */}
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-xs text-muted-foreground mb-1">From (Collection)</p>
+                        <p className="font-medium">{job.currentSiteName || 'Current Address'}</p>
+                        <p className="text-sm text-muted-foreground">{job.currentAddress}</p>
+                        {job.currentPostcode && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{job.currentPostcode}</p>
+                        )}
+                      </div>
+                    </div>
+                    {/* New Address (To) */}
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-5 w-5 text-primary mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-xs text-muted-foreground mb-1">To (Delivery)</p>
+                        <p className="font-medium">{job.siteName}</p>
+                        <p className="text-sm text-muted-foreground">{job.siteAddress}</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <MapPin className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">{job.siteName}</p>
+                      <p className="text-sm text-muted-foreground">{job.siteAddress}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Site</p>
-                    <p className="font-medium">{job.siteName}</p>
-                    <p className="text-sm text-muted-foreground">{job.siteAddress}</p>
-                  </div>
-                </div>
+                )}
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-secondary">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -277,7 +385,7 @@ const JobDetail = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {job.assets.map((asset) => {
+                {enrichedAssets.map((asset) => {
                   // Try to find category by ID first, then by name
                   const category = assetCategories?.find(
                     (c) => c.id === (asset.categoryId || asset.category) || c.name === (asset.categoryName || asset.category)
@@ -285,28 +393,48 @@ const JobDetail = () => {
                   return (
                     <div
                       key={asset.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
+                      className="p-3 rounded-lg bg-secondary/50 space-y-1"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{category?.icon || '📦'}</span>
-                        <div>
-                          <p className="font-medium">{category?.name || asset.categoryName || asset.category}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {asset.quantity} units
-                            {asset.weight && ` • ${asset.weight}kg`}
-                          </p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{category?.icon || '📦'}</span>
+                          <div>
+                            <p className="font-medium">{category?.name || asset.categoryName || asset.category}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {asset.quantity} units
+                              {asset.weight && ` • ${asset.weight}kg`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {asset.grade && (
+                            <Badge variant="outline">Grade {asset.grade}</Badge>
+                          )}
+                          {asset.sanitised && (
+                            <Badge variant="secondary" className="bg-success/10 text-success">
+                              Sanitised
+                            </Badge>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        {asset.grade && (
-                          <Badge variant="outline">Grade {asset.grade}</Badge>
-                        )}
-                        {asset.sanitised && (
-                          <Badge variant="secondary" className="bg-success/10 text-success">
-                            Sanitised
-                          </Badge>
-                        )}
-                      </div>
+                      {/* Device details (if available) */}
+                      {asset.deviceMake || asset.deviceModel ? (
+                        <div className="pl-10 text-xs text-muted-foreground flex flex-wrap gap-x-1">
+                          {asset.deviceMake && <span>{asset.deviceMake}</span>}
+                          {asset.deviceModel && (
+                            <>
+                              {asset.deviceMake && <span>•</span>}
+                              <span>{asset.deviceModel}</span>
+                            </>
+                          )}
+                          {asset.deviceType && (
+                            <>
+                              {(asset.deviceMake || asset.deviceModel) && <span>•</span>}
+                              <span>{asset.deviceType}</span>
+                            </>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -413,10 +541,16 @@ const JobDetail = () => {
                     'en_route': 1,
                     'arrived': 2,
                     'collected': 3,
+                    'in-transit': 3.5,
+                    'in_transit': 3.5,
                     'warehouse': 4,
-                    'sanitised': 5,
-                    'graded': 6,
-                    'completed': 7,
+                    'delivery-en-route': 4.5,
+                    'delivery_en_route': 4.5,
+                    'delivery-arrived': 5,
+                    'delivery_arrived': 5,
+                    'sanitised': 6,
+                    'graded': 7,
+                    'completed': 8,
                     'booked': 0,
                     'routed': 0,
                   };
@@ -433,7 +567,13 @@ const JobDetail = () => {
                     'en_route': 'En Route',
                     'arrived': 'Arrived',
                     'collected': 'Collected',
+                    'in-transit': 'In Transit',
+                    'in_transit': 'In Transit',
                     'warehouse': 'Warehouse',
+                    'delivery-en-route': 'Delivery En Route',
+                    'delivery_en_route': 'Delivery En Route',
+                    'delivery-arrived': 'Delivery Arrived',
+                    'delivery_arrived': 'Delivery Arrived',
                     'sanitised': 'Sanitised',
                     'graded': 'Graded',
                     'completed': 'Completed',
@@ -441,13 +581,48 @@ const JobDetail = () => {
                     'routed': 'Routed',
                   };
                   
-                  // Normalize status for comparison (handle both en-route and en_route)
-                  const normalizeStatus = (status: string) => status === 'en_route' ? 'en-route' : status;
+                  // Normalize status for comparison (handle both en-route and en_route, in-transit and in_transit, etc.)
+                  const normalizeStatus = (status: string) => {
+                    if (status === 'en_route') return 'en-route';
+                    if (status === 'in_transit') return 'in-transit';
+                    if (status === 'delivery_en_route') return 'delivery-en-route';
+                    if (status === 'delivery_arrived') return 'delivery-arrived';
+                    return status;
+                  };
                   const statusesWithEvidence = new Set(
                     evidenceList.map((ev: any) => normalizeStatus(ev.status || ''))
                   );
                   
-                  const requiredStatuses = ['en-route', 'arrived', 'collected', 'warehouse'];
+                  // Get required statuses based on booking type
+                  const getRequiredStatuses = (): string[] => {
+                    const bookingType = job.bookingType;
+                    const jmlSubType = job.jmlSubType;
+                    
+                    // ITAD and Leaver: en-route, arrived, collected, warehouse
+                    if (!bookingType || bookingType === 'itad_collection' || (bookingType === 'jml' && jmlSubType === 'leaver')) {
+                      return ['en-route', 'arrived', 'collected', 'warehouse'];
+                    }
+                    
+                    // New Starter: collected, in-transit, arrived (no en-route, no warehouse)
+                    if (bookingType === 'jml' && jmlSubType === 'new_starter') {
+                      return ['collected', 'in-transit', 'arrived'];
+                    }
+                    
+                    // Mover: en-route, arrived, collected, in-transit, delivery-arrived (no warehouse)
+                    if (bookingType === 'jml' && jmlSubType === 'mover') {
+                      return ['en-route', 'arrived', 'collected', 'in-transit', 'delivery-arrived'];
+                    }
+                    
+                    // Breakfix: en-route, arrived, collected, warehouse, delivery-en-route, delivery-arrived
+                    if (bookingType === 'jml' && jmlSubType === 'breakfix') {
+                      return ['en-route', 'arrived', 'collected', 'warehouse', 'delivery-en-route', 'delivery-arrived'];
+                    }
+                    
+                    // Default: ITAD workflow
+                    return ['en-route', 'arrived', 'collected', 'warehouse'];
+                  };
+                  
+                  const requiredStatuses = getRequiredStatuses();
 
                   if (evidenceList.length === 0) {
                     return (

@@ -5,15 +5,28 @@ import { ApiError, ApiErrorType } from './api-error';
 import { apiClient } from './api-client';
 import { transformJobs, transformJob } from './data-transform';
 
+/**
+ * Convert frontend status format (hyphens) to backend format (underscores)
+ * Frontend uses: en-route, in-transit, delivery-routed, delivery-en-route, delivery-arrived
+ * Backend uses: en_route, in_transit, delivery_routed, delivery_en_route, delivery_arrived
+ */
+function convertStatusToBackendFormat(status: string): string {
+  const statusMap: Record<string, string> = {
+    'en-route': 'en_route',
+    'in-transit': 'in_transit',
+    'delivery-routed': 'delivery_routed',
+    'delivery-en-route': 'delivery_en_route',
+    'delivery-arrived': 'delivery_arrived',
+  };
+  return statusMap[status] || status;
+}
+
 class JobsService {
   async getJobs(filter?: JobsFilter, user?: User | null): Promise<Job[]> {
     const params = new URLSearchParams();
     if (filter?.status && filter.status !== 'all') {
       // Convert frontend status format to backend format
-      const statusMap: Record<string, string> = {
-        'en-route': 'en_route',
-      };
-      const backendStatus = statusMap[filter.status] || filter.status;
+      const backendStatus = convertStatusToBackendFormat(filter.status);
       params.append('status', backendStatus);
     }
     if (filter?.clientName) {
@@ -82,10 +95,7 @@ class JobsService {
 
   async updateJobStatus(jobId: string, status: Job['status']): Promise<Job> {
     // Convert frontend status format to backend format
-    const statusMap: Record<string, string> = {
-      'en-route': 'en_route',
-    };
-    const backendStatus = statusMap[status] || status;
+    const backendStatus = convertStatusToBackendFormat(status);
     
     const backendJob = await apiClient.patch<any>(`/jobs/${jobId}/status`, { 
       status: backendStatus 
@@ -94,7 +104,13 @@ class JobsService {
   }
 
   async updateJobEvidence(jobId: string, evidence: Partial<Job['evidence']> & { status?: string }): Promise<Job> {
-    const backendJob = await apiClient.patch<any>(`/jobs/${jobId}/evidence`, evidence);
+    // Convert frontend status format to backend format if status is provided
+    const backendEvidence = {
+      ...evidence,
+      ...(evidence.status && { status: convertStatusToBackendFormat(evidence.status) }),
+    };
+    
+    const backendJob = await apiClient.patch<any>(`/jobs/${jobId}/evidence`, backendEvidence);
     return transformJob(backendJob);
   }
 

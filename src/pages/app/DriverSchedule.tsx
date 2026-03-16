@@ -15,23 +15,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
+import { BookingTypeBadge } from "@/components/bookings/BookingTypeBadge";
 import { useJobs } from "@/hooks/useJobs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { kmToMiles } from "@/lib/calculations";
+import { canDriverEditJob } from "@/utils/job-helpers";
 
 const DriverSchedule = () => {
   const { user } = useAuth();
   const { data: allJobs = [], isLoading, error } = useJobs();
 
-  // Filter jobs for current driver (assigned to this driver, exclude jobs at "warehouse" or later)
-  // Jobs at "warehouse" or later should only appear in Job History
+  // Filter jobs for current driver (assigned to this driver, only show jobs driver can still work on)
+  // Jobs at or beyond driver's final status should only appear in Job History
   const driverJobs = useMemo(() => {
     return allJobs.filter(job => 
       job.driver && 
       (job.driver.id === user?.id || job.driver.name === user?.name) && 
-      !['warehouse', 'sanitised', 'graded', 'completed'].includes(job.status)
+      canDriverEditJob(job) // Only show jobs driver can still edit (not at final status)
     );
   }, [allJobs, user?.id, user?.name]);
 
@@ -45,9 +47,9 @@ const DriverSchedule = () => {
       const scheduledDate = new Date(job.scheduledDate);
       scheduledDate.setHours(0, 0, 0, 0);
       // Include jobs scheduled for today or future
-      // Also include in-progress jobs (en-route, arrived, collected) even if scheduled in the past
+      // Also include in-progress jobs (en-route, arrived, collected, in-transit, delivery-en-route) even if scheduled in the past
       const isUpcoming = scheduledDate >= today;
-      const isInProgress = ['en-route', 'arrived', 'collected', 'warehouse'].includes(job.status);
+      const isInProgress = ['en-route', 'en_route', 'arrived', 'collected', 'in-transit', 'in_transit', 'delivery-en-route', 'delivery_en_route'].includes(job.status);
       return isUpcoming || isInProgress;
     }).sort((a, b) => {
       const dateA = new Date(a.scheduledDate);
@@ -301,12 +303,28 @@ const DriverSchedule = () => {
 
                         {/* Main Info */}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-foreground mb-2">{job.organisationName || job.clientName}</h3>
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <h3 className="font-semibold text-foreground">{job.organisationName || job.clientName}</h3>
+                            <BookingTypeBadge 
+                              bookingType={job.bookingType} 
+                              jmlSubType={job.jmlSubType}
+                              size="sm"
+                            />
+                          </div>
                           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1.5">
-                              <MapPin className="h-3.5 w-3.5" />
-                              <span className="truncate">{job.siteName}</span>
-                            </div>
+                            {job.jmlSubType === 'mover' && job.currentAddress ? (
+                              <div className="flex items-center gap-1.5">
+                                <MapPin className="h-3.5 w-3.5" />
+                                <span className="truncate text-xs">
+                                  {job.currentSiteName || 'Current'} → {job.siteName}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <MapPin className="h-3.5 w-3.5" />
+                                <span className="truncate">{job.siteName}</span>
+                              </div>
+                            )}
                             <div className="flex items-center gap-1.5">
                               <Package className="h-3.5 w-3.5" />
                               <span>

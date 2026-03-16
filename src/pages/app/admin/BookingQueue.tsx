@@ -23,13 +23,18 @@ import { useReassignDriver } from "@/hooks/useJobs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getStatusLabelExtended, getStatusColor } from "@/types/booking-lifecycle";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
+import { BookingTypeBadge } from "@/components/bookings/BookingTypeBadge";
 import { toast } from "sonner";
 
 const statusGroups: { label: string; statuses: (BookingLifecycleStatus | 'cancelled')[] }[] = [
   { label: "Pending Approval", statuses: ['pending'] },
   { label: "Created", statuses: ['created'] },
-  { label: "Scheduled", statuses: ['scheduled'] },
-  { label: "In Progress", statuses: ['collected', 'sanitised', 'graded'] },
+  { label: "Scheduled", statuses: ['scheduled', 'collection_scheduled', 'delivery_scheduled'] },
+  { label: "JML - Device Management", statuses: ['device_allocated', 'courier_booked'] },
+  { label: "Collected", statuses: ['collected'] },
+  { label: "In Transit", statuses: ['in_transit'] },
+  { label: "In Progress", statuses: ['warehouse', 'sanitised', 'graded'] },
+  { label: "Delivered", statuses: ['delivered'] },
   { label: "Completed", statuses: ['completed'] },
   { label: "Cancelled", statuses: ['cancelled'] },
 ];
@@ -90,6 +95,13 @@ const BookingQueue = () => {
     }
     return acc;
   }, {} as Record<string, typeof filteredBookings>);
+
+  // Include any bookings that don't match any status group (safety net)
+  const allStatusesInGroups = new Set(statusGroups.flatMap(g => g.statuses));
+  const ungroupedBookings = filteredBookings.filter(b => !allStatusesInGroups.has(b.status));
+  if (ungroupedBookings.length > 0) {
+    groupedBookings['Other'] = ungroupedBookings;
+  }
 
   if (error) {
     return (
@@ -186,19 +198,39 @@ const BookingQueue = () => {
                       >
                         <Card className="hover:shadow-md transition-shadow h-full">
                           <CardHeader className="pb-3">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
                                 <CardTitle className="text-base mb-1">{booking.organisationName || booking.clientName}</CardTitle>
-                                <p className="text-xs font-mono text-muted-foreground">{booking.bookingNumber}</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-xs font-mono text-muted-foreground">{booking.bookingNumber}</p>
+                                  <BookingTypeBadge 
+                                    bookingType={booking.bookingType} 
+                                    jmlSubType={booking.jmlSubType}
+                                    size="sm"
+                                  />
+                                </div>
                               </div>
                               <Badge className={statusColor}>{statusLabel}</Badge>
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-3">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <MapPin className="h-4 w-4" />
-                              <span className="truncate">{booking.siteName}</span>
-                            </div>
+                            {booking.jmlSubType === 'mover' && booking.currentAddress ? (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <MapPin className="h-4 w-4" />
+                                  <span className="truncate text-xs">From: {booking.currentSiteName || 'Current'}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <MapPin className="h-4 w-4 text-primary" />
+                                  <span className="truncate text-xs">To: {booking.siteName}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <MapPin className="h-4 w-4" />
+                                <span className="truncate">{booking.siteName}</span>
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Calendar className="h-4 w-4" />
                               <span>{new Date(booking.scheduledDate).toLocaleDateString("en-GB")}</span>
@@ -260,7 +292,7 @@ const BookingQueue = () => {
                                 </Link>
                               </Button>
                             )}
-                            {booking.status === 'collected' && (
+                            {booking.status === 'warehouse' && (
                               <Button asChild className="w-full mt-2" size="sm" variant="default">
                                 <Link to={`/admin/sanitisation/${booking.id}`} className="text-inherit no-underline">
                                   Record Sanitisation

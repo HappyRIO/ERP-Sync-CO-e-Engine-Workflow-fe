@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
+import { BookingTypeBadge } from "@/components/bookings/BookingTypeBadge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { WorkflowStatus } from "@/types/jobs";
 import { useJobs } from "@/hooks/useJobs";
@@ -20,17 +21,19 @@ const allStatusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
   { value: "en-route", label: "En Route" },
   { value: "arrived", label: "Arrived" },
   { value: "collected", label: "Collected" },
+  { value: "in-transit", label: "In Transit" },
   { value: "warehouse", label: "Warehouse" },
+  { value: "sanitised", label: "Sanitised" },
   { value: "graded", label: "Graded" },
   { value: "completed", label: "Completed" },
 ];
 
 const getStatusFilters = (userRole?: string) => {
   if (userRole === 'driver') {
-    // Drivers only see jobs assigned to them: routed, en-route, arrived, collected
-    // They don't see booked (unassigned), warehouse, graded, or completed jobs
+    // Drivers see jobs assigned to them: routed, en-route, arrived, collected, in-transit
+    // They don't see booked (unassigned), warehouse, sanitised, graded, or completed jobs
     return allStatusFilters.filter(
-      filter => !['booked', 'warehouse', 'graded', 'completed'].includes(filter.value)
+      filter => !['booked', 'warehouse', 'sanitised', 'graded', 'completed'].includes(filter.value)
     );
   }
   return allStatusFilters;
@@ -144,18 +147,36 @@ const Jobs = () => {
               <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                 {/* Main Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center gap-3 mb-2 flex-wrap">
                     <h3 className="font-semibold text-foreground truncate">{job.organisationName || job.clientName}</h3>
+                    <BookingTypeBadge 
+                      bookingType={job.bookingType} 
+                      jmlSubType={job.jmlSubType}
+                      size="sm"
+                    />
                     <JobStatusBadge status={job.status} />
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span className="font-mono text-xs bg-secondary px-2 py-0.5 rounded">
                       {job.erpJobNumber}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {job.siteName}
-                    </span>
+                    {job.jmlSubType === 'mover' && job.currentAddress ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          <span className="text-xs">From: <span className="truncate">{job.currentSiteName || 'Current'}</span></span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3 text-primary" />
+                          <span className="text-xs">To: <span className="truncate">{job.siteName}</span></span>
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {job.siteName}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       {new Date(job.scheduledDate).toLocaleDateString("en-GB", {

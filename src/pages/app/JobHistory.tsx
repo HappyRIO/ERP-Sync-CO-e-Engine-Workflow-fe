@@ -6,31 +6,43 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { JobStatusBadge } from "@/components/jobs/JobStatusBadge";
+import { BookingTypeBadge } from "@/components/bookings/BookingTypeBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useJobs } from "@/hooks/useJobs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
+import { canDriverEditJob } from "@/utils/job-helpers";
 
 const JobHistory = () => {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("all");
 
-  // Get jobs with status "warehouse" or later for driver history
-  // This includes: warehouse, sanitised, graded, completed
-  // Request with status='warehouse' to trigger history mode in backend
-  // Backend will return all history statuses (warehouse, sanitised, graded, completed) when this is requested
+  // Get history jobs for driver (warehouse+ statuses)
+  // Pass 'warehouse' status to signal backend this is a history request
   const { data: allJobs = [], isLoading, error } = useJobs({
-    status: 'warehouse', // This tells the backend to return history jobs
     searchQuery: searchQuery || undefined,
+    status: 'warehouse', // Signal to backend this is a history request
   });
 
-  // Filter jobs for current driver (only show jobs assigned to this driver)
-  // Backend already filters by driverId, but double-check for safety
-  const driverJobs = (allJobs || []).filter(job => 
-    job.driver && (job.driver.id === user?.id || job.driver.name === user?.name)
-  );
+  // Filter jobs for current driver and history statuses
+  // History includes: jobs at driver's final status OR warehouse/sanitised/graded/completed
+  // Backend already filters by history statuses, so we just need to filter by driver
+  const driverJobs = useMemo(() => {
+    return (allJobs || []).filter(job => {
+      if (!job.driver || (job.driver.id !== user?.id && job.driver.name !== user?.name)) {
+        return false;
+      }
+      // Backend already returns only history statuses (warehouse+), so include all jobs returned
+      // Also include jobs at driver's final status (not editable) as a safety check
+      // For new_starter jobs, "arrived" is the final driver status
+      const isNewStarterAtArrived = job.jmlSubType === 'new_starter' && job.status === 'arrived';
+      return !canDriverEditJob(job) || 
+             ['warehouse', 'sanitised', 'graded', 'completed', 'delivery-arrived', 'delivery-routed', 'delivery-en-route'].includes(job.status) ||
+             isNewStarterAtArrived;
+    });
+  }, [allJobs, user?.id, user?.name]);
 
   // Apply date range filter
   const jobs = useMemo(() => {
@@ -60,9 +72,17 @@ const JobHistory = () => {
     }
     
     return driverJobs.filter(job => {
-      if (!job.completedDate) return false;
-      const completedDate = new Date(job.completedDate);
-      return completedDate >= cutoffDate;
+      // Use completedDate if available, otherwise use updatedAt or createdAt
+      const dateToCheck = job.completedDate 
+        ? new Date(job.completedDate)
+        : job.updatedAt 
+        ? new Date(job.updatedAt)
+        : job.createdAt 
+        ? new Date(job.createdAt)
+        : null;
+      
+      if (!dateToCheck) return false;
+      return dateToCheck >= cutoffDate;
     });
   }, [driverJobs, dateRangeFilter]);
 
@@ -201,18 +221,32 @@ const JobHistory = () => {
                 <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                   {/* Main Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <h3 className="font-semibold text-foreground truncate">{job.organisationName || job.clientName}</h3>
+                      <BookingTypeBadge 
+                        bookingType={job.bookingType} 
+                        jmlSubType={job.jmlSubType}
+                        size="sm"
+                      />
                       <JobStatusBadge status={job.status} />
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono text-xs">{job.erpJobNumber}</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5" />
-                        <span className="truncate">{job.siteName}</span>
-                      </div>
+                      {job.jmlSubType === 'mover' && job.currentAddress ? (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span className="truncate text-xs">
+                            {job.currentSiteName || 'Current'} → {job.siteName}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span className="truncate">{job.siteName}</span>
+                        </div>
+                      )}
                       {job.completedDate && (
                         <div className="flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5" />

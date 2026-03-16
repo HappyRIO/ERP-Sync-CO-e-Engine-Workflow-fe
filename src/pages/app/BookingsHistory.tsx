@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { getStatusLabelExtended, getStatusColor } from "@/types/booking-lifecycle";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
+import { BookingTypeBadge } from "@/components/bookings/BookingTypeBadge";
 
 const BookingsHistory = () => {
   const { user } = useAuth();
@@ -120,8 +121,13 @@ const BookingsHistory = () => {
                   <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                     {/* Main Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="font-semibold text-foreground truncate">{booking.organisationName || booking.clientName}</h3>
+                        <BookingTypeBadge 
+                          bookingType={booking.bookingType} 
+                          jmlSubType={booking.jmlSubType}
+                          size="sm"
+                        />
                         <Badge className={statusColor}>{statusLabel}</Badge>
                         {booking.resellerName && (
                           <Badge variant="outline" className="text-xs">
@@ -133,10 +139,23 @@ const BookingsHistory = () => {
                         <span className="font-mono text-xs bg-secondary px-2 py-0.5 rounded">
                           {booking.bookingNumber}
                         </span>
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {booking.siteName}
-                        </span>
+                        {booking.jmlSubType === 'mover' && booking.currentAddress ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              <span className="text-xs">From: <span className="truncate">{booking.currentSiteName || 'Current'}</span></span>
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3 text-primary" />
+                              <span className="text-xs">To: <span className="truncate">{booking.siteName}</span></span>
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {booking.siteName}
+                          </span>
+                        )}
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {new Date(booking.scheduledDate).toLocaleDateString("en-GB", {

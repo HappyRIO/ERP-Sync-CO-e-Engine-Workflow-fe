@@ -344,14 +344,35 @@ const BookingApproval = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Collection Site</p>
-                <p className="text-muted-foreground">{booking.siteName}</p>
-                <p className="text-muted-foreground text-xs">{booking.siteAddress}</p>
+            {booking.jmlSubType === 'mover' && booking.currentAddress ? (
+              <>
+                <div className="flex items-start gap-2 text-sm">
+                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="font-medium">From (Collection)</p>
+                    <p className="text-muted-foreground">{booking.currentSiteName || 'Current Address'}</p>
+                    <p className="text-muted-foreground text-xs">{booking.currentAddress}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 text-sm">
+                  <MapPin className="h-4 w-4 text-primary mt-0.5" />
+                  <div>
+                    <p className="font-medium">To (Delivery)</p>
+                    <p className="text-muted-foreground">{booking.siteName}</p>
+                    <p className="text-muted-foreground text-xs">{booking.siteAddress}</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Collection Site</p>
+                  <p className="text-muted-foreground">{booking.siteName}</p>
+                  <p className="text-muted-foreground text-xs">{booking.siteAddress}</p>
+                </div>
               </div>
-            </div>
+            )}
             <div className="flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <div>
@@ -528,6 +549,58 @@ const BookingApproval = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Device Details - For JML bookings */}
+      {isPending && booking.bookingType === 'jml' && booking.statusHistory && booking.statusHistory.length > 0 && (() => {
+        // Extract device details from status history notes
+        const creationHistory = booking.statusHistory.find(h => 
+          h.notes && h.notes.includes('Device details:')
+        );
+        
+        if (creationHistory && creationHistory.notes) {
+          try {
+            const deviceDetailsMatch = creationHistory.notes.match(/Device details: (\[.*\])/);
+            if (deviceDetailsMatch) {
+              const deviceDetails = JSON.parse(deviceDetailsMatch[1]);
+              return (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Device Details</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {deviceDetails.map((device: any, index: number) => (
+                        <div key={index} className="p-3 rounded-lg bg-muted/30 border">
+                          <div className="grid gap-2">
+                            <div className="flex items-center justify-between">
+                              <p className="font-medium">{device.category}</p>
+                              <Badge variant="outline">{device.deviceType}</Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                              <div>
+                                <span className="font-medium">Make:</span> {device.make}
+                              </div>
+                              <div>
+                                <span className="font-medium">Model:</span> {device.model}
+                              </div>
+                              <div>
+                                <span className="font-medium">Quantity:</span> {device.quantity}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            }
+          } catch (error) {
+            // If parsing fails, don't show device details
+          }
+        }
+        return null;
+      })()}
 
       {/* Approval Actions */}
       {!showCancelForm ? (

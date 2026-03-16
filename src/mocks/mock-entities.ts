@@ -63,6 +63,22 @@ export interface Booking {
   completedAt?: string;
   notes?: string;
   cancellationNotes?: string;
+  // JML fields
+  bookingType?: 'itad_collection' | 'jml';
+  jmlSubType?: 'new_starter' | 'leaver' | 'breakfix' | 'mover';
+  employeeName?: string;
+  employeeEmail?: string;
+  employeePhone?: string;
+  startDate?: string;
+  deviceType?: string;
+  courierTracking?: string;
+  deliveryDate?: string;
+  // Mover booking specific fields
+  currentAddress?: string;
+  currentPostcode?: string;
+  currentSiteName?: string;
+  currentLat?: number;
+  currentLng?: number;
 }
 
 export interface SanitisationRecord {

@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, Clock, Calendar, MapPin, Package, Truck, Shield, Award, FileCheck, User, Phone, Smartphone } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, Calendar, MapPin, Package, Truck, Shield, Award, FileCheck, User, Phone, Smartphone, Warehouse, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,15 +13,94 @@ import { Loader2 } from "lucide-react";
 import { getStatusLabelExtended, getStatusColor } from "@/types/booking-lifecycle";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
 import { cn } from "@/lib/utils";
+import { useMemo } from "react";
 
-const timelineSteps: { status: BookingLifecycleStatus | 'cancelled'; label: string; icon: typeof CheckCircle2; description: string }[] = [
-  { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
-  { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Driver assigned and scheduled' },
-  { status: 'collected', label: 'Collected', icon: Truck, description: 'Assets collected by driver' },
-  { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
-  { status: 'graded', label: 'Graded', icon: Award, description: 'Assets graded for resale' },
-  { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
-];
+// Helper function to get timeline steps based on booking type
+function getTimelineSteps(
+  bookingType?: 'itad_collection' | 'jml',
+  jmlSubType?: 'new_starter' | 'leaver' | 'breakfix' | 'mover' | null
+): { status: BookingLifecycleStatus | 'cancelled'; label: string; icon: typeof CheckCircle2; description: string }[] {
+  // ITAD workflow
+  if (!bookingType || bookingType === 'itad_collection') {
+    return [
+      { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
+      { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Driver assigned and scheduled' },
+      { status: 'collected', label: 'Collected', icon: Truck, description: 'Assets collected by driver' },
+      { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Assets delivered to warehouse' },
+      { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
+      { status: 'graded', label: 'Graded', icon: Award, description: 'Assets graded for resale' },
+      { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
+    ];
+  }
+
+  // JML workflows
+  if (bookingType === 'jml') {
+    if (jmlSubType === 'new_starter') {
+      return [
+        { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
+        { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Driver assigned and scheduled' },
+        { status: 'collected', label: 'Collected', icon: Truck, description: 'Device collected from warehouse' },
+        { status: 'in_transit', label: 'In Transit', icon: Navigation, description: 'Device in transit to employee' },
+        { status: 'delivered', label: 'Delivered', icon: CheckCircle2, description: 'Device delivered to employee' },
+        { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
+      ];
+    } else if (jmlSubType === 'leaver') {
+      return [
+        { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
+        { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Collection scheduled' },
+        { status: 'collected', label: 'Collected', icon: Truck, description: 'Devices collected from employee' },
+        { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Devices delivered to warehouse' },
+        { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
+        { status: 'graded', label: 'Graded', icon: Award, description: 'Devices graded' },
+        { status: 'inventory', label: 'Inventory', icon: Package, description: 'Devices added to inventory for reuse' },
+        { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
+      ];
+    } else if (jmlSubType === 'mover') {
+      // Mover: Leaver first (collect old), then New Starter (deliver new)
+      return [
+        { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
+        { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Collection scheduled' },
+        { status: 'collected', label: 'Collected (Old)', icon: Truck, description: 'Old devices collected from old location' },
+        { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Old devices at warehouse' },
+        { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
+        { status: 'graded', label: 'Graded', icon: Award, description: 'Devices graded' },
+        { status: 'inventory', label: 'Inventory', icon: Package, description: 'Old devices added to inventory' },
+        { status: 'device_allocated', label: 'New Device Allocated', icon: Package, description: 'New device allocated from inventory' },
+        { status: 'courier_booked', label: 'Courier Booked', icon: Calendar, description: 'New device courier booked' },
+        { status: 'in_transit', label: 'In Transit', icon: Navigation, description: 'New device in transit to new location' },
+        { status: 'delivered', label: 'Delivered', icon: CheckCircle2, description: 'New device delivered to new location' },
+        { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
+      ];
+    } else if (jmlSubType === 'breakfix') {
+      // Breakfix: New Starter first (deliver replacement), then Leaver (collect broken)
+      return [
+        { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
+        { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Delivery scheduled' },
+        { status: 'device_allocated', label: 'Replacement Allocated', icon: Package, description: 'Replacement device allocated from inventory' },
+        { status: 'courier_booked', label: 'Courier Booked', icon: Calendar, description: 'Replacement device courier booked' },
+        { status: 'in_transit', label: 'In Transit (Replacement)', icon: Navigation, description: 'Replacement device in transit' },
+        { status: 'delivered', label: 'Replacement Delivered', icon: CheckCircle2, description: 'Replacement device delivered' },
+        { status: 'collected', label: 'Broken Device Collected', icon: Truck, description: 'Broken device collected' },
+        { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Broken device at warehouse' },
+        { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
+        { status: 'graded', label: 'Graded', icon: Award, description: 'Broken device graded' },
+        { status: 'inventory', label: 'Inventory', icon: Package, description: 'Broken device added to inventory' },
+        { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
+      ];
+    }
+  }
+
+  // Default to ITAD if unknown
+  return [
+    { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
+    { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Driver assigned and scheduled' },
+    { status: 'collected', label: 'Collected', icon: Truck, description: 'Assets collected by driver' },
+    { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Assets delivered to warehouse' },
+    { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
+    { status: 'graded', label: 'Graded', icon: Award, description: 'Assets graded for resale' },
+    { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
+  ];
+}
 
 const BookingTimeline = () => {
   const { id } = useParams();
@@ -50,17 +129,32 @@ const BookingTimeline = () => {
     );
   }
 
+  // Get timeline steps based on booking type
+  const timelineSteps = useMemo(
+    () => getTimelineSteps(booking.bookingType, booking.jmlSubType),
+    [booking.bookingType, booking.jmlSubType]
+  );
+
   const currentStatusIndex = timelineSteps.findIndex(step => step.status === booking.status);
   const isCancelled = booking.status === 'cancelled';
 
-  const getTimestamp = (status: BookingLifecycleStatus) => {
+  const getTimestamp = (status: BookingLifecycleStatus | 'cancelled') => {
     switch (status) {
       case 'created': return booking.createdAt;
       case 'scheduled': return booking.scheduledAt;
       case 'collected': return booking.collectedAt;
+      case 'warehouse': return undefined; // warehouseAt field doesn't exist in schema
       case 'sanitised': return booking.sanitisedAt;
       case 'graded': return booking.gradedAt;
+      case 'delivery_scheduled': return booking.scheduledAt; // Re-use scheduledAt for re-delivery scheduling
+      case 'delivered': return booking.deliveryDate;
       case 'completed': return booking.completedAt;
+      case 'inventory': return undefined; // No specific timestamp field
+      case 'device_allocated': return undefined; // No specific timestamp field
+      case 'courier_booked': return undefined; // No specific timestamp field
+      case 'in_transit': return undefined; // No specific timestamp field
+      case 'cancelled': return undefined;
+      default: return undefined;
     }
   };
 

@@ -48,6 +48,8 @@ import { useBuybackCalculation } from "@/hooks/useBuyback";
 import { useCreateBooking } from "@/hooks/useBooking";
 import { geocodePostcode, geocodeAddressWithDetails } from "@/lib/calculations";
 import { validateEuropeanPostcode, isValidEuropeanCountry } from "@/lib/european-validation";
+import { BookingTypeSelector } from "@/components/booking/BookingTypeSelector";
+import { JMLSubTypeSelector } from "@/components/booking/JMLSubTypeSelector";
 
 const steps = [
   { id: 1, title: "Site Details", icon: Building2 },
@@ -60,9 +62,14 @@ interface AssetSelection {
   quantity: number;
 }
 
+type BookingType = 'itad' | 'jml' | null;
+type JMLSubType = 'new_starter' | 'leaver' | 'breakfix' | 'mover' | null;
+
 const Booking = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [bookingType, setBookingType] = useState<BookingType>(null);
+  const [jmlSubType, setJmlSubType] = useState<JMLSubType>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedClientId, setSelectedClientId] = useState<string>(""); // For resellers: selected client
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
@@ -493,6 +500,56 @@ const Booking = () => {
 
   const isBlocked = (isReseller || isAdmin) && !isLoadingClients && clients.length === 0 && !clientsError;
 
+  // Show booking type selector if not selected
+  if (!bookingType) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <BookingTypeSelector onSelect={(type) => {
+          setBookingType(type);
+          if (type === 'jml') {
+            // Will show JML sub-type selector next
+          } else {
+            // ITAD flow - continue with existing steps
+            setCurrentStep(1);
+          }
+        }} />
+      </div>
+    );
+  }
+
+  // Show JML sub-type selector if JML selected but sub-type not chosen
+  if (bookingType === 'jml' && !jmlSubType) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <JMLSubTypeSelector 
+          onSelect={(subType) => {
+            setJmlSubType(subType);
+            setCurrentStep(1);
+          }}
+          onBack={() => setBookingType(null)}
+        />
+      </div>
+    );
+  }
+
+  // For JML bookings, redirect to JML-specific pages
+  if (bookingType === 'jml' && jmlSubType) {
+    if (jmlSubType === 'new_starter') {
+      navigate('/bookings/jml/new-starter');
+      return null;
+    } else if (jmlSubType === 'leaver') {
+      navigate('/bookings/jml/leaver');
+      return null;
+    } else if (jmlSubType === 'breakfix') {
+      navigate('/bookings/jml/breakfix');
+      return null;
+    } else if (jmlSubType === 'mover') {
+      navigate('/bookings/jml/mover');
+      return null;
+    }
+  }
+
+  // ITAD Collection flow (existing code)
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Notification for no clients */}
@@ -834,22 +891,48 @@ const Booking = () => {
                     position={siteLocation}
                     onPositionChange={(position) => {
                       setSiteLocation(position);
+                      // If user selects a location on map while an existing site is selected, switch to 'new' mode
+                      if (selectedSiteId !== 'new') {
+                        setSelectedSiteId('new');
+                        // Reset site details when switching to new address
+                        setSiteDetails({
+                          siteName: "",
+                          street: "",
+                          city: "",
+                          county: "",
+                          postcode: "",
+                          country: "",
+                          contactName: "",
+                          contactPhone: "",
+                        });
+                      }
                     }}
                     onAddressDetailsChange={(details) => {
-                      // Only auto-fill if creating new site
-                      // When user clicks on map, always update address fields (even if already filled)
-                      // This allows users to correct/update the address by clicking a new location
-                      if (selectedSiteId === 'new') {
-                        setSiteDetails(prev => ({
-                          ...prev,
-                          // Update fields if provided in details (even if empty string), otherwise keep previous value
-                          street: details.street !== undefined ? details.street : prev.street,
-                          city: details.city !== undefined ? details.city : prev.city,
-                          county: details.county !== undefined ? details.county : prev.county,
-                          postcode: details.postcode !== undefined ? details.postcode : prev.postcode,
-                          country: details.country !== undefined ? details.country : prev.country,
-                        }));
+                      // If user clicks on map while an existing site is selected, switch to 'new' mode
+                      if (selectedSiteId !== 'new') {
+                        setSelectedSiteId('new');
+                        // Reset site details when switching to new address
+                        setSiteDetails({
+                          siteName: "",
+                          street: "",
+                          city: "",
+                          county: "",
+                          postcode: "",
+                          country: "",
+                          contactName: "",
+                          contactPhone: "",
+                        });
                       }
+                      // Update address fields when creating new site
+                      setSiteDetails(prev => ({
+                        ...prev,
+                        // Update fields if provided in details (even if empty string), otherwise keep previous value
+                        street: details.street !== undefined ? details.street : prev.street,
+                        city: details.city !== undefined ? details.city : prev.city,
+                        county: details.county !== undefined ? details.county : prev.county,
+                        postcode: details.postcode !== undefined ? details.postcode : prev.postcode,
+                        country: details.country !== undefined ? details.country : prev.country,
+                      }));
                     }}
                     height="450px"
                   />
@@ -1171,8 +1254,14 @@ const Booking = () => {
                     <span className="text-muted-foreground">Site</span>
                     <span className="font-semibold text-foreground">{siteDetails.siteName}</span>
                   </div>
+                  <div className="flex justify-between text-xs sm:text-sm">
+                    <span className="text-muted-foreground">Address</span>
+                    <span className="font-semibold text-foreground text-right max-w-[60%]">
+                      {[siteDetails.street, siteDetails.city, siteDetails.postcode].filter(Boolean).join(", ")}
+                    </span>
+                  </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Location</span>
+                    <span className="text-muted-foreground">Postcode</span>
                     <span className="font-semibold text-foreground">{siteDetails.postcode}</span>
                   </div>
                   {scheduledDate && (

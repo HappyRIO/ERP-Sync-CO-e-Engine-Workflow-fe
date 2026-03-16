@@ -20,6 +20,14 @@ interface BackendJob {
   charityPercent: number;
   roundTripDistanceKm?: number | null; // From booking
   roundTripDistanceMiles?: number | null; // From booking
+  bookingType?: 'itad_collection' | 'jml'; // From booking
+  jmlSubType?: 'new_starter' | 'leaver' | 'breakfix' | 'mover'; // From booking
+  // Mover booking specific fields (from booking status history)
+  currentAddress?: string;
+  currentPostcode?: string;
+  currentSiteName?: string;
+  currentLat?: number;
+  currentLng?: number;
   assets?: BackendJobAsset[];
   driver?: BackendDriver | null;
   evidence?: BackendEvidence[] | BackendEvidence | null; // Can be array (new format) or single object (backward compatibility)
@@ -79,18 +87,23 @@ interface BackendCertificate {
  * Transform backend job status to frontend format
  */
 function transformStatus(status: string): WorkflowStatus {
-  // Convert 'en_route' to 'en-route', etc.
+  // Convert 'en_route' to 'en-route', 'in_transit' to 'in-transit', etc.
   const statusMap: Record<string, WorkflowStatus> = {
     'booked': 'booked',
     'routed': 'routed',
     'en_route': 'en-route',
     'arrived': 'arrived',
     'collected': 'collected',
+    'in_transit': 'in-transit',
     'warehouse': 'warehouse',
     'sanitised': 'sanitised',
     'graded': 'graded',
     'completed': 'completed',
     'cancelled': 'cancelled',
+    // Breakfix re-delivery statuses
+    'delivery_routed': 'delivery-routed',
+    'delivery_en_route': 'delivery-en-route',
+    'delivery_arrived': 'delivery-arrived',
   };
   
   return statusMap[status] || status as WorkflowStatus;
@@ -228,6 +241,14 @@ export function transformJob(backendJob: BackendJob): Job {
     charityPercent: backendJob.charityPercent,
     roundTripDistanceKm: backendJob.roundTripDistanceKm ?? undefined,
     roundTripDistanceMiles: backendJob.roundTripDistanceMiles ?? undefined,
+    bookingType: backendJob.bookingType || 'itad_collection',
+    jmlSubType: backendJob.jmlSubType || undefined,
+    // Mover booking specific fields
+    currentAddress: backendJob.currentAddress,
+    currentPostcode: backendJob.currentPostcode,
+    currentSiteName: backendJob.currentSiteName,
+    currentLat: backendJob.currentLat,
+    currentLng: backendJob.currentLng,
     evidence: transformedEvidence as Evidence[] | Evidence | undefined,
     certificates: (backendJob.certificates || []).map(transformCertificate),
   };

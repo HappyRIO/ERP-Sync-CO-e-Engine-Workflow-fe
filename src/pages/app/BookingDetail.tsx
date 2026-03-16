@@ -1,32 +1,116 @@
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Calendar, MapPin, Package, Truck, Route, Fuel, Loader2, CheckCircle2, Shield, Award, FileCheck, User, Phone, Smartphone } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Package, Truck, Route, Fuel, Loader2, CheckCircle2, Shield, Award, FileCheck, User, Phone, Smartphone, Warehouse, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useBooking } from "@/hooks/useBookings";
 import { useJob } from "@/hooks/useJobs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getStatusLabelExtended, getStatusColor } from "@/types/booking-lifecycle";
+import { getStatusLabelExtended, getStatusColor, getStatusLabel } from "@/types/booking-lifecycle";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
+import { BookingTypeBadge } from "@/components/bookings/BookingTypeBadge";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { canDriverEditJob } from "@/utils/job-helpers";
 import { useDriver } from "@/hooks/useDrivers";
 import type { Driver } from "@/types/jobs";
+import { useMemo } from "react";
 
-const timelineSteps: { 
+// Helper function to get timeline steps based on booking type
+function getTimelineSteps(
+  bookingType?: 'itad_collection' | 'jml',
+  jmlSubType?: 'new_starter' | 'leaver' | 'breakfix' | 'mover' | null
+): { 
   status: BookingLifecycleStatus; 
   label: string; 
   icon: typeof CheckCircle2;
-}[] = [
-  { status: 'created', label: 'Created', icon: Package },
-  { status: 'scheduled', label: 'Scheduled', icon: Calendar },
-  { status: 'collected', label: 'Collected', icon: Truck },
-  { status: 'sanitised', label: 'Sanitised', icon: Shield },
-  { status: 'graded', label: 'Graded', icon: Award },
-  { status: 'completed', label: 'Completed', icon: FileCheck },
-];
+}[] {
+  // ITAD workflow
+  if (!bookingType || bookingType === 'itad_collection') {
+    return [
+      { status: 'created', label: 'Created', icon: Package },
+      { status: 'scheduled', label: 'Scheduled', icon: Calendar },
+      { status: 'collected', label: 'Collected', icon: Truck },
+      { status: 'warehouse', label: 'At Warehouse', icon: Warehouse },
+      { status: 'sanitised', label: 'Sanitised', icon: Shield },
+      { status: 'graded', label: 'Graded', icon: Award },
+      { status: 'completed', label: 'Completed', icon: FileCheck },
+    ];
+  }
+
+  // JML workflows
+  if (bookingType === 'jml') {
+    if (jmlSubType === 'new_starter') {
+      // New-starter: created → scheduled → collected → in_transit → delivered → completed
+      return [
+        { status: 'created', label: 'Created', icon: Package },
+        { status: 'scheduled', label: 'Scheduled', icon: Calendar },
+        { status: 'collected', label: 'Collected', icon: Truck },
+        { status: 'in_transit', label: 'In Transit', icon: Navigation },
+        { status: 'delivered', label: 'Delivered', icon: CheckCircle2 },
+        { status: 'completed', label: 'Completed', icon: FileCheck },
+      ];
+    } else if (jmlSubType === 'leaver') {
+      // Leaver: created → scheduled → collected → warehouse → sanitised → graded → inventory → completed
+      return [
+        { status: 'created', label: 'Created', icon: Package },
+        { status: 'scheduled', label: 'Scheduled', icon: Calendar },
+        { status: 'collected', label: 'Collected', icon: Truck },
+        { status: 'warehouse', label: 'At Warehouse', icon: Warehouse },
+        { status: 'sanitised', label: 'Sanitised', icon: Shield },
+        { status: 'graded', label: 'Graded', icon: Award },
+        { status: 'inventory', label: 'Inventory', icon: Package },
+        { status: 'completed', label: 'Completed', icon: FileCheck },
+      ];
+    } else if (jmlSubType === 'mover') {
+      // Mover: Leaver first (collect old), then New Starter (deliver new)
+      // created → scheduled → collected → warehouse → sanitised → graded → inventory → device_allocated → courier_booked → in_transit → delivered → completed
+      return [
+        { status: 'created', label: 'Created', icon: Package },
+        { status: 'scheduled', label: 'Scheduled', icon: Calendar },
+        { status: 'collected', label: 'Collected (Old)', icon: Truck },
+        { status: 'warehouse', label: 'At Warehouse', icon: Warehouse },
+        { status: 'sanitised', label: 'Sanitised', icon: Shield },
+        { status: 'graded', label: 'Graded', icon: Award },
+        { status: 'inventory', label: 'Inventory', icon: Package },
+        { status: 'device_allocated', label: 'New Device Allocated', icon: Package },
+        { status: 'courier_booked', label: 'Courier Booked', icon: Calendar },
+        { status: 'in_transit', label: 'In Transit', icon: Navigation },
+        { status: 'delivered', label: 'Delivered', icon: CheckCircle2 },
+        { status: 'completed', label: 'Completed', icon: FileCheck },
+      ];
+    } else if (jmlSubType === 'breakfix') {
+      // Breakfix: New Starter first (deliver replacement), then Leaver (collect broken)
+      // created → scheduled → device_allocated → courier_booked → in_transit → delivered → collected → warehouse → sanitised → graded → inventory → completed
+      return [
+        { status: 'created', label: 'Created', icon: Package },
+        { status: 'scheduled', label: 'Scheduled', icon: Calendar },
+        { status: 'device_allocated', label: 'Replacement Allocated', icon: Package },
+        { status: 'courier_booked', label: 'Courier Booked', icon: Calendar },
+        { status: 'in_transit', label: 'In Transit (Replacement)', icon: Navigation },
+        { status: 'delivered', label: 'Replacement Delivered', icon: CheckCircle2 },
+        { status: 'collected', label: 'Broken Device Collected', icon: Truck },
+        { status: 'warehouse', label: 'At Warehouse', icon: Warehouse },
+        { status: 'sanitised', label: 'Sanitised', icon: Shield },
+        { status: 'graded', label: 'Graded', icon: Award },
+        { status: 'inventory', label: 'Inventory', icon: Package },
+        { status: 'completed', label: 'Completed', icon: FileCheck },
+      ];
+    }
+  }
+
+  // Default to ITAD if unknown
+  return [
+    { status: 'created', label: 'Created', icon: Package },
+    { status: 'scheduled', label: 'Scheduled', icon: Calendar },
+    { status: 'collected', label: 'Collected', icon: Truck },
+    { status: 'warehouse', label: 'At Warehouse', icon: Warehouse },
+    { status: 'sanitised', label: 'Sanitised', icon: Shield },
+    { status: 'graded', label: 'Graded', icon: Award },
+    { status: 'completed', label: 'Completed', icon: FileCheck },
+  ];
+}
 
 const BookingDetail = () => {
   const { id } = useParams();
@@ -48,6 +132,79 @@ const BookingDetail = () => {
     phone: driverDetailsData.phone || '',
     // eta is optional and not available from driver service
   } : null;
+
+  // Get timeline steps based on booking type - MUST be called before conditional returns
+  const timelineSteps = useMemo(
+    () => getTimelineSteps(booking?.bookingType, booking?.jmlSubType),
+    [booking?.bookingType, booking?.jmlSubType]
+  );
+
+  // Extract device details from status history notes - MUST be called before conditional returns
+  const deviceDetailsMap = useMemo(() => {
+    const map = new Map<string, { make: string; model: string; deviceType?: string }>();
+    
+    if (!booking) return map;
+    
+    // Type assertion: statusHistory exists in API response but not in type definition
+    const statusHistory = (booking as any).statusHistory as Array<{
+      id: string;
+      status: string;
+      changedBy?: string;
+      notes?: string;
+      createdAt: string;
+    }> | undefined;
+    
+    if (statusHistory && statusHistory.length > 0) {
+      const creationHistory = statusHistory.find(h => 
+        h.notes && h.notes.includes('Device details:')
+      );
+      
+      if (creationHistory && creationHistory.notes) {
+        try {
+          const deviceDetailsMatch = creationHistory.notes.match(/Device details: (\[.*\])/);
+          if (deviceDetailsMatch) {
+            const deviceDetails = JSON.parse(deviceDetailsMatch[1]);
+            deviceDetails.forEach((device: any) => {
+              // Use category name as key, store device info
+              map.set(device.category, {
+                make: device.make,
+                model: device.model,
+                deviceType: device.deviceType,
+              });
+            });
+          }
+        } catch (error) {
+          // If parsing fails, return empty map
+          console.error('Failed to parse device details from status history:', error);
+        }
+      }
+    }
+    
+    return map;
+  }, [booking]);
+
+  // Helper function to check if Device Type should be shown for a category
+  const shouldShowDeviceType = (category: string): boolean => {
+    const categoryLower = category.toLowerCase();
+    // Only show Device Type for categories where Windows/Apple distinction is meaningful
+    // Hide for: Smart Phones, Tablets, Networking, Server, Storage (these don't use Windows/Apple)
+    return categoryLower.includes('laptop') || categoryLower.includes('desktop');
+  };
+
+  // Enrich assets with device details - MUST be called before conditional returns
+  const enrichedAssets = useMemo(() => {
+    if (!booking?.assets) return [];
+    return booking.assets.map(asset => {
+      const deviceInfo = deviceDetailsMap.get(asset.categoryName);
+      const showDeviceType = shouldShowDeviceType(asset.categoryName);
+      return {
+        ...asset,
+        deviceMake: deviceInfo?.make,
+        deviceModel: deviceInfo?.model,
+        deviceType: showDeviceType ? deviceInfo?.deviceType : undefined,
+      };
+    });
+  }, [booking?.assets, deviceDetailsMap]);
 
   if (isLoading) {
     return (
@@ -110,7 +267,14 @@ const BookingDetail = () => {
           </Link>
         </Button>
         <div className="flex-1">
+          <div className="flex items-center gap-3 mb-1">
           <h2 className="text-2xl font-bold text-foreground">{booking.organisationName || booking.clientName}</h2>
+            <BookingTypeBadge 
+              bookingType={booking.bookingType} 
+              jmlSubType={booking.jmlSubType}
+              size="sm"
+            />
+          </div>
           <p className="text-muted-foreground font-mono">{booking.bookingNumber}</p>
         </div>
         <Badge className={cn("text-sm", statusColor)}>{statusLabel}</Badge>
@@ -303,13 +467,67 @@ const BookingDetail = () => {
                   </AlertDescription>
                 </Alert>
               )}
-              <div className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">{booking.siteName}</p>
-                  <p className="text-sm text-muted-foreground">{booking.siteAddress}</p>
+
+              {/* JML Employee Details (match style of site details for ITAD) */}
+              {booking.bookingType === 'jml' && booking.employeeName && (
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-secondary">
+                    <User className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Employee</p>
+                    <p className="font-medium">{booking.employeeName}</p>
+                    {(booking.employeeEmail || booking.employeePhone) && (
+                      <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
+                        {booking.employeeEmail && (
+                          <span>{booking.employeeEmail}</span>
+                        )}
+                        {booking.employeePhone && (
+                          <span className="inline-flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {booking.employeePhone}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Site details (ITAD and JML) */}
+              {booking.jmlSubType === 'mover' && booking.currentAddress ? (
+                <>
+                  {/* Current Address (From) */}
+                  <div className="flex items-start gap-3">
+                    <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground mb-1">From (Collection)</p>
+                      <p className="font-medium">{booking.currentSiteName || 'Current Address'}</p>
+                      <p className="text-sm text-muted-foreground">{booking.currentAddress}</p>
+                      {booking.currentPostcode && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{booking.currentPostcode}</p>
+                      )}
+                    </div>
+                  </div>
+                  {/* New Address (To) */}
+                  <div className="flex items-start gap-3">
+                    <MapPin className="h-5 w-5 text-primary mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground mb-1">To (Delivery)</p>
+                      <p className="font-medium">{booking.siteName}</p>
+                      <p className="text-sm text-muted-foreground">{booking.siteAddress}</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">{booking.siteName}</p>
+                    <p className="text-sm text-muted-foreground">{booking.siteAddress}</p>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center gap-3">
                 <Calendar className="h-5 w-5 text-muted-foreground" />
                 <div>
@@ -411,13 +629,33 @@ const BookingDetail = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {booking.assets.map((asset, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <Package className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{asset.categoryName}</span>
+                {enrichedAssets.map((asset, index) => (
+                  <div key={index} className="p-3 rounded-lg bg-muted/50 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{asset.categoryName}</span>
+                      </div>
+                      <Badge variant="secondary">{asset.quantity} units</Badge>
                     </div>
-                    <Badge variant="secondary">{asset.quantity} units</Badge>
+                    {/* Device details (if available) */}
+                    {asset.deviceMake || asset.deviceModel ? (
+                      <div className="pl-7 text-xs text-muted-foreground flex flex-wrap gap-x-1">
+                        {asset.deviceMake && <span>{asset.deviceMake}</span>}
+                        {asset.deviceModel && (
+                          <>
+                            {asset.deviceMake && <span>•</span>}
+                            <span>{asset.deviceModel}</span>
+                          </>
+                        )}
+                        {asset.deviceType && (
+                          <>
+                            {(asset.deviceMake || asset.deviceModel) && <span>•</span>}
+                            <span>{asset.deviceType}</span>
+                          </>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
                 <div className="pt-3 border-t">

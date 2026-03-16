@@ -8,34 +8,160 @@ import {
   Package, 
   Shield, 
   Award, 
-  FileCheck 
+  FileCheck,
+  Warehouse,
+  Navigation
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 
 interface WorkflowTimelineProps {
   currentStatus: WorkflowStatus;
+  bookingType?: 'itad_collection' | 'jml';
+  jmlSubType?: 'new_starter' | 'leaver' | 'breakfix' | 'mover' | null;
 }
 
-const workflowSteps: { 
+// Helper function to get workflow steps based on booking type
+function getWorkflowSteps(
+  bookingType?: 'itad_collection' | 'jml',
+  jmlSubType?: 'new_starter' | 'leaver' | 'breakfix' | 'mover' | null
+): { 
   status: WorkflowStatus; 
   label: string; 
   icon: typeof CheckCircle2;
   description: string;
-}[] = [
-  { status: "booked", label: "Booked", icon: Calendar, description: "Job booking confirmed" },
-  { status: "routed", label: "Routed", icon: MapPin, description: "Route assigned to driver" },
-  { status: "en-route", label: "En Route", icon: Truck, description: "Driver traveling to site" },
-  { status: "arrived", label: "Arrived", icon: MapPin, description: "Driver arrived at collection site" },
-  { status: "collected", label: "Collected", icon: Package, description: "Assets collected from site" },
-  { status: "warehouse", label: "Warehouse", icon: Package, description: "Assets at processing facility" },
-  { status: "sanitised", label: "Sanitised", icon: Shield, description: "Data sanitisation completed" },
-  { status: "graded", label: "Graded", icon: Award, description: "Assets graded for resale" },
-  { status: "completed", label: "Completed", icon: FileCheck, description: "Job completed" },
-];
+}[] {
+  // ITAD workflow
+  if (!bookingType || bookingType === 'itad_collection') {
+    return [
+      { status: "booked", label: "Booked", icon: Calendar, description: "Job booking confirmed" },
+      { status: "routed", label: "Routed", icon: MapPin, description: "Route assigned to driver" },
+      { status: "en-route", label: "En Route", icon: Truck, description: "Driver traveling to site (no assets)" },
+      { status: "arrived", label: "Arrived", icon: MapPin, description: "Driver arrived at collection site" },
+      { status: "collected", label: "Collected", icon: Package, description: "Assets collected from site" },
+      { status: "warehouse", label: "Warehouse", icon: Warehouse, description: "Assets at processing facility" },
+      { status: "sanitised", label: "Sanitised", icon: Shield, description: "Data sanitisation completed" },
+      { status: "graded", label: "Graded", icon: Award, description: "Assets graded for resale" },
+      { status: "completed", label: "Completed", icon: FileCheck, description: "Job completed" },
+    ];
+  }
 
-export function WorkflowTimeline({ currentStatus }: WorkflowTimelineProps) {
-  const currentIndex = workflowSteps.findIndex((s) => s.status === currentStatus);
+  // JML workflows
+  if (bookingType === 'jml') {
+    if (jmlSubType === 'new_starter') {
+      // New-starter: booked → routed → collected (at warehouse) → in-transit → arrived → completed
+      return [
+        { status: "booked", label: "Booked", icon: Calendar, description: "Job booking confirmed" },
+        { status: "routed", label: "Routed", icon: MapPin, description: "Route assigned to driver" },
+        { status: "collected", label: "Collected", icon: Package, description: "Device collected from warehouse" },
+        { status: "in-transit", label: "In Transit", icon: Navigation, description: "Device in transit to employee" },
+        { status: "arrived", label: "Arrived", icon: MapPin, description: "Driver arrived at employee location" },
+        { status: "completed", label: "Completed", icon: FileCheck, description: "Device delivered and job completed" },
+      ];
+    } else if (jmlSubType === 'leaver') {
+      // Leaver: booked → routed → en-route → arrived → collected → warehouse → sanitised → graded → inventory → completed
+      return [
+        { status: "booked", label: "Booked", icon: Calendar, description: "Job booking confirmed" },
+        { status: "routed", label: "Routed", icon: MapPin, description: "Route assigned to driver" },
+        { status: "en-route", label: "En Route", icon: Truck, description: "Driver traveling to employee location" },
+        { status: "arrived", label: "Arrived", icon: MapPin, description: "Driver arrived at employee location" },
+        { status: "collected", label: "Collected", icon: Package, description: "Devices collected from employee" },
+        { status: "warehouse", label: "Warehouse", icon: Warehouse, description: "Devices at processing facility" },
+        { status: "sanitised", label: "Sanitised", icon: Shield, description: "Data sanitisation completed" },
+        { status: "graded", label: "Graded", icon: Award, description: "Devices graded" },
+        { status: "inventory", label: "Inventory", icon: Package, description: "Devices added to inventory for reuse" },
+        { status: "completed", label: "Completed", icon: FileCheck, description: "Job completed" },
+      ];
+    } else if (jmlSubType === 'mover') {
+      // Mover: Leaver first (collect old), then New Starter (deliver new)
+      // booked → routed → en-route → arrived → collected → warehouse → sanitised → graded → inventory → delivery_routed → delivery_en_route → delivery_arrived → completed
+      return [
+        { status: "booked", label: "Booked", icon: Calendar, description: "Job booking confirmed" },
+        { status: "routed", label: "Routed", icon: MapPin, description: "Route assigned to driver" },
+        { status: "en-route", label: "En Route", icon: Truck, description: "Driver traveling to old location" },
+        { status: "arrived", label: "Arrived", icon: MapPin, description: "Driver arrived at old location" },
+        { status: "collected", label: "Collected (Old)", icon: Package, description: "Old devices collected from old location" },
+        { status: "warehouse", label: "Warehouse", icon: Warehouse, description: "Old devices at processing facility" },
+        { status: "sanitised", label: "Sanitised", icon: Shield, description: "Data sanitisation completed" },
+        { status: "graded", label: "Graded", icon: Award, description: "Devices graded" },
+        { status: "inventory", label: "Inventory", icon: Package, description: "Old devices added to inventory" },
+        { status: "delivery-routed", label: "Delivery Routed", icon: MapPin, description: "New device delivery route assigned" },
+        { status: "delivery-en-route", label: "Delivery En Route", icon: Truck, description: "Driver traveling with new device" },
+        { status: "delivery-arrived", label: "Delivery Arrived", icon: MapPin, description: "Driver arrived at new location" },
+        { status: "completed", label: "Completed", icon: FileCheck, description: "Job completed" },
+      ];
+    } else if (jmlSubType === 'breakfix') {
+      // Breakfix: New Starter first (deliver replacement), then Leaver (collect broken)
+      // booked → routed → collected → in-transit → arrived → warehouse → sanitised → graded → inventory → completed
+      return [
+        { status: "booked", label: "Booked", icon: Calendar, description: "Job booking confirmed" },
+        { status: "routed", label: "Routed", icon: MapPin, description: "Replacement device route assigned" },
+        { status: "collected", label: "Collected (Replacement)", icon: Package, description: "Replacement device collected from warehouse" },
+        { status: "in-transit", label: "In Transit", icon: Navigation, description: "Replacement device in transit to employee" },
+        { status: "arrived", label: "Arrived", icon: MapPin, description: "Driver arrived at employee location" },
+        { status: "warehouse", label: "Warehouse", icon: Warehouse, description: "Broken device at processing facility" },
+        { status: "sanitised", label: "Sanitised", icon: Shield, description: "Data sanitisation completed" },
+        { status: "graded", label: "Graded", icon: Award, description: "Broken device graded" },
+        { status: "inventory", label: "Inventory", icon: Package, description: "Broken device added to inventory" },
+        { status: "completed", label: "Completed", icon: FileCheck, description: "Job completed" },
+      ];
+    }
+  }
+
+  // Default to ITAD if unknown
+  return [
+    { status: "booked", label: "Booked", icon: Calendar, description: "Job booking confirmed" },
+    { status: "routed", label: "Routed", icon: MapPin, description: "Route assigned to driver" },
+    { status: "en-route", label: "En Route", icon: Truck, description: "Driver traveling to site (no assets)" },
+    { status: "arrived", label: "Arrived", icon: MapPin, description: "Driver arrived at collection site" },
+    { status: "collected", label: "Collected", icon: Package, description: "Assets collected from site" },
+    { status: "warehouse", label: "Warehouse", icon: Warehouse, description: "Assets at processing facility" },
+    { status: "sanitised", label: "Sanitised", icon: Shield, description: "Data sanitisation completed" },
+    { status: "graded", label: "Graded", icon: Award, description: "Assets graded for resale" },
+    { status: "completed", label: "Completed", icon: FileCheck, description: "Job completed" },
+  ];
+}
+
+export function WorkflowTimeline({ currentStatus, bookingType, jmlSubType }: WorkflowTimelineProps) {
+  const workflowSteps = getWorkflowSteps(bookingType, jmlSubType);
+  
+  // Normalize status for comparison (handle both en-route and en_route, delivery statuses)
+  const normalizedStatus = currentStatus === 'en_route' ? 'en-route' 
+    : currentStatus === 'delivery_routed' ? 'delivery-routed'
+    : currentStatus === 'delivery_en_route' ? 'delivery-en-route'
+    : currentStatus === 'delivery_arrived' ? 'delivery-arrived'
+    : currentStatus;
+  
+  // Find current index - handle duplicate statuses (like 'arrived' appearing twice)
+  // For workflows with duplicate statuses, we need to determine which occurrence we're at
+  // Strategy: Find all matching indices, then determine the correct one based on workflow position
+  const matchingIndices: number[] = [];
+  workflowSteps.forEach((step, index) => {
+    const normalizedStepStatus = step.status === 'en_route' ? 'en-route' 
+      : step.status === 'delivery_routed' ? 'delivery-routed'
+      : step.status === 'delivery_en_route' ? 'delivery-en-route'
+      : step.status === 'delivery_arrived' ? 'delivery-arrived'
+      : step.status;
+    if (normalizedStepStatus === normalizedStatus) {
+      matchingIndices.push(index);
+    }
+  });
+  
+  let currentIndex = -1;
+  
+  if (matchingIndices.length === 0) {
+    // Status not found in workflow - shouldn't happen, but handle gracefully
+    currentIndex = -1;
+  } else if (matchingIndices.length === 1) {
+    // Single occurrence - use it
+    currentIndex = matchingIndices[0];
+  } else {
+    // Multiple occurrences - use the last one (most advanced position)
+    // This works because users progress sequentially through the workflow
+    // If they're at 'arrived' and it appears twice, they're at the later occurrence
+    currentIndex = matchingIndices[matchingIndices.length - 1];
+  }
+  
   const totalSteps = workflowSteps.length;
   
   // Calculate progress for horizontal layout

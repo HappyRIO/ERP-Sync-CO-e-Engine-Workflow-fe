@@ -27,7 +27,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { WorkflowStatus } from "@/types/jobs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDriver } from "@/hooks/useDrivers";
-import { canDriverEditJob } from "@/utils/job-helpers";
+import { canDriverEditJob, isDriverFinalStatus } from "@/utils/job-helpers";
 
 const DriverJobView = () => {
   const { id } = useParams();
@@ -173,18 +173,91 @@ const DriverJobView = () => {
     previousStatusRef.current = job.status;
   }, [job?.id, job?.status]);
 
+  // Helper function to get next status based on booking type
+  const getNextStatusForType = (
+    currentStatus: WorkflowStatus,
+    bookingType?: 'itad_collection' | 'jml',
+    jmlSubType?: 'new_starter' | 'leaver' | 'breakfix' | 'mover'
+  ): WorkflowStatus | null => {
+    // Normalize status (handle both en-route and en_route)
+    const normalizedStatus = currentStatus === 'en_route' ? 'en-route' : currentStatus;
+    
+    // ITAD workflow
+    if (!bookingType || bookingType === 'itad_collection') {
+      // ITAD: booked → routed → en-route → arrived → collected → warehouse (driver final status)
+      // Admin handles: warehouse → sanitised → graded → completed
+      const itadTransitions: Record<string, WorkflowStatus> = {
+        'routed': 'en-route',
+        'en-route': 'arrived',
+        'arrived': 'collected',
+        'collected': 'warehouse', // Driver final status
+        // 'warehouse' has no next status for driver - admin moves to sanitised → graded → completed
+      };
+      return itadTransitions[normalizedStatus] || null;
+    }
+    
+    // JML workflows
+    if (bookingType === 'jml') {
+      if (jmlSubType === 'new_starter') {
+        // New-starter: booked → routed → collected → in-transit → arrived (driver final status)
+        // Admin handles: arrived → completed
+        const newStarterTransitions: Record<string, WorkflowStatus> = {
+          'routed': 'collected', // Driver is at warehouse, can collect directly
+          'collected': 'in-transit',
+          'in-transit': 'arrived', // Arrived at client location (driver final status)
+          // 'arrived' has no next status for driver - admin moves to completed
+        };
+        return newStarterTransitions[normalizedStatus] || null;
+      } else if (jmlSubType === 'leaver') {
+        // Leaver: booked → routed → en-route → arrived → collected → warehouse (driver final status)
+        // Admin handles: warehouse → sanitised → graded → completed
+        const leaverTransitions: Record<string, WorkflowStatus> = {
+          'routed': 'en-route',
+          'en-route': 'arrived',
+          'arrived': 'collected',
+          'collected': 'warehouse', // Driver final status
+          // 'warehouse' has no next status for driver - admin moves to sanitised → graded → completed
+        };
+        return leaverTransitions[normalizedStatus] || null;
+      } else if (jmlSubType === 'mover') {
+        // Mover: booked → routed → en-route → arrived → collected → in-transit → delivery_arrived (driver final status)
+        // Admin handles: delivery-arrived → completed
+        const moverTransitions: Record<string, WorkflowStatus> = {
+          'routed': 'en-route',
+          'en-route': 'arrived',
+          'arrived': 'collected', // First arrived (at old office)
+          'collected': 'in-transit',
+          'in-transit': 'delivery-arrived', // Arrived at new office (driver final status)
+          // 'delivery-arrived' has no next status for driver - admin moves to completed
+        };
+        return moverTransitions[normalizedStatus] || null;
+      } else if (jmlSubType === 'breakfix') {
+        // Breakfix: booked → routed → en-route → arrived → collected → warehouse → sanitised → graded → delivery_routed → delivery_en_route → delivery_arrived (driver final status)
+        // Admin handles: delivery-arrived → completed
+        const breakfixTransitions: Record<string, WorkflowStatus> = {
+          'booked': 'routed',
+          'routed': 'en-route',
+          'en-route': 'arrived',
+          'arrived': 'collected',
+          'collected': 'warehouse',
+          'warehouse': 'sanitised',
+          'sanitised': 'graded',
+          'graded': 'delivery-routed', // Re-delivery routing
+          'delivery-routed': 'delivery-en-route', // Re-delivery en route
+          'delivery-en-route': 'delivery-arrived', // Re-delivery arrival (driver final status)
+          // 'delivery-arrived' has no next status for driver - admin moves to completed
+        };
+        return breakfixTransitions[normalizedStatus] || null;
+      }
+    }
+    
+    return null;
+  };
+
   const nextStatus = useMemo((): WorkflowStatus | null => {
     if (!job) return null;
-    const statusTransitions: Record<string, WorkflowStatus> = {
-      'routed': 'en-route',
-      'en-route': 'arrived',
-      'arrived': 'collected',
-      'collected': 'warehouse',
-    };
-    // But we'll show "warehouse" as the primary next status
-    // "completed" can be accessed via a separate action if needed
-    return statusTransitions[job.status] || null;
-  }, [job?.status]);
+    return getNextStatusForType(job.status, job.bookingType, job.jmlSubType);
+  }, [job?.status, job?.bookingType, job?.jmlSubType]);
 
   // Normalize status for comparison (handle both en-route and en_route)
   const normalizeStatus = (status: string) => {
@@ -193,14 +266,18 @@ const DriverJobView = () => {
   };
 
   // Statuses that require evidence submission (these are the statuses FOR which evidence is submitted)
-  const statusesRequiringEvidence: WorkflowStatus[] = ['en-route', 'arrived', 'collected', 'warehouse'];
+  // Includes: en-route, arrived, collected, warehouse, in-transit (for new_starter/mover), delivery-arrived, delivery-en-route (for breakfix)
+  const statusesRequiringEvidence: WorkflowStatus[] = ['en-route', 'arrived', 'collected', 'warehouse', 'in-transit', 'delivery-arrived', 'delivery-en-route'];
   
   // Evidence is ALWAYS submitted for the NEXT status (not current)
   // Pattern: Driver in status X submits evidence for status Y (next status) → job moves to status Y
   // - "Routed" → submit evidence for "en-route" → move to "en-route"
   // - "En-route" → submit evidence for "arrived" → move to "arrived"
   // - "Arrived" → submit evidence for "collected" → move to "collected"
-  // - "Collected" → submit evidence for "warehouse" → move to "warehouse"
+  // - "Collected" → submit evidence for "warehouse" (ITAD/Leaver) or "in-transit" (New Starter/Mover) → move to next status
+  // - "In-transit" → submit evidence for "arrived" (New Starter) or "delivery-arrived" (Mover) → move to next status
+  // - "Delivery-routed" → submit evidence for "delivery-en-route" (Breakfix) → move to "delivery-en-route"
+  // - "Delivery-en-route" → submit evidence for "delivery-arrived" (Breakfix) → move to "delivery-arrived"
   const evidenceTargetStatus = useMemo(() => {
     if (!job || !nextStatus) return null;
     // Always submit evidence for the next status (if it requires evidence)
@@ -222,10 +299,18 @@ const DriverJobView = () => {
   // Silent redirect - no toast message
   useEffect(() => {
     if (job && !canEditBase) {
-      // Job is beyond editable range - redirect to job detail page silently
-      navigate(`/jobs/${job.id}`, { replace: true });
+      // If this is the driver's final status, redirect to job history
+      // Otherwise, redirect to job detail page
+      if (isDriver && isDriverFinalStatus(job, job.status)) {
+        navigate('/jobs/history', { replace: true });
+      } else if (isDriver && (job.status === 'completed')) {
+        // Completed jobs also go to history
+        navigate('/jobs/history', { replace: true });
+      } else {
+        navigate(`/jobs/${job.id}`, { replace: true });
+      }
     }
-  }, [job, canEditBase, navigate]);
+  }, [job, canEditBase, navigate, isDriver]);
 
   const evidenceForNextStatus = useMemo(() => {
     if (!job?.evidence || !evidenceTargetStatus) return null;
@@ -396,8 +481,13 @@ const DriverJobView = () => {
                 toast.success("Evidence saved and job status updated!", {
                   description: `Job status changed to ${nextStatus}.`,
                 });
-                // Navigate back to Route & Schedule page after successful submission
-                navigate('/driver/schedule');
+                // If this is the driver's final status, redirect to job history
+                // Otherwise, redirect to schedule
+                if (job && isDriverFinalStatus(job, nextStatus)) {
+                  navigate('/jobs/history');
+                } else {
+                  navigate('/driver/schedule');
+                }
               },
               onError: (error) => {
                 toast.error("Evidence saved but failed to update job status", {

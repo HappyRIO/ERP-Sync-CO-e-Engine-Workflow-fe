@@ -117,12 +117,12 @@ const Sanitisation = () => {
     );
   }
 
-  if (booking.status !== 'collected' && booking.status !== 'sanitised' && booking.status !== 'graded' && booking.status !== 'completed') {
+  if (booking.status !== 'collected' && booking.status !== 'warehouse' && booking.status !== 'sanitised' && booking.status !== 'graded' && booking.status !== 'completed') {
     return (
       <div className="space-y-6">
         <Alert>
           <AlertDescription>
-            Sanitisation can only be performed on collected bookings. Current status: {booking.status}
+            Sanitisation can only be performed on collected or warehouse bookings. Current status: {booking.status}
           </AlertDescription>
         </Alert>
         <Button asChild>
@@ -150,9 +150,9 @@ const Sanitisation = () => {
   const handleMoveToNextStatus = () => {
     if (!id || !booking) return;
     
-    // Only update status if moving from 'collected' to 'sanitised'
+    // Update status if moving from 'collected' or 'warehouse' to 'sanitised'
     // Do NOT update to 'graded' - that should only happen after actual grading is completed
-    if (booking.status === 'collected') {
+    if (booking.status === 'collected' || booking.status === 'warehouse') {
       // Update to 'sanitised' status
       updateBookingStatus.mutate(
         { bookingId: id, status: 'sanitised' },
@@ -385,7 +385,7 @@ const Sanitisation = () => {
       </div>
 
       {/* Approval Button */}
-      {allAssetsSanitised && booking.status === 'collected' && (
+      {allAssetsSanitised && (booking.status === 'collected' || booking.status === 'warehouse') && (
         <Card className="bg-success/5 border-success/20 border-2">
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

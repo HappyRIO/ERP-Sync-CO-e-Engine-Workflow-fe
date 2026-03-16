@@ -40,6 +40,12 @@ import Login from "./pages/app/Login";
 import Signup from "./pages/app/Signup";
 import AcceptInvite from "./pages/app/AcceptInvite";
 import NotFound from "./pages/app/NotFound";
+import JMLNewStarter from "./pages/app/JMLNewStarter";
+import JMLLeaver from "./pages/app/JMLLeaver";
+import JMLBreakfix from "./pages/app/JMLBreakfix";
+import JMLMover from "./pages/app/JMLMover";
+import Inventory from "./pages/app/Inventory";
+import JMLBookings from "./pages/app/admin/JMLBookings";
 
 const queryClient = new QueryClient();
 
@@ -96,8 +102,40 @@ const App = () => (
                 <Route
                   path="/booking"
                   element={
-                    <ProtectedRoute allowedRoles={['client', 'admin']}>
+                    <ProtectedRoute allowedRoles={['client', 'admin', 'reseller']}>
                       <Booking />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/bookings/jml/new-starter"
+                  element={
+                    <ProtectedRoute allowedRoles={['client', 'admin', 'reseller']}>
+                      <JMLNewStarter />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/bookings/jml/leaver"
+                  element={
+                    <ProtectedRoute allowedRoles={['client', 'admin', 'reseller']}>
+                      <JMLLeaver />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/bookings/jml/breakfix"
+                  element={
+                    <ProtectedRoute allowedRoles={['client', 'admin', 'reseller']}>
+                      <JMLBreakfix />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/bookings/jml/mover"
+                  element={
+                    <ProtectedRoute allowedRoles={['client', 'admin', 'reseller']}>
+                      <JMLMover />
                     </ProtectedRoute>
                   }
                 />
@@ -170,6 +208,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin']}>
                       <BookingQueue />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/jml-bookings"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <JMLBookings />
                     </ProtectedRoute>
                   }
                 />
@@ -250,6 +296,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin', 'client']}>
                       <Sites />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/inventory"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'client']}>
+                      <Inventory />
                     </ProtectedRoute>
                   }
                 />

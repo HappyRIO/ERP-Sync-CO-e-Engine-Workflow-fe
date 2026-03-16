@@ -14,7 +14,8 @@ import {
   Route as RouteIcon,
   MapPin,
   Icon,
-  Briefcase
+  Briefcase,
+  Package
 } from "lucide-react";
 import { steeringWheel } from "@lucide/lab";
 import { NavLink, useLocation } from "react-router-dom";
@@ -67,6 +68,7 @@ const getMainNavItems = (role: string) => {
     { title: "Users", url: "/users", icon: Users, roles: ['admin'] },
     { title: "Clients", url: "/clients", icon: Building2, roles: ['admin', 'reseller'] },
     { title: "Sites", url: "/sites", icon: MapPin, roles: ['admin', 'client'] },
+    { title: "Inventory", url: "/inventory", icon: Package, roles: ['admin', 'client'] },
     { title: "Drivers", url: "/admin/drivers", icon: SteeringWheelIcon, roles: ['admin'] },
     { title: "Vehicles", url: "/admin/vehicles", icon: Truck, roles: ['admin'] },
     { title: "CO₂e Dashboard", url: "/co2e", icon: Leaf, roles: ['admin', 'client', 'reseller'] },

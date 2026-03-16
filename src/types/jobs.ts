@@ -3,13 +3,18 @@
 export type WorkflowStatus = 
   | 'booked' 
   | 'routed' 
-  | 'en-route' 
-  | 'arrived'    // Driver has arrived at collection site
+  | 'en-route'     // Vehicle traveling WITHOUT assets (going to pickup location)
+  | 'arrived'      // Driver has arrived at collection site
   | 'collected' 
+  | 'in-transit'   // Vehicle traveling WITH assets (transporting assets)
   | 'warehouse' 
   | 'sanitised' 
   | 'graded' 
-  | 'completed';
+  | 'completed'
+  | 'delivery-routed'   // Breakfix re-delivery routing
+  | 'delivery-en-route' // Breakfix re-delivery en route
+  | 'delivery-arrived' // Breakfix re-delivery arrival
+  | 'inventory';    // Leaver: Added to inventory (handles both reuse and disposal)
 
 export interface Job {
   id: string;
@@ -30,6 +35,15 @@ export interface Job {
   charityPercent: number;
   roundTripDistanceKm?: number | null; // From booking (actual calculated distance)
   roundTripDistanceMiles?: number | null; // From booking (actual calculated distance)
+  bookingType?: 'itad_collection' | 'jml'; // From booking
+  jmlSubType?: 'new_starter' | 'leaver' | 'breakfix' | 'mover'; // From booking
+  // Mover booking specific fields (from booking)
+  currentAddress?: string;
+  currentPostcode?: string;
+  currentSiteName?: string;
+  currentLat?: number;
+  currentLng?: number;
+  postcode?: string; // Postcode for the main site address
   // Driver journey fields (entered before starting journey in routed status)
   dial2Collection?: string | null;
   securityRequirements?: string | null;

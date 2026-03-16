@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { statusConfig } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { BookingTypeBadge } from "@/components/bookings/BookingTypeBadge";
 import { useJobs } from "@/hooks/useJobs";
 
 export function RecentJobsTable() {
@@ -50,8 +51,13 @@ export function RecentJobsTable() {
               className="flex items-center gap-4 p-3 rounded-lg hover:bg-secondary/50 transition-colors group"
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <p className="font-medium text-foreground truncate">{job.clientName}</p>
+                  <BookingTypeBadge 
+                    bookingType={job.bookingType} 
+                    jmlSubType={job.jmlSubType}
+                    size="sm"
+                  />
                   <Badge 
                     variant="secondary" 
                     className={cn("text-xs", status.bgColor, status.color)}
@@ -61,7 +67,13 @@ export function RecentJobsTable() {
                 </div>
                 <div className="flex items-center gap-1 text-sm text-muted-foreground">
                   <MapPin className="h-3 w-3" />
-                  <span className="truncate">{job.siteName}</span>
+                  {job.jmlSubType === 'mover' && job.currentAddress ? (
+                    <span className="truncate text-xs">
+                      {job.currentSiteName || 'Current'} → {job.siteName}
+                    </span>
+                  ) : (
+                    <span className="truncate">{job.siteName}</span>
+                  )}
                   <span className="mx-1">•</span>
                   <span>{job.erpJobNumber}</span>
                 </div>
