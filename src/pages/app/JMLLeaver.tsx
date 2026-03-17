@@ -172,6 +172,23 @@ const JMLLeaver = () => {
     }
   }, [selectedClientId, isAdmin, isReseller]);
 
+  // Default email/phone for step 1 (does not override user edits)
+  useEffect(() => {
+    if (isClient && clientProfile) {
+      if (!personalEmail.trim() && clientProfile.email) setPersonalEmail(clientProfile.email);
+      if (!phone.trim() && clientProfile.phone) setPhone(clientProfile.phone);
+      return;
+    }
+
+    if ((isAdmin || isReseller) && selectedClientId) {
+      const selectedClient = clients.find(c => c.id === selectedClientId);
+      if (selectedClient) {
+        if (!personalEmail.trim() && selectedClient.email) setPersonalEmail(selectedClient.email);
+        if (!phone.trim() && selectedClient.contactPhone) setPhone(selectedClient.contactPhone);
+      }
+    }
+  }, [isClient, clientProfile, isAdmin, isReseller, selectedClientId, clients, personalEmail, phone]);
+
   // Auto-geocode postcode when manually entered (for new addresses only)
   useEffect(() => {
     if (selectedSiteId !== 'new' || !siteDetails.postcode.trim()) {

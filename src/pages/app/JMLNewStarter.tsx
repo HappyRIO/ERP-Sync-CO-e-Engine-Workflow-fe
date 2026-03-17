@@ -103,6 +103,23 @@ const JMLNewStarter = () => {
     }
   }, [selectedClientId, isAdmin, isReseller]);
 
+  // Default email/phone for step 1 (does not override user edits)
+  useEffect(() => {
+    if (isClient && clientProfile) {
+      if (!email.trim() && clientProfile.email) setEmail(clientProfile.email);
+      if (!phone.trim() && clientProfile.phone) setPhone(clientProfile.phone);
+      return;
+    }
+
+    if ((isAdmin || isReseller) && selectedClientId) {
+      const selectedClient = clients.find(c => c.id === selectedClientId);
+      if (selectedClient) {
+        if (!email.trim() && selectedClient.email) setEmail(selectedClient.email);
+        if (!phone.trim() && selectedClient.contactPhone) setPhone(selectedClient.contactPhone);
+      }
+    }
+  }, [isClient, clientProfile, isAdmin, isReseller, selectedClientId, clients, email, phone]);
+
   // Auto-geocode postcode when manually entered (for new addresses only)
   useEffect(() => {
     if (selectedSiteId !== 'new' || !siteDetails.postcode.trim()) {

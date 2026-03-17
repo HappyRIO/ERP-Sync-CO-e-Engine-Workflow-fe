@@ -529,27 +529,6 @@ const BookingApproval = () => {
         </Card>
       )}
 
-      {/* Assets List - Only for pending bookings */}
-      {isPending && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Assets</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {booking.assets.map((asset) => (
-                <div key={asset.categoryId} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div>
-                    <p className="font-medium">{asset.categoryName}</p>
-                    <p className="text-sm text-muted-foreground">Quantity: {asset.quantity} units</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Device Details - For JML bookings */}
       {isPending && booking.bookingType === 'jml' && booking.statusHistory && booking.statusHistory.length > 0 && (() => {
         // Extract device details from status history notes
@@ -574,9 +553,11 @@ const BookingApproval = () => {
                           <div className="grid gap-2">
                             <div className="flex items-center justify-between">
                               <p className="font-medium">{device.category}</p>
-                              <Badge variant="outline">{device.deviceType}</Badge>
+                              {(device.category === 'Laptop' || device.category === 'Desktop') && device.deviceType ? (
+                                <Badge variant="outline">{device.deviceType}</Badge>
+                              ) : null}
                             </div>
-                            <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                               <div>
                                 <span className="font-medium">Make:</span> {device.make}
                               </div>
