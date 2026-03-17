@@ -29,18 +29,20 @@ const JobHistory = () => {
   // Filter jobs for current driver and history statuses
   // History includes: jobs at driver's final status OR warehouse/sanitised/graded/completed
   // Backend already filters by history statuses, so we just need to filter by driver
+  // Drivers only see ITAD collection jobs, not JML jobs (handled by couriers)
   const driverJobs = useMemo(() => {
     return (allJobs || []).filter(job => {
       if (!job.driver || (job.driver.id !== user?.id && job.driver.name !== user?.name)) {
         return false;
       }
+      // Only show ITAD collection jobs for drivers
+      if (job.bookingType !== 'itad_collection') {
+        return false;
+      }
       // Backend already returns only history statuses (warehouse+), so include all jobs returned
       // Also include jobs at driver's final status (not editable) as a safety check
-      // For new_starter jobs, "arrived" is the final driver status
-      const isNewStarterAtArrived = job.jmlSubType === 'new_starter' && job.status === 'arrived';
       return !canDriverEditJob(job) || 
-             ['warehouse', 'sanitised', 'graded', 'completed', 'delivery-arrived', 'delivery-routed', 'delivery-en-route'].includes(job.status) ||
-             isNewStarterAtArrived;
+             ['warehouse', 'sanitised', 'graded', 'completed'].includes(job.status);
     });
   }, [allJobs, user?.id, user?.name]);
 

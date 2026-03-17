@@ -38,17 +38,17 @@ function getTimelineSteps(
     if (jmlSubType === 'new_starter') {
       return [
         { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
-        { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Driver assigned and scheduled' },
-        { status: 'collected', label: 'Collected', icon: Truck, description: 'Device collected from warehouse' },
-        { status: 'in_transit', label: 'In Transit', icon: Navigation, description: 'Device in transit to employee' },
-        { status: 'delivered', label: 'Delivered', icon: CheckCircle2, description: 'Device delivered to employee' },
-        { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
+        { status: 'device_allocated', label: 'Device Allocated', icon: Package, description: 'Items picked, packed, and serial numbers allocated' },
+        { status: 'courier_booked', label: 'Courier Booked', icon: Calendar, description: 'Courier booked and tracking number inputted' },
+        { status: 'dispatched', label: 'Dispatched', icon: Truck, description: 'Courier picked up package' },
+        { status: 'delivered', label: 'Delivered', icon: CheckCircle2, description: 'Package arrived at new user and received' },
+        { status: 'completed', label: 'Completed', icon: FileCheck, description: 'ERP and connected shake hands, ticket closed' },
       ];
     } else if (jmlSubType === 'leaver') {
       return [
         { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
-        { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Collection scheduled' },
-        { status: 'collected', label: 'Collected', icon: Truck, description: 'Devices collected from employee' },
+        { status: 'collection_scheduled', label: 'Collection Scheduled', icon: Calendar, description: 'Courier collection scheduled' },
+        { status: 'collected', label: 'Collected', icon: Truck, description: 'Devices collected by courier from employee' },
         { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Devices delivered to warehouse' },
         { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
         { status: 'graded', label: 'Graded', icon: Award, description: 'Devices graded' },
@@ -59,28 +59,25 @@ function getTimelineSteps(
       // Mover: Leaver first (collect old), then New Starter (deliver new)
       return [
         { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
-        { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Collection scheduled' },
-        { status: 'collected', label: 'Collected (Old)', icon: Truck, description: 'Old devices collected from old location' },
-        { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Old devices at warehouse' },
-        { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
-        { status: 'graded', label: 'Graded', icon: Award, description: 'Devices graded' },
-        { status: 'inventory', label: 'Inventory', icon: Package, description: 'Old devices added to inventory' },
-        { status: 'device_allocated', label: 'New Device Allocated', icon: Package, description: 'New device allocated from inventory' },
-        { status: 'courier_booked', label: 'Courier Booked', icon: Calendar, description: 'New device courier booked' },
-        { status: 'in_transit', label: 'In Transit', icon: Navigation, description: 'New device in transit to new location' },
-        { status: 'delivered', label: 'Delivered', icon: CheckCircle2, description: 'New device delivered to new location' },
+        { status: 'collection_scheduled', label: 'Collection Scheduled', icon: Calendar, description: 'Courier collection scheduled' },
+        { status: 'collected', label: 'Collected', icon: Truck, description: 'Devices collected by courier from old location' },
+        { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Devices at warehouse' },
+        { status: 'inventory', label: 'Inventory', icon: Package, description: 'Devices added to inventory' },
+        { status: 'device_allocated', label: 'Device Allocated', icon: Package, description: 'Device allocated from inventory' },
+        { status: 'courier_booked', label: 'Courier Booked', icon: Calendar, description: 'Device courier booked' },
+        { status: 'dispatched', label: 'Dispatched', icon: Truck, description: 'Courier picked up device' },
+        { status: 'delivered', label: 'Delivered', icon: CheckCircle2, description: 'Device delivered to new location' },
         { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
       ];
     } else if (jmlSubType === 'breakfix') {
       // Breakfix: New Starter first (deliver replacement), then Leaver (collect broken)
       return [
         { status: 'created', label: 'Created', icon: Package, description: 'Booking request created' },
-        { status: 'scheduled', label: 'Scheduled', icon: Calendar, description: 'Delivery scheduled' },
         { status: 'device_allocated', label: 'Replacement Allocated', icon: Package, description: 'Replacement device allocated from inventory' },
         { status: 'courier_booked', label: 'Courier Booked', icon: Calendar, description: 'Replacement device courier booked' },
-        { status: 'in_transit', label: 'In Transit (Replacement)', icon: Navigation, description: 'Replacement device in transit' },
+        { status: 'dispatched', label: 'Dispatched', icon: Truck, description: 'Courier picked up replacement device' },
         { status: 'delivered', label: 'Replacement Delivered', icon: CheckCircle2, description: 'Replacement device delivered' },
-        { status: 'collected', label: 'Broken Device Collected', icon: Truck, description: 'Broken device collected' },
+        { status: 'collected', label: 'Broken Device Collected', icon: Truck, description: 'Broken device collected by courier' },
         { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Broken device at warehouse' },
         { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
         { status: 'graded', label: 'Graded', icon: Award, description: 'Broken device graded' },
@@ -146,13 +143,13 @@ const BookingTimeline = () => {
       case 'warehouse': return undefined; // warehouseAt field doesn't exist in schema
       case 'sanitised': return booking.sanitisedAt;
       case 'graded': return booking.gradedAt;
-      case 'delivery_scheduled': return booking.scheduledAt; // Re-use scheduledAt for re-delivery scheduling
       case 'delivered': return booking.deliveryDate;
       case 'completed': return booking.completedAt;
       case 'inventory': return undefined; // No specific timestamp field
       case 'device_allocated': return undefined; // No specific timestamp field
       case 'courier_booked': return undefined; // No specific timestamp field
-      case 'in_transit': return undefined; // No specific timestamp field
+      case 'dispatched': return undefined; // No specific timestamp field
+      case 'collection_scheduled': return booking.scheduledAt; // Re-use scheduledAt for collection scheduling
       case 'cancelled': return undefined;
       default: return undefined;
     }

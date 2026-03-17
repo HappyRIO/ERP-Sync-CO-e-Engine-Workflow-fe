@@ -42,20 +42,20 @@ function getTimelineSteps(
   // JML workflows
   if (bookingType === 'jml') {
     if (jmlSubType === 'new_starter') {
-      // New-starter: created → scheduled → collected → in_transit → delivered → completed
+      // New-starter: created → device_allocated → courier_booked → dispatched → delivered → completed
       return [
         { status: 'created', label: 'Created', icon: Package },
-        { status: 'scheduled', label: 'Scheduled', icon: Calendar },
-        { status: 'collected', label: 'Collected', icon: Truck },
-        { status: 'in_transit', label: 'In Transit', icon: Navigation },
+        { status: 'device_allocated', label: 'Device Allocated', icon: Package },
+        { status: 'courier_booked', label: 'Courier Booked', icon: Calendar },
+        { status: 'dispatched', label: 'Dispatched', icon: Truck },
         { status: 'delivered', label: 'Delivered', icon: CheckCircle2 },
         { status: 'completed', label: 'Completed', icon: FileCheck },
       ];
     } else if (jmlSubType === 'leaver') {
-      // Leaver: created → scheduled → collected → warehouse → sanitised → graded → inventory → completed
+      // Leaver: created → collection_scheduled → collected → warehouse → sanitised → graded → inventory → completed
       return [
         { status: 'created', label: 'Created', icon: Package },
-        { status: 'scheduled', label: 'Scheduled', icon: Calendar },
+        { status: 'collection_scheduled', label: 'Collection Scheduled', icon: Calendar },
         { status: 'collected', label: 'Collected', icon: Truck },
         { status: 'warehouse', label: 'At Warehouse', icon: Warehouse },
         { status: 'sanitised', label: 'Sanitised', icon: Shield },
@@ -65,30 +65,27 @@ function getTimelineSteps(
       ];
     } else if (jmlSubType === 'mover') {
       // Mover: Leaver first (collect old), then New Starter (deliver new)
-      // created → scheduled → collected → warehouse → sanitised → graded → inventory → device_allocated → courier_booked → in_transit → delivered → completed
+      // created → collection_scheduled → collected → warehouse → inventory → device_allocated → courier_booked → dispatched → delivered → completed
       return [
         { status: 'created', label: 'Created', icon: Package },
-        { status: 'scheduled', label: 'Scheduled', icon: Calendar },
-        { status: 'collected', label: 'Collected (Old)', icon: Truck },
+        { status: 'collection_scheduled', label: 'Collection Scheduled', icon: Calendar },
+        { status: 'collected', label: 'Collected', icon: Truck },
         { status: 'warehouse', label: 'At Warehouse', icon: Warehouse },
-        { status: 'sanitised', label: 'Sanitised', icon: Shield },
-        { status: 'graded', label: 'Graded', icon: Award },
         { status: 'inventory', label: 'Inventory', icon: Package },
-        { status: 'device_allocated', label: 'New Device Allocated', icon: Package },
+        { status: 'device_allocated', label: 'Device Allocated', icon: Package },
         { status: 'courier_booked', label: 'Courier Booked', icon: Calendar },
-        { status: 'in_transit', label: 'In Transit', icon: Navigation },
+        { status: 'dispatched', label: 'Dispatched', icon: Truck },
         { status: 'delivered', label: 'Delivered', icon: CheckCircle2 },
         { status: 'completed', label: 'Completed', icon: FileCheck },
       ];
     } else if (jmlSubType === 'breakfix') {
       // Breakfix: New Starter first (deliver replacement), then Leaver (collect broken)
-      // created → scheduled → device_allocated → courier_booked → in_transit → delivered → collected → warehouse → sanitised → graded → inventory → completed
+      // created → device_allocated → courier_booked → dispatched → delivered → collected → warehouse → sanitised → graded → inventory → completed
       return [
         { status: 'created', label: 'Created', icon: Package },
-        { status: 'scheduled', label: 'Scheduled', icon: Calendar },
         { status: 'device_allocated', label: 'Replacement Allocated', icon: Package },
         { status: 'courier_booked', label: 'Courier Booked', icon: Calendar },
-        { status: 'in_transit', label: 'In Transit (Replacement)', icon: Navigation },
+        { status: 'dispatched', label: 'Dispatched', icon: Truck },
         { status: 'delivered', label: 'Replacement Delivered', icon: CheckCircle2 },
         { status: 'collected', label: 'Broken Device Collected', icon: Truck },
         { status: 'warehouse', label: 'At Warehouse', icon: Warehouse },

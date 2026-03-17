@@ -24,6 +24,7 @@ import Drivers from "./pages/app/admin/Drivers";
 import Vehicles from "./pages/app/admin/Vehicles";
 import BookingQueue from "./pages/app/admin/BookingQueue";
 import Assignment from "./pages/app/admin/Assignment";
+import DeviceAllocation from "./pages/app/admin/DeviceAllocation";
 import Sanitisation from "./pages/app/admin/Sanitisation";
 import Grading from "./pages/app/admin/Grading";
 import BookingDetail from "./pages/app/BookingDetail";
@@ -224,6 +225,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin']}>
                       <Assignment />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/device-allocation"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <DeviceAllocation />
                     </ProtectedRoute>
                   }
                 />

@@ -3,21 +3,21 @@ import { inventoryService, InventoryItem, InventoryUploadItem } from "@/services
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
-export function useInventory(clientId?: string) {
+export function useInventory(clientId?: string | null) {
   const { user } = useAuth();
   
   return useQuery({
     queryKey: ['inventory', clientId || user?.userId],
-    queryFn: () => inventoryService.getInventory(clientId),
+    queryFn: () => inventoryService.getInventory(clientId || undefined),
     enabled: !!user,
   });
 }
 
-export function useAvailableInventory(clientId: string, deviceType?: string, conditionCode?: string) {
+export function useAvailableInventory(allocatedTo: string, category?: string, conditionCode?: string) {
   return useQuery({
-    queryKey: ['inventory', 'available', clientId, deviceType, conditionCode],
-    queryFn: () => inventoryService.getAvailableInventory(clientId, deviceType, conditionCode),
-    enabled: !!clientId,
+    queryKey: ['inventory', 'available', allocatedTo, category, conditionCode],
+    queryFn: () => inventoryService.getAvailableInventory(allocatedTo, category, conditionCode),
+    enabled: !!allocatedTo,
   });
 }
 
@@ -28,11 +28,21 @@ export function useUploadInventory() {
   return useMutation({
     mutationFn: ({ items, clientId }: { items: InventoryUploadItem[]; clientId?: string }) =>
       inventoryService.uploadInventory(items, clientId),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success("Inventory uploaded successfully", {
         description: `Created ${data.created} items`,
       });
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      // Invalidate all inventory queries (with any clientId or userId) to ensure the list refreshes
+      // Using exact: false will match all queries that start with ['inventory']
+      await queryClient.invalidateQueries({ 
+        queryKey: ['inventory'],
+        exact: false
+      });
+      // Also explicitly refetch to ensure immediate update
+      await queryClient.refetchQueries({ 
+        queryKey: ['inventory'],
+        exact: false
+      });
     },
     onError: (error) => {
       toast.error("Failed to upload inventory", {
@@ -47,7 +57,7 @@ export function useSyncInventory() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: (clientId?: string) => inventoryService.syncInventory(clientId),
+    mutationFn: (clientId?: string | null) => inventoryService.syncInventory(clientId || undefined),
     onSuccess: (data) => {
       toast.success("Inventory synced successfully", {
         description: `Synced ${data.synced} items (${data.created} created, ${data.updated} updated)`,

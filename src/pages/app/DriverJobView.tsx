@@ -197,58 +197,11 @@ const DriverJobView = () => {
     }
     
     // JML workflows
+    // Drivers only handle ITAD collection jobs (JML jobs are handled by couriers)
+    // JML workflows removed - drivers don't see JML jobs
     if (bookingType === 'jml') {
-      if (jmlSubType === 'new_starter') {
-        // New-starter: booked → routed → collected → in-transit → arrived (driver final status)
-        // Admin handles: arrived → completed
-        const newStarterTransitions: Record<string, WorkflowStatus> = {
-          'routed': 'collected', // Driver is at warehouse, can collect directly
-          'collected': 'in-transit',
-          'in-transit': 'arrived', // Arrived at client location (driver final status)
-          // 'arrived' has no next status for driver - admin moves to completed
-        };
-        return newStarterTransitions[normalizedStatus] || null;
-      } else if (jmlSubType === 'leaver') {
-        // Leaver: booked → routed → en-route → arrived → collected → warehouse (driver final status)
-        // Admin handles: warehouse → sanitised → graded → completed
-        const leaverTransitions: Record<string, WorkflowStatus> = {
-          'routed': 'en-route',
-          'en-route': 'arrived',
-          'arrived': 'collected',
-          'collected': 'warehouse', // Driver final status
-          // 'warehouse' has no next status for driver - admin moves to sanitised → graded → completed
-        };
-        return leaverTransitions[normalizedStatus] || null;
-      } else if (jmlSubType === 'mover') {
-        // Mover: booked → routed → en-route → arrived → collected → in-transit → delivery_arrived (driver final status)
-        // Admin handles: delivery-arrived → completed
-        const moverTransitions: Record<string, WorkflowStatus> = {
-          'routed': 'en-route',
-          'en-route': 'arrived',
-          'arrived': 'collected', // First arrived (at old office)
-          'collected': 'in-transit',
-          'in-transit': 'delivery-arrived', // Arrived at new office (driver final status)
-          // 'delivery-arrived' has no next status for driver - admin moves to completed
-        };
-        return moverTransitions[normalizedStatus] || null;
-      } else if (jmlSubType === 'breakfix') {
-        // Breakfix: booked → routed → en-route → arrived → collected → warehouse → sanitised → graded → delivery_routed → delivery_en_route → delivery_arrived (driver final status)
-        // Admin handles: delivery-arrived → completed
-        const breakfixTransitions: Record<string, WorkflowStatus> = {
-          'booked': 'routed',
-          'routed': 'en-route',
-          'en-route': 'arrived',
-          'arrived': 'collected',
-          'collected': 'warehouse',
-          'warehouse': 'sanitised',
-          'sanitised': 'graded',
-          'graded': 'delivery-routed', // Re-delivery routing
-          'delivery-routed': 'delivery-en-route', // Re-delivery en route
-          'delivery-en-route': 'delivery-arrived', // Re-delivery arrival (driver final status)
-          // 'delivery-arrived' has no next status for driver - admin moves to completed
-        };
-        return breakfixTransitions[normalizedStatus] || null;
-      }
+      // JML jobs are not accessible to drivers
+      return null;
     }
     
     return null;
@@ -266,18 +219,16 @@ const DriverJobView = () => {
   };
 
   // Statuses that require evidence submission (these are the statuses FOR which evidence is submitted)
-  // Includes: en-route, arrived, collected, warehouse, in-transit (for new_starter/mover), delivery-arrived, delivery-en-route (for breakfix)
-  const statusesRequiringEvidence: WorkflowStatus[] = ['en-route', 'arrived', 'collected', 'warehouse', 'in-transit', 'delivery-arrived', 'delivery-en-route'];
+  // Drivers only handle ITAD collection jobs
+  // Includes: en-route, arrived, collected, warehouse
+  const statusesRequiringEvidence: WorkflowStatus[] = ['en-route', 'arrived', 'collected', 'warehouse'];
   
   // Evidence is ALWAYS submitted for the NEXT status (not current)
   // Pattern: Driver in status X submits evidence for status Y (next status) → job moves to status Y
   // - "Routed" → submit evidence for "en-route" → move to "en-route"
   // - "En-route" → submit evidence for "arrived" → move to "arrived"
   // - "Arrived" → submit evidence for "collected" → move to "collected"
-  // - "Collected" → submit evidence for "warehouse" (ITAD/Leaver) or "in-transit" (New Starter/Mover) → move to next status
-  // - "In-transit" → submit evidence for "arrived" (New Starter) or "delivery-arrived" (Mover) → move to next status
-  // - "Delivery-routed" → submit evidence for "delivery-en-route" (Breakfix) → move to "delivery-en-route"
-  // - "Delivery-en-route" → submit evidence for "delivery-arrived" (Breakfix) → move to "delivery-arrived"
+  // - "Collected" → submit evidence for "warehouse" (ITAD) → move to "warehouse"
   const evidenceTargetStatus = useMemo(() => {
     if (!job || !nextStatus) return null;
     // Always submit evidence for the next status (if it requires evidence)

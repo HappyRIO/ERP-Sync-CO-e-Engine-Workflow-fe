@@ -9,28 +9,26 @@ export type BookingLifecycleStatus =
   | 'completed'     // Final state - all processes complete
   | 'device_allocated'  // JML: Device allocated from inventory
   | 'courier_booked'    // JML: Courier booked
-  | 'in_transit'        // JML: In transit (with assets)
+  | 'dispatched'        // JML: Courier picked up package
   | 'delivered'         // JML: Delivered
   | 'collection_scheduled' // JML: Collection scheduled
-  | 'delivery_scheduled'  // Breakfix re-delivery scheduling
   | 'inventory'          // Leaver: Added to inventory (handles both reuse and disposal)
 
 export const lifecycleTransitions: Record<BookingLifecycleStatus, (BookingLifecycleStatus | 'cancelled')[]> = {
   pending: ['created', 'cancelled', 'device_allocated'], // JML can go to device_allocated
-  created: ['scheduled', 'cancelled'],
-  scheduled: ['collected', 'cancelled', 'courier_booked'], // JML can go to courier_booked
-  collected: ['sanitised', 'warehouse', 'in_transit'], // ITAD: sanitised, Leaver: warehouse, New-starter/Mover: in_transit
-  warehouse: ['sanitised'], // ITAD and Leaver: warehouse → sanitised
+  created: ['scheduled', 'cancelled', 'device_allocated', 'collection_scheduled'], // JML can go directly to device_allocated or collection_scheduled
+  scheduled: ['collected', 'cancelled', 'courier_booked'], // ITAD: collected, JML can go to courier_booked
+  collected: ['sanitised', 'warehouse', 'dispatched'], // ITAD: sanitised, Leaver: warehouse, New-starter/Mover: dispatched
+  warehouse: ['sanitised', 'inventory'], // ITAD: sanitised, Mover: inventory
   sanitised: ['graded'],
-  graded: ['completed', 'delivery_scheduled', 'inventory'], // ITAD: completed, Leaver: inventory, Breakfix: delivery_scheduled (re-delivery)
-  inventory: ['completed'], // Added to inventory (handles both reuse and disposal)
+  graded: ['completed', 'inventory'], // ITAD: completed, Leaver: inventory
+  inventory: ['completed', 'device_allocated'], // Added to inventory (handles both reuse and disposal), Mover: device_allocated
   completed: [], // Terminal state
   device_allocated: ['courier_booked', 'cancelled'],
-  courier_booked: ['in_transit', 'delivered', 'cancelled'],
-  in_transit: ['delivered', 'cancelled'],
-  delivered: ['completed'], // JML new starter/mover/breakfix outbound - ticket closed
-  collection_scheduled: ['collected', 'cancelled'], // JML leaver - collection scheduled
-  delivery_scheduled: ['in_transit', 'cancelled'], // Breakfix: delivery_scheduled → in_transit
+  courier_booked: ['dispatched', 'cancelled'],
+  dispatched: ['delivered', 'collected', 'cancelled'], // JML: delivered (for deliveries), collected (for collections)
+  delivered: ['completed', 'collected'], // JML new starter/mover/breakfix outbound - ticket closed, Breakfix: collected
+  collection_scheduled: ['collected', 'cancelled'], // JML leaver/mover - collection scheduled
 };
 
 export const roleTransitionPermissions: Record<string, BookingLifecycleStatus[]> = {
@@ -89,10 +87,9 @@ export function getStatusLabel(status: BookingLifecycleStatus): string {
     completed: 'Completed',
     device_allocated: 'Device Allocated',
     courier_booked: 'Courier Booked',
-    in_transit: 'In Transit',
+    dispatched: 'Dispatched',
     delivered: 'Delivered',
     collection_scheduled: 'Collection Scheduled',
-    delivery_scheduled: 'Delivery Scheduled', // Breakfix re-delivery
     inventory: 'Inventory',
   };
   return labels[status] || status;
@@ -114,10 +111,9 @@ export function getStatusColor(status: BookingLifecycleStatus | 'cancelled'): st
     cancelled: 'bg-destructive/10 text-destructive',
     device_allocated: 'bg-blue-500/10 text-blue-500',
     courier_booked: 'bg-purple-500/10 text-purple-500',
-    in_transit: 'bg-orange-500/10 text-orange-500',
+    dispatched: 'bg-orange-500/10 text-orange-500',
     delivered: 'bg-green-500/10 text-green-500',
     collection_scheduled: 'bg-cyan-500/10 text-cyan-500',
-    delivery_scheduled: 'bg-indigo-500/10 text-indigo-500', // Breakfix re-delivery
     inventory: 'bg-green-500/10 text-green-500',
   };
   return colors[status] || 'bg-gray-500/10 text-gray-500';

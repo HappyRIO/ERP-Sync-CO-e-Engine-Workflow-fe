@@ -4,9 +4,9 @@ import { apiClient } from './api-client';
 
 export interface InventoryItem {
   id: string;
-  clientId: string;
   tenantId: string;
-  deviceType: string;
+  category: string;
+  deviceType: string | null; // Windows/Apple for laptop/desktop, null for others
   make: string;
   model: string;
   serialNumber: string;
@@ -14,7 +14,7 @@ export interface InventoryItem {
   conditionCode: string;
   erpInventoryId?: string;
   status: 'available' | 'allocated' | 'in_transit' | 'delivered' | 'collected' | 'warehouse';
-  allocatedTo?: string;
+  allocatedTo: string | null; // Client ID if allocated
   createdAt: string;
   updatedAt: string;
   lastSyncedAt?: string;
@@ -27,6 +27,7 @@ export interface InventoryUploadItem {
   serialNumber: string;
   imei?: string;
   conditionCode: string;
+  status?: string;
 }
 
 export interface InventoryUploadResponse {
@@ -42,8 +43,10 @@ export interface InventorySyncResponse {
 }
 
 class InventoryService {
-  async getInventory(clientId?: string): Promise<InventoryItem[]> {
-    const params = clientId ? `?clientId=${clientId}` : '';
+  async getInventory(allocatedTo?: string | null): Promise<InventoryItem[]> {
+    // For admin, if allocatedTo is null/undefined, don't pass it (shows all inventory)
+    // For client users, don't pass allocatedTo (they see their allocated inventory)
+    const params = allocatedTo ? `?allocatedTo=${allocatedTo}` : '';
     const response = await apiClient.get<InventoryItem[]>(`/inventory${params}`);
     return response || [];
   }
@@ -63,10 +66,10 @@ class InventoryService {
     return response;
   }
 
-  async getAvailableInventory(clientId: string, deviceType?: string, conditionCode?: string): Promise<InventoryItem[]> {
+  async getAvailableInventory(allocatedTo: string, category?: string, conditionCode?: string): Promise<InventoryItem[]> {
     const params = new URLSearchParams();
-    params.append('clientId', clientId);
-    if (deviceType) params.append('deviceType', deviceType);
+    params.append('allocatedTo', allocatedTo);
+    if (category) params.append('category', category);
     if (conditionCode) params.append('conditionCode', conditionCode);
     
     const response = await apiClient.get<InventoryItem[]>(`/inventory/available?${params.toString()}`);

@@ -46,10 +46,10 @@ const JMLBookings = () => {
     return bookings.filter(b => b.bookingType === 'jml');
   }, [bookings]);
 
-  // Get available inventory for allocation
+  // Get available inventory for allocation (unallocated inventory)
   const { data: availableInventory = [] } = useAvailableInventory(
-    selectedBooking?.clientId || '',
-    selectedBooking?.deviceType || undefined
+    '', // Empty string means null (unallocated)
+    selectedBooking?.deviceType ? (selectedBooking.deviceType.includes('laptop') ? 'laptop' : selectedBooking.deviceType.includes('mobile') ? 'mobile' : undefined) : undefined
   );
 
   const allocateDeviceMutation = useMutation({
@@ -137,7 +137,6 @@ const JMLBookings = () => {
     pending: "bg-yellow-500/10 text-yellow-500",
     device_allocated: "bg-blue-500/10 text-blue-500",
     courier_booked: "bg-purple-500/10 text-purple-500",
-    in_transit: "bg-orange-500/10 text-orange-500",
     delivered: "bg-green-500/10 text-green-500",
     collection_scheduled: "bg-cyan-500/10 text-cyan-500",
     collected: "bg-teal-500/10 text-teal-500",
@@ -263,7 +262,6 @@ const JMLBookings = () => {
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="device_allocated">Device Allocated</SelectItem>
             <SelectItem value="courier_booked">Courier Booked</SelectItem>
-            <SelectItem value="in_transit">In Transit</SelectItem>
             <SelectItem value="delivered">Delivered</SelectItem>
             <SelectItem value="collection_scheduled">Collection Scheduled</SelectItem>
             <SelectItem value="collected">Collected</SelectItem>
@@ -354,7 +352,7 @@ const JMLBookings = () => {
                         Add Tracking
                       </Button>
                     )}
-                    {(booking.status === 'courier_booked' || booking.status === 'in_transit') && (
+                    {booking.status === 'courier_booked' && (
                       <Button
                         size="sm"
                         variant="outline"

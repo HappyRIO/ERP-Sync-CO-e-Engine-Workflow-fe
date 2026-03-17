@@ -7,16 +7,12 @@ import { transformJobs, transformJob } from './data-transform';
 
 /**
  * Convert frontend status format (hyphens) to backend format (underscores)
- * Frontend uses: en-route, in-transit, delivery-routed, delivery-en-route, delivery-arrived
- * Backend uses: en_route, in_transit, delivery_routed, delivery_en_route, delivery_arrived
+ * Frontend uses: en-route
+ * Backend uses: en_route
  */
 function convertStatusToBackendFormat(status: string): string {
   const statusMap: Record<string, string> = {
     'en-route': 'en_route',
-    'in-transit': 'in_transit',
-    'delivery-routed': 'delivery_routed',
-    'delivery-en-route': 'delivery_en_route',
-    'delivery-arrived': 'delivery_arrived',
   };
   return statusMap[status] || status;
 }

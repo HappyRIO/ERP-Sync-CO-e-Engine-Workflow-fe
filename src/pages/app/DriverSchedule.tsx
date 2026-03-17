@@ -29,10 +29,12 @@ const DriverSchedule = () => {
 
   // Filter jobs for current driver (assigned to this driver, only show jobs driver can still work on)
   // Jobs at or beyond driver's final status should only appear in Job History
+  // Drivers only see ITAD collection jobs, not JML jobs (handled by couriers)
   const driverJobs = useMemo(() => {
     return allJobs.filter(job => 
       job.driver && 
       (job.driver.id === user?.id || job.driver.name === user?.name) && 
+      job.bookingType === 'itad_collection' && // Only ITAD collection jobs for drivers
       canDriverEditJob(job) // Only show jobs driver can still edit (not at final status)
     );
   }, [allJobs, user?.id, user?.name]);
@@ -47,9 +49,9 @@ const DriverSchedule = () => {
       const scheduledDate = new Date(job.scheduledDate);
       scheduledDate.setHours(0, 0, 0, 0);
       // Include jobs scheduled for today or future
-      // Also include in-progress jobs (en-route, arrived, collected, in-transit, delivery-en-route) even if scheduled in the past
+      // Also include in-progress jobs (en-route, arrived, collected) even if scheduled in the past
       const isUpcoming = scheduledDate >= today;
-      const isInProgress = ['en-route', 'en_route', 'arrived', 'collected', 'in-transit', 'in_transit', 'delivery-en-route', 'delivery_en_route'].includes(job.status);
+      const isInProgress = ['en-route', 'en_route', 'arrived', 'collected'].includes(job.status);
       return isUpcoming || isInProgress;
     }).sort((a, b) => {
       const dateA = new Date(a.scheduledDate);

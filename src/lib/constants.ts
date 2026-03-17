@@ -9,15 +9,19 @@ export const statusConfig: Record<WorkflowStatus, { label: string; color: string
   'en-route': { label: 'En Route', color: 'text-warning-foreground', bgColor: 'bg-warning/20' },
   'arrived': { label: 'Arrived', color: 'text-warning-foreground', bgColor: 'bg-warning/20' },
   'collected': { label: 'Collected', color: 'text-primary', bgColor: 'bg-primary/10' },
-  'in-transit': { label: 'In Transit', color: 'text-orange-600', bgColor: 'bg-orange-500/20' },
   'warehouse': { label: 'At Warehouse', color: 'text-secondary-foreground', bgColor: 'bg-secondary' },
   'sanitised': { label: 'Sanitised', color: 'text-primary', bgColor: 'bg-primary/15' },
   'graded': { label: 'Graded', color: 'text-success', bgColor: 'bg-success/15' },
   'completed': { label: 'Completed', color: 'text-success-foreground', bgColor: 'bg-success/20' },
-  // Breakfix re-delivery statuses
-  'delivery-routed': { label: 'Delivery Routed', color: 'text-indigo-600', bgColor: 'bg-indigo-500/20' },
-  'delivery-en-route': { label: 'Delivery En Route', color: 'text-indigo-600', bgColor: 'bg-indigo-500/20' },
-  'delivery-arrived': { label: 'Delivery Arrived', color: 'text-indigo-600', bgColor: 'bg-indigo-500/20' },
+  // JML-specific statuses
+  'device-allocated': { label: 'Device Allocated', color: 'text-blue-600', bgColor: 'bg-blue-500/20' },
+  'courier-booked': { label: 'Courier Booked', color: 'text-purple-600', bgColor: 'bg-purple-500/20' },
+  'dispatched': { label: 'Dispatched', color: 'text-orange-600', bgColor: 'bg-orange-500/20' },
+  'delivered': { label: 'Delivered', color: 'text-green-600', bgColor: 'bg-green-500/20' },
+  'inventory': { label: 'Inventory', color: 'text-green-600', bgColor: 'bg-green-500/20' },
+  // Mover delivery statuses
+  'delivery-courier-booked': { label: 'Delivery Courier Booked', color: 'text-purple-600', bgColor: 'bg-purple-500/20' },
+  'delivery-dispatched': { label: 'Delivery Dispatched', color: 'text-orange-600', bgColor: 'bg-orange-500/20' },
 };
 
 /**
@@ -30,15 +34,19 @@ export function getWorkflowStatusColor(status: WorkflowStatus): string {
     'en-route': 'bg-warning/10 text-warning',
     'arrived': 'bg-warning/10 text-warning',
     'collected': 'bg-primary/10 text-primary',
-    'in-transit': 'bg-orange-500/10 text-orange-600',
     'warehouse': 'bg-secondary text-secondary-foreground',
     'sanitised': 'bg-accent/10 text-accent',
     'graded': 'bg-success/10 text-success',
     'completed': 'bg-success/20 text-success',
-    // Breakfix re-delivery statuses
-    'delivery-routed': 'bg-indigo-500/10 text-indigo-600',
-    'delivery-en-route': 'bg-indigo-500/10 text-indigo-600',
-    'delivery-arrived': 'bg-indigo-500/10 text-indigo-600',
+    // JML-specific statuses
+    'device-allocated': 'bg-blue-500/10 text-blue-600',
+    'courier-booked': 'bg-purple-500/10 text-purple-600',
+    'dispatched': 'bg-orange-500/10 text-orange-600',
+    'delivered': 'bg-green-500/10 text-green-600',
+    'inventory': 'bg-green-500/10 text-green-600',
+    // Mover delivery statuses
+    'delivery-courier-booked': 'bg-purple-500/10 text-purple-600',
+    'delivery-dispatched': 'bg-orange-500/10 text-orange-600',
   };
   return colors[status];
 }

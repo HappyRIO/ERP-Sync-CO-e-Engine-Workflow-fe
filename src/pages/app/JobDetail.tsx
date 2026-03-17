@@ -541,13 +541,7 @@ const JobDetail = () => {
                     'en_route': 1,
                     'arrived': 2,
                     'collected': 3,
-                    'in-transit': 3.5,
-                    'in_transit': 3.5,
                     'warehouse': 4,
-                    'delivery-en-route': 4.5,
-                    'delivery_en_route': 4.5,
-                    'delivery-arrived': 5,
-                    'delivery_arrived': 5,
                     'sanitised': 6,
                     'graded': 7,
                     'completed': 8,
@@ -567,13 +561,7 @@ const JobDetail = () => {
                     'en_route': 'En Route',
                     'arrived': 'Arrived',
                     'collected': 'Collected',
-                    'in-transit': 'In Transit',
-                    'in_transit': 'In Transit',
                     'warehouse': 'Warehouse',
-                    'delivery-en-route': 'Delivery En Route',
-                    'delivery_en_route': 'Delivery En Route',
-                    'delivery-arrived': 'Delivery Arrived',
-                    'delivery_arrived': 'Delivery Arrived',
                     'sanitised': 'Sanitised',
                     'graded': 'Graded',
                     'completed': 'Completed',
@@ -581,12 +569,9 @@ const JobDetail = () => {
                     'routed': 'Routed',
                   };
                   
-                  // Normalize status for comparison (handle both en-route and en_route, in-transit and in_transit, etc.)
+                  // Normalize status for comparison (handle both en-route and en_route, etc.)
                   const normalizeStatus = (status: string) => {
                     if (status === 'en_route') return 'en-route';
-                    if (status === 'in_transit') return 'in-transit';
-                    if (status === 'delivery_en_route') return 'delivery-en-route';
-                    if (status === 'delivery_arrived') return 'delivery-arrived';
                     return status;
                   };
                   const statusesWithEvidence = new Set(
@@ -603,19 +588,19 @@ const JobDetail = () => {
                       return ['en-route', 'arrived', 'collected', 'warehouse'];
                     }
                     
-                    // New Starter: collected, in-transit, arrived (no en-route, no warehouse)
+                    // New Starter: device-allocated, courier-booked, dispatched, delivered (courier-based)
                     if (bookingType === 'jml' && jmlSubType === 'new_starter') {
-                      return ['collected', 'in-transit', 'arrived'];
+                      return ['device-allocated', 'courier-booked', 'dispatched', 'delivered'];
                     }
                     
-                    // Mover: en-route, arrived, collected, in-transit, delivery-arrived (no warehouse)
+                    // Mover: courier-booked, dispatched, collected, warehouse, inventory, device-allocated, delivery-courier-booked, delivery-dispatched, delivered
                     if (bookingType === 'jml' && jmlSubType === 'mover') {
-                      return ['en-route', 'arrived', 'collected', 'in-transit', 'delivery-arrived'];
+                      return ['courier-booked', 'dispatched', 'collected', 'warehouse', 'inventory', 'device-allocated', 'delivery-courier-booked', 'delivery-dispatched', 'delivered'];
                     }
                     
-                    // Breakfix: en-route, arrived, collected, warehouse, delivery-en-route, delivery-arrived
+                    // Breakfix: device-allocated, courier-booked, dispatched, delivered, collected, warehouse, sanitised, graded, inventory
                     if (bookingType === 'jml' && jmlSubType === 'breakfix') {
-                      return ['en-route', 'arrived', 'collected', 'warehouse', 'delivery-en-route', 'delivery-arrived'];
+                      return ['device-allocated', 'courier-booked', 'dispatched', 'delivered', 'collected', 'warehouse', 'sanitised', 'graded', 'inventory'];
                     }
                     
                     // Default: ITAD workflow

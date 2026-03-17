@@ -137,16 +137,27 @@ class JMLBookingService {
     return response;
   }
 
-  async allocateDevice(bookingId: string, serialNumber: string): Promise<BookingResponse> {
-    const response = await apiClient.patch<BookingResponse>(`/bookings/${bookingId}/allocate-device`, {
-      serialNumber,
-    });
+  async allocateDevice(
+    bookingId: string,
+    options: 
+      | { serialNumber: string }
+      | { category: string; make: string; model: string; deviceType?: string | null; quantity: number }
+  ): Promise<{ booking: BookingResponse; allocatedSerialNumbers: string[]; quantity: number }> {
+    const response = await apiClient.patch<{ booking: BookingResponse; allocatedSerialNumbers: string[]; quantity: number }>(
+      `/bookings/${bookingId}/allocate-device`,
+      options
+    );
     return response;
   }
 
-  async updateCourierTracking(bookingId: string, trackingNumber: string): Promise<BookingResponse> {
+  async allocateDeviceBySerial(bookingId: string, serialNumber: string): Promise<{ booking: BookingResponse; allocatedSerialNumbers: string[]; quantity: number }> {
+    return this.allocateDevice(bookingId, { serialNumber });
+  }
+
+  async updateCourierTracking(bookingId: string, trackingNumber: string, courierService: string): Promise<BookingResponse> {
     const response = await apiClient.patch<BookingResponse>(`/bookings/${bookingId}/courier-tracking`, {
       trackingNumber,
+      courierService,
     });
     return response;
   }

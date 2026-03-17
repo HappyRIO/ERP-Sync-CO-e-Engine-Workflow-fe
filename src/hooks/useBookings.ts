@@ -1,6 +1,7 @@
 // Custom hooks for booking history
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { bookingService } from '@/services/booking.service';
+import { jmlBookingService } from '@/services/jml-booking.service';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function useBookings(filter?: { status?: string; clientId?: string }) {
@@ -32,6 +33,18 @@ export function useAssignDriver() {
       // Refresh notifications and unread count, as driver assignment triggers notifications
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+    },
+  });
+}
+
+export function useBookCourier() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ bookingId, trackingNumber, courierService }: { bookingId: string; trackingNumber: string; courierService: string }) =>
+      jmlBookingService.updateCourierTracking(bookingId, trackingNumber, courierService),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
 }

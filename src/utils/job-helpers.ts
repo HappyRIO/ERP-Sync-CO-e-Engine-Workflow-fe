@@ -5,7 +5,6 @@ import type { Job } from '@/types/jobs';
  * Check if a driver can access a job (for driver view)
  * Drivers can only access jobs in statuses they can work on:
  * - booked, routed, en_route (or en-route), arrived, collected, warehouse
- * - in-transit, delivery-routed, delivery-en-route (for JML workflows)
  * - They cannot edit jobs in sanitised, graded, completed statuses
  * - But they can view their submitted evidence for those statuses
  */
@@ -15,28 +14,20 @@ export function canDriverAccessJob(job: Job | null | undefined): boolean {
   // Normalize the job status for comparison
   const normalizedStatus = normalizeStatusForCheck(job.status);
   
-  // Normalize delivery statuses for consistency
-  const normalized = normalizedStatus === 'delivery_routed' ? 'delivery-routed' 
-    : normalizedStatus === 'delivery_en_route' ? 'delivery-en-route'
-    : normalizedStatus === 'delivery_arrived' ? 'delivery-arrived'
-    : normalizedStatus === 'in_transit' ? 'in-transit'
-    : normalizedStatus;
+  // Normalize status for consistency
+  const normalized = normalizedStatus;
   
   // Drivers can access jobs in these statuses (normalized format)
-  const accessibleStatuses = ['booked', 'routed', 'en-route', 'arrived', 'collected', 'warehouse', 'in-transit', 'delivery-routed', 'delivery-en-route', 'delivery-arrived', 'sanitised', 'graded', 'inventory', 'completed'];
+  const accessibleStatuses = ['booked', 'routed', 'en-route', 'arrived', 'collected', 'warehouse', 'sanitised', 'graded', 'inventory', 'completed'];
   
   return accessibleStatuses.includes(normalized);
 }
 
 /**
- * Normalize status for comparison (handle both en-route and en_route, in-transit and in_transit, etc.)
+ * Normalize status for comparison (handle both en-route and en_route, etc.)
  */
 function normalizeStatusForCheck(status: string): string {
   if (status === 'en-route' || status === 'en_route') return 'en-route';
-  if (status === 'in-transit' || status === 'in_transit') return 'in-transit';
-  if (status === 'delivery-routed' || status === 'delivery_routed') return 'delivery-routed';
-  if (status === 'delivery-en-route' || status === 'delivery_en_route') return 'delivery-en-route';
-  if (status === 'delivery-arrived' || status === 'delivery_arrived') return 'delivery-arrived';
   return status;
 }
 
@@ -46,10 +37,9 @@ function normalizeStatusForCheck(status: string): string {
  * Final driver statuses (non-editable):
  * - ITAD/Leaver: warehouse (admin handles sanitised → graded → inventory → completed)
  * - New Starter: arrived (admin handles arrived → completed)
- * - Mover: warehouse (first phase - old device), then delivery-arrived (second phase - new device)
- * - Breakfix: arrived (first phase - replacement delivery), then warehouse (second phase - broken device collection)
+ * - Mover: warehouse (first phase - old device) - delivery phase is courier-based
+ * - Breakfix: courier-based workflow - drivers don't handle JML jobs
  * Note: 'booked' is not editable - job must be routed first
- * Note: 'delivery-routed' is not editable - it's an admin status (driver can access but not edit)
  */
 export function canDriverEditJob(job: Job | null | undefined): boolean {
   if (!job) return false;
@@ -57,15 +47,11 @@ export function canDriverEditJob(job: Job | null | undefined): boolean {
   // Normalize the job status for comparison
   const normalizedStatus = normalizeStatusForCheck(job.status);
   
-  // Normalize status variants for consistency
-  const normalized = normalizedStatus === 'delivery_arrived' ? 'delivery-arrived'
-    : normalizedStatus === 'delivery_en_route' ? 'delivery-en-route'
-    : normalizedStatus === 'delivery_routed' ? 'delivery-routed'
-    : normalizedStatus === 'in_transit' ? 'in-transit'
-    : normalizedStatus;
+  // Normalize status for consistency
+  const normalized = normalizedStatus;
   
   // Base editable statuses (before checking final statuses)
-  const baseEditableStatuses = ['routed', 'en-route', 'arrived', 'collected', 'in-transit', 'delivery-en-route', 'delivery-arrived'];
+  const baseEditableStatuses = ['routed', 'en-route', 'arrived', 'collected'];
   
   if (!baseEditableStatuses.includes(normalized)) {
     return false;
@@ -86,9 +72,9 @@ export function canDriverEditJob(job: Job | null | undefined): boolean {
   }
   
   // Mover: warehouse is final driver status for first phase (old device collection)
-  // Then delivery-arrived is final driver status for second phase (new device delivery)
+  // Drivers don't handle delivery phase for Mover (courier-based)
   if (bookingType === 'jml' && jmlSubType === 'mover') {
-    if (normalized === 'warehouse' || normalized === 'delivery-arrived') {
+    if (normalized === 'warehouse') {
       return false;
     }
   }
@@ -109,7 +95,7 @@ export function canDriverEditJob(job: Job | null | undefined): boolean {
  * Final driver statuses:
  * - ITAD/Leaver: warehouse
  * - New Starter: arrived
- * - Mover: warehouse (first phase), delivery-arrived (second phase)
+ * - Mover: warehouse (first phase) - delivery phase is courier-based
  * - Breakfix: arrived (first phase), warehouse (second phase)
  */
 export function isDriverFinalStatus(job: Job | null | undefined, status: string): boolean {
@@ -117,11 +103,7 @@ export function isDriverFinalStatus(job: Job | null | undefined, status: string)
   
   // Normalize the status for comparison
   const normalizedStatus = normalizeStatusForCheck(status);
-  const normalized = normalizedStatus === 'delivery_arrived' ? 'delivery-arrived'
-    : normalizedStatus === 'delivery_en_route' ? 'delivery-en-route'
-    : normalizedStatus === 'delivery_routed' ? 'delivery-routed'
-    : normalizedStatus === 'in_transit' ? 'in-transit'
-    : normalizedStatus;
+  const normalized = normalizedStatus;
   
   const bookingType = job.bookingType;
   const jmlSubType = job.jmlSubType;
@@ -136,8 +118,9 @@ export function isDriverFinalStatus(job: Job | null | undefined, status: string)
     return true;
   }
   
-  // Mover: warehouse (first phase) or delivery-arrived (second phase) are final driver statuses
-  if (bookingType === 'jml' && jmlSubType === 'mover' && (normalized === 'warehouse' || normalized === 'delivery-arrived')) {
+  // Mover: warehouse (first phase) is final driver status
+  // Drivers don't handle delivery phase for Mover (courier-based)
+  if (bookingType === 'jml' && jmlSubType === 'mover' && normalized === 'warehouse') {
     return true;
   }
   

@@ -21,7 +21,6 @@ const allStatusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
   { value: "en-route", label: "En Route" },
   { value: "arrived", label: "Arrived" },
   { value: "collected", label: "Collected" },
-  { value: "in-transit", label: "In Transit" },
   { value: "warehouse", label: "Warehouse" },
   { value: "sanitised", label: "Sanitised" },
   { value: "graded", label: "Graded" },
@@ -30,7 +29,7 @@ const allStatusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
 
 const getStatusFilters = (userRole?: string) => {
   if (userRole === 'driver') {
-    // Drivers see jobs assigned to them: routed, en-route, arrived, collected, in-transit
+    // Drivers see jobs assigned to them: routed, en-route, arrived, collected
     // They don't see booked (unassigned), warehouse, sanitised, graded, or completed jobs
     return allStatusFilters.filter(
       filter => !['booked', 'warehouse', 'sanitised', 'graded', 'completed'].includes(filter.value)

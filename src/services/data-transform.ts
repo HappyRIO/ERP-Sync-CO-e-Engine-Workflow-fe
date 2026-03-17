@@ -87,23 +87,27 @@ interface BackendCertificate {
  * Transform backend job status to frontend format
  */
 function transformStatus(status: string): WorkflowStatus {
-  // Convert 'en_route' to 'en-route', 'in_transit' to 'in-transit', etc.
+  // Convert 'en_route' to 'en-route', etc.
   const statusMap: Record<string, WorkflowStatus> = {
     'booked': 'booked',
     'routed': 'routed',
     'en_route': 'en-route',
     'arrived': 'arrived',
     'collected': 'collected',
-    'in_transit': 'in-transit',
     'warehouse': 'warehouse',
     'sanitised': 'sanitised',
     'graded': 'graded',
     'completed': 'completed',
     'cancelled': 'cancelled',
-    // Breakfix re-delivery statuses
-    'delivery_routed': 'delivery-routed',
-    'delivery_en_route': 'delivery-en-route',
-    'delivery_arrived': 'delivery-arrived',
+    // JML-specific statuses
+    'device_allocated': 'device-allocated',
+    'courier_booked': 'courier-booked',
+    'dispatched': 'dispatched',
+    'delivered': 'delivered',
+    'inventory': 'inventory',
+    // Mover delivery statuses
+    'delivery_courier_booked': 'delivery-courier-booked',
+    'delivery_dispatched': 'delivery-dispatched',
   };
   
   return statusMap[status] || status as WorkflowStatus;

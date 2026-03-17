@@ -6,15 +6,17 @@ export type WorkflowStatus =
   | 'en-route'     // Vehicle traveling WITHOUT assets (going to pickup location)
   | 'arrived'      // Driver has arrived at collection site
   | 'collected' 
-  | 'in-transit'   // Vehicle traveling WITH assets (transporting assets)
   | 'warehouse' 
   | 'sanitised' 
   | 'graded' 
   | 'completed'
-  | 'delivery-routed'   // Breakfix re-delivery routing
-  | 'delivery-en-route' // Breakfix re-delivery en route
-  | 'delivery-arrived' // Breakfix re-delivery arrival
-  | 'inventory';    // Leaver: Added to inventory (handles both reuse and disposal)
+  | 'device-allocated'      // JML: Device allocated from inventory
+  | 'courier-booked'         // JML: Courier assigned/booked
+  | 'dispatched'             // JML: Courier picked up package
+  | 'delivered'              // JML: Package delivered to destination
+  | 'delivery-courier-booked' // Mover: Delivery phase courier booked
+  | 'delivery-dispatched'    // Mover: Delivery phase dispatched
+  | 'inventory';             // Leaver: Added to inventory (handles both reuse and disposal)
 
 export interface Job {
   id: string;

@@ -72,6 +72,7 @@ export interface Booking {
   startDate?: string;
   deviceType?: string;
   courierTracking?: string;
+  courierService?: string;
   deliveryDate?: string;
   // Mover booking specific fields
   currentAddress?: string;

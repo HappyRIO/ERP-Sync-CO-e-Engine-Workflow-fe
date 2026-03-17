@@ -1125,11 +1125,15 @@ const JMLNewStarter = () => {
                   <div className="pt-3 border-t space-y-2">
                     {devices.map((device, index) => {
                       const category = assetCategories.find(c => c.name === device.category);
+                      const deviceInfo = [
+                        device.make,
+                        device.model,
+                        shouldShowDeviceType(device.category) ? device.deviceType : null
+                      ].filter(Boolean).join(' • ');
                       return (
                         <div key={index} className="flex justify-between text-sm">
                           <span className="text-muted-foreground">
-                            {category?.icon} {device.category} ({device.make} {device.model})
-                            {shouldShowDeviceType(device.category) && ` - ${device.deviceType}`}
+                            {category?.icon} {device.category} ({deviceInfo})
                           </span>
                           <span className="font-semibold text-foreground">{device.quantity}</span>
                         </div>

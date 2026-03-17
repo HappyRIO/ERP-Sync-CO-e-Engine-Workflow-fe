@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, UserPlus, Truck, Calendar, MapPin, Package, Loader2, CheckCircle2, Car, AlertTriangle, Route, Fuel } from "lucide-react";
+import { ArrowLeft, UserPlus, Truck, Calendar, MapPin, Package, Loader2, CheckCircle2, Car, AlertTriangle, Route, Fuel, PackageSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useBooking, useAssignDriver } from "@/hooks/useBookings";
+import { useBooking, useAssignDriver, useBookCourier } from "@/hooks/useBookings";
 import { useDrivers } from "@/hooks/useDrivers";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -23,7 +24,13 @@ const Assignment = () => {
   const [selectedDriverVehicle, setSelectedDriverVehicle] = useState<{ driverId: string; vehicleId: string } | null>(null);
   const [roundTripDistanceKm, setRoundTripDistanceKm] = useState<number | null>(null);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [courierService, setCourierService] = useState<string>("");
+  const [otherCourierService, setOtherCourierService] = useState<string>("");
   const assignMutation = useAssignDriver();
+  const bookCourierMutation = useBookCourier();
+  
+  const isJMLBooking = booking?.bookingType === 'jml';
   
   // Filter out drivers without allocated vehicles
   const driversWithVehicles = drivers.filter(driver => driver.hasVehicle && (driver.vehicleReg || (driver.vehicles && driver.vehicles.length > 0)));
@@ -162,6 +169,73 @@ const Assignment = () => {
     );
   };
 
+  const handleBookCourier = () => {
+    if (!bookingId || !trackingNumber.trim()) {
+      toast.error("Please enter a tracking number");
+      return;
+    }
+
+    if (!courierService) {
+      toast.error("Please select a courier service");
+      return;
+    }
+
+    if (courierService === 'other' && !otherCourierService.trim()) {
+      toast.error("Please enter the courier service name");
+      return;
+    }
+
+    // For new_starter and breakfix, device must be allocated first
+    if ((booking?.jmlSubType === 'new_starter' || booking?.jmlSubType === 'breakfix') && 
+        booking?.status !== 'device_allocated') {
+      toast.error("Device must be allocated before booking courier for this booking type");
+      return;
+    }
+
+    // For other JML types (leaver, mover), allow from created status
+    if (booking?.status !== 'device_allocated' && booking?.status !== 'created') {
+      toast.error("Only bookings in 'device_allocated' or 'created' status can have courier booked");
+      return;
+    }
+
+    const finalCourierService = courierService === 'other' ? otherCourierService.trim() : courierService;
+
+    bookCourierMutation.mutate(
+      { bookingId, trackingNumber: trackingNumber.trim(), courierService: finalCourierService },
+      {
+        onSuccess: () => {
+          toast.success("Courier booked successfully!", {
+            description: "Tracking number has been added and booking status updated to 'courier_booked'.",
+          });
+          navigate("/admin/bookings");
+        },
+        onError: (error) => {
+          toast.error("Failed to book courier", {
+            description: error instanceof Error ? error.message : "Please try again.",
+          });
+        },
+      }
+    );
+  };
+
+  // Initialize tracking number and courier service from booking if available
+  useEffect(() => {
+    if (booking?.courierTracking) {
+      setTrackingNumber(booking.courierTracking);
+    }
+    if (booking?.courierService) {
+      // Check if it's one of the predefined services
+      const predefinedServices = ['fedex', 'dpd', 'ups', 'parcelforce', 'royalmail'];
+      const serviceLower = booking.courierService.toLowerCase();
+      if (predefinedServices.includes(serviceLower)) {
+        setCourierService(serviceLower);
+      } else {
+        setCourierService('other');
+        setOtherCourierService(booking.courierService);
+      }
+    }
+  }, [booking]);
+
   if (isLoadingBooking) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -181,18 +255,36 @@ const Assignment = () => {
     );
   }
 
-  if (booking.status !== 'created' && booking.status !== 'scheduled') {
-    return (
-      <div className="space-y-6">
-        <Alert>
-          <AlertDescription>
-            This booking cannot be assigned. Only bookings in "created" status can be assigned a driver.
-            Current status: {booking.status}
-          </AlertDescription>
-        </Alert>
-        <Button onClick={() => navigate("/admin/bookings")}>Back to Booking Queue</Button>
-      </div>
-    );
+  if (isJMLBooking) {
+    // For JML bookings, check if status allows courier booking
+    if (booking.status !== 'device_allocated' && booking.status !== 'created' && booking.status !== 'courier_booked') {
+      return (
+        <div className="space-y-6">
+          <Alert>
+            <AlertDescription>
+              This booking cannot have courier booked. Only bookings in "device_allocated" or "created" status can have courier booked.
+              Current status: {booking.status}
+            </AlertDescription>
+          </Alert>
+          <Button onClick={() => navigate("/admin/bookings")}>Back to Booking Queue</Button>
+        </div>
+      );
+    }
+  } else {
+    // For ITAD bookings, check if status allows driver assignment
+    if (booking.status !== 'created' && booking.status !== 'scheduled') {
+      return (
+        <div className="space-y-6">
+          <Alert>
+            <AlertDescription>
+              This booking cannot be assigned. Only bookings in "created" status can be assigned a driver.
+              Current status: {booking.status}
+            </AlertDescription>
+          </Alert>
+          <Button onClick={() => navigate("/admin/bookings")}>Back to Booking Queue</Button>
+        </div>
+      );
+    }
   }
 
   const totalAssets = booking.assets.reduce((sum, a) => sum + a.quantity, 0);
@@ -209,8 +301,14 @@ const Assignment = () => {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Assign Driver</h2>
-          <p className="text-muted-foreground">Schedule booking and assign driver for collection</p>
+          <h2 className="text-2xl font-bold text-foreground">
+            {isJMLBooking ? "Book Courier" : "Assign Driver"}
+          </h2>
+          <p className="text-muted-foreground">
+            {isJMLBooking 
+              ? "Add courier tracking number for delivery/collection" 
+              : "Schedule booking and assign driver for collection"}
+          </p>
         </div>
       </motion.div>
 
@@ -305,14 +403,105 @@ const Assignment = () => {
 
         {/* Assignment Form */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UserPlus className="h-5 w-5" />
-                Driver Assignment
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          {isJMLBooking ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PackageSearch className="h-5 w-5" />
+                  Courier Booking
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {booking.courierTracking && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">Current Tracking Number</p>
+                    <div className="p-3 rounded-lg bg-muted space-y-2">
+                      <div className="flex items-center gap-2">
+                        <PackageSearch className="h-4 w-4" />
+                        <span className="font-mono font-medium">{booking.courierTracking}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="courier-service">Courier Service *</Label>
+                  <Select value={courierService} onValueChange={setCourierService}>
+                    <SelectTrigger id="courier-service">
+                      <SelectValue placeholder="Select courier service..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fedex">FedEx</SelectItem>
+                      <SelectItem value="dpd">DPD</SelectItem>
+                      <SelectItem value="ups">UPS</SelectItem>
+                      <SelectItem value="parcelforce">Parcelforce</SelectItem>
+                      <SelectItem value="royalmail">Royal Mail</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {courierService === 'other' && (
+                    <div className="space-y-2 mt-2">
+                      <Label htmlFor="other-courier-service">Courier Service Name *</Label>
+                      <Input
+                        id="other-courier-service"
+                        placeholder="Enter courier service name..."
+                        value={otherCourierService}
+                        onChange={(e) => setOtherCourierService(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tracking-number">Tracking Number *</Label>
+                  <Input
+                    id="tracking-number"
+                    placeholder="Enter tracking number..."
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {booking.courierTracking 
+                      ? "Update the tracking number if it has changed."
+                      : "Enter the tracking number provided by the courier service."}
+                  </p>
+                </div>
+                <Button
+                  variant="default"
+                  onClick={handleBookCourier}
+                  disabled={
+                    !trackingNumber.trim() || 
+                    !courierService || 
+                    (courierService === 'other' && !otherCourierService.trim()) ||
+                    bookCourierMutation.isPending
+                  }
+                  className="w-full"
+                >
+                  {bookCourierMutation.isPending ? (
+                    <>
+                      <Loader2 className="animate-spin" />
+                      Booking Courier...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 />
+                      Book Courier
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  This will update the booking status to "courier_booked" and add the tracking number.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserPlus className="h-5 w-5" />
+                  Driver Assignment
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
               {booking.driverName ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">Currently Assigned</p>
@@ -480,6 +669,7 @@ const Assignment = () => {
               )}
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     </div>

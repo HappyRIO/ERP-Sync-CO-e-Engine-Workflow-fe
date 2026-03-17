@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, Truck, Route, Fuel, User, UserPlus, UserCog } from "lucide-react";
+import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, Truck, Route, Fuel, User, UserPlus, UserCog, PackageSearch } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,10 +29,9 @@ import { toast } from "sonner";
 const statusGroups: { label: string; statuses: (BookingLifecycleStatus | 'cancelled')[] }[] = [
   { label: "Pending Approval", statuses: ['pending'] },
   { label: "Created", statuses: ['created'] },
-  { label: "Scheduled", statuses: ['scheduled', 'collection_scheduled', 'delivery_scheduled'] },
+  { label: "Scheduled", statuses: ['scheduled', 'collection_scheduled'] },
   { label: "JML - Device Management", statuses: ['device_allocated', 'courier_booked'] },
   { label: "Collected", statuses: ['collected'] },
-  { label: "In Transit", statuses: ['in_transit'] },
   { label: "In Progress", statuses: ['warehouse', 'sanitised', 'graded'] },
   { label: "Delivered", statuses: ['delivered'] },
   { label: "Completed", statuses: ['completed'] },
@@ -261,8 +260,8 @@ const BookingQueue = () => {
                                 <span>Driver: {booking.driverName}</span>
                               </div>
                             )}
-                            {/* Show Re-assign button only when booking is scheduled, has a job, and job status is 'routed' */}
-                            {booking.status === 'scheduled' && booking.jobId && booking.jobStatus === 'routed' && (
+                            {/* Show Re-assign button only when booking is scheduled, has a job, and job status is 'routed' - only for ITAD bookings */}
+                            {booking.status === 'scheduled' && booking.jobId && booking.jobStatus === 'routed' && booking.bookingType !== 'jml' && (
                               <Button 
                                 variant="outline" 
                                 className="w-full mt-2" 
@@ -284,11 +283,46 @@ const BookingQueue = () => {
                                 </Link>
                               </Button>
                             )}
-                            {booking.status === 'created' && (
+                            {/* Only show Assign Driver for ITAD bookings - explicitly exclude JML */}
+                            {booking.status === 'created' && 
+                             booking.bookingType !== 'jml' && 
+                             (booking.bookingType === 'itad_collection' || booking.bookingType === undefined || booking.bookingType === null) && (
                               <Button variant="default" asChild className="w-full mt-2" size="sm">
                                 <Link to={`/admin/assign?booking=${booking.id}`} className="text-inherit no-underline">
                                   <UserPlus />
                                   Assign Driver
+                                </Link>
+                              </Button>
+                            )}
+                            {/* Show Allocate Device for new_starter and breakfix in created status */}
+                            {booking.status === 'created' &&
+                              booking.bookingType === 'jml' &&
+                              (booking.jmlSubType === 'new_starter' || booking.jmlSubType === 'breakfix') && (
+                              <Button variant="default" asChild className="w-full mt-2" size="sm">
+                                <Link to={`/admin/device-allocation?booking=${booking.id}`} className="text-inherit no-underline">
+                                  <Package />
+                                  Allocate Device
+                                </Link>
+                              </Button>
+                            )}
+                            {/* Show Book Courier for JML bookings in device_allocated status */}
+                            {booking.status === 'device_allocated' &&
+                              booking.bookingType === 'jml' && (
+                              <Button variant="default" asChild className="w-full mt-2" size="sm">
+                                <Link to={`/admin/assign?booking=${booking.id}`} className="text-inherit no-underline">
+                                  <PackageSearch />
+                                  Book Courier
+                                </Link>
+                              </Button>
+                            )}
+                            {/* Show Book Courier for leaver and mover in created status (no device allocation needed) */}
+                            {booking.status === 'created' &&
+                              booking.bookingType === 'jml' &&
+                              (booking.jmlSubType === 'leaver' || booking.jmlSubType === 'mover') && (
+                              <Button variant="default" asChild className="w-full mt-2" size="sm">
+                                <Link to={`/admin/assign?booking=${booking.id}`} className="text-inherit no-underline">
+                                  <PackageSearch />
+                                  Book Courier
                                 </Link>
                               </Button>
                             )}
