@@ -421,6 +421,7 @@ const JMLNewStarter = () => {
             const bookingLat = siteLat;
             const bookingLng = siteLng;
 
+            const filteredDevices = devices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType);
             const booking = await jmlBookingService.createNewStarter({
               clientId,
               clientName,
@@ -431,9 +432,10 @@ const JMLNewStarter = () => {
               phone,
               startDate: startDate!.toISOString(),
               siteName: selectedSite ? selectedSite.name : siteDetails.siteName,
+              deviceType: filteredDevices[0]?.deviceType ?? 'Windows',
               lat: bookingLat,
               lng: bookingLng,
-              devices: devices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType),
+              devices: filteredDevices,
             });
 
             toast.success("Booking created successfully!", {
@@ -476,6 +478,7 @@ const JMLNewStarter = () => {
         resolvedEmployeeName = user?.name || "User";
       }
 
+      const filteredDevices = devices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType);
       const booking = await jmlBookingService.createNewStarter({
         clientId,
         clientName,
@@ -486,9 +489,10 @@ const JMLNewStarter = () => {
         phone,
         startDate: startDate!.toISOString(),
         siteName: siteDetails.siteName,
+        deviceType: filteredDevices[0]?.deviceType ?? 'Windows',
         lat: siteLocation?.lat,
         lng: siteLocation?.lng,
-        devices: devices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType),
+        devices: filteredDevices,
       });
 
       toast.success("Booking created successfully!", {

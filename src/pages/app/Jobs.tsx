@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, ArrowRight, MapPin, Calendar, Package, Loader2, Filter, Truck } from "lucide-react";
+import { Search, ArrowRight, MapPin, Calendar, Package, Loader2, Filter, Truck, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +13,10 @@ import { useJobs } from "@/hooks/useJobs";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Base status filters - all possible statuses
+// All workflow status filters (aligned with WorkflowStatus type)
 const allStatusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
+  // ITAD collection flow
   { value: "booked", label: "Booked" },
   { value: "routed", label: "Routed" },
   { value: "en-route", label: "En Route" },
@@ -25,15 +26,23 @@ const allStatusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
   { value: "sanitised", label: "Sanitised" },
   { value: "graded", label: "Graded" },
   { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+  // JML flow
+  { value: "device-allocated", label: "Device Allocated" },
+  { value: "courier-booked", label: "Courier Booked" },
+  { value: "dispatched", label: "Dispatched" },
+  { value: "delivered", label: "Delivered" },
+  { value: "delivery-courier-booked", label: "Delivery Courier Booked" },
+  { value: "delivery-dispatched", label: "Delivery Dispatched" },
+  { value: "inventory", label: "Inventory" },
 ];
 
+// Statuses drivers care about (assigned / in-transit jobs only)
+const driverStatuses: (WorkflowStatus | "all")[] = ["all", "routed", "en-route", "arrived", "collected"];
+
 const getStatusFilters = (userRole?: string) => {
-  if (userRole === 'driver') {
-    // Drivers see jobs assigned to them: routed, en-route, arrived, collected
-    // They don't see booked (unassigned), warehouse, sanitised, graded, or completed jobs
-    return allStatusFilters.filter(
-      filter => !['booked', 'warehouse', 'sanitised', 'graded', 'completed'].includes(filter.value)
-    );
+  if (userRole === "driver") {
+    return allStatusFilters.filter((f) => driverStatuses.includes(f.value));
   }
   return allStatusFilters;
 };
@@ -147,7 +156,7 @@ const Jobs = () => {
                 {/* Main Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2 flex-wrap">
-                    <h3 className="font-semibold text-foreground truncate">{job.organisationName || job.clientName}</h3>
+                    <h3 className="font-semibold text-foreground truncate">{job.organisationName}</h3>
                     <BookingTypeBadge 
                       bookingType={job.bookingType} 
                       jmlSubType={job.jmlSubType}
@@ -159,6 +168,12 @@ const Jobs = () => {
                     <span className="font-mono text-xs bg-secondary px-2 py-0.5 rounded">
                       {job.erpJobNumber}
                     </span>
+                    {job.createdByName && (
+                      <span className="flex items-center gap-1" title="Booked by">
+                        <User className="h-3.5 w-3.5" />
+                        {job.createdByName}
+                      </span>
+                    )}
                     {job.jmlSubType === 'mover' && job.currentAddress ? (
                       <div className="flex flex-col gap-0.5">
                         <span className="flex items-center gap-1">

@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from "react";
-import { Upload, RefreshCw, Filter, Search, Plus, EllipsisVertical, Edit2, FileUp } from "lucide-react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { Upload, RefreshCw, Filter, Search, Plus, EllipsisVertical, Edit2, FileUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useInventory, useUploadInventory, useSyncInventory } from "@/hooks/useInventory";
+import { useAssetCategories } from "@/hooks/useAssets";
 import { useClients } from "@/hooks/useClients";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -29,14 +30,23 @@ const Inventory = () => {
   
   // Use selected clientId for admin (optional), undefined for client users (they see their own)
   const { data: inventory = [], isLoading } = useInventory(isAdmin ? (selectedClientId || undefined) : undefined);
+  const { data: assetCategories = [] } = useAssetCategories();
   const uploadInventory = useUploadInventory();
   const syncInventory = useSyncInventory();
+
+  // Helpers: match category by API name or legacy lowercase (for CSV/backward compatibility)
+  const requiresDeviceType = (name: string) =>
+    ['Laptop', 'Desktop'].includes(name) || ['laptop', 'desktop'].includes(name?.toLowerCase());
+  const requiresImei = (name: string) =>
+    ['Smart Phones', 'Tablets'].includes(name) || ['mobile', 'tablet'].includes(name?.toLowerCase());
   
   const [searchTerm, setSearchTerm] = useState("");
   const [deviceTypeFilter, setDeviceTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [conditionCodeFilter, setConditionCodeFilter] = useState<string>("all");
   const [showAddDevice, setShowAddDevice] = useState(false);
+  const [pageSize, setPageSize] = useState<10 | 20 | 50>(20);
+  const [page, setPage] = useState(1);
   
   // Manual Add form state
   const [manualForm, setManualForm] = useState({
@@ -75,6 +85,18 @@ const Inventory = () => {
     });
   }, [inventory, searchTerm, deviceTypeFilter, statusFilter, conditionCodeFilter, selectedClientId, isAdmin]);
 
+  const totalFiltered = filteredInventory.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const paginatedInventory = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredInventory.slice(start, start + pageSize);
+  }, [filteredInventory, page, pageSize]);
+
+  // Reset to page 1 when filters or page size change (page may be out of range)
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
+
   const handleManualAdd = () => {
     if (!manualForm.category || !manualForm.make || !manualForm.model || !manualForm.serialNumber || !manualForm.conditionCode) {
       toast.error("Please fill in all required fields");
@@ -82,13 +104,13 @@ const Inventory = () => {
     }
 
     // Device Type is required for Laptop and Desktop
-    if ((manualForm.category === "laptop" || manualForm.category === "desktop") && !manualForm.deviceType) {
+    if (requiresDeviceType(manualForm.category) && !manualForm.deviceType) {
       toast.error("Device Type (Windows/Apple) is required for Laptop and Desktop");
       return;
     }
 
     // IMEI is required for mobile devices
-    if ((manualForm.category === "mobile" || manualForm.category === "tablet") && !manualForm.imei) {
+    if (requiresImei(manualForm.category) && !manualForm.imei) {
       toast.error("IMEI is required for mobile devices");
       return;
     }
@@ -98,9 +120,7 @@ const Inventory = () => {
 
     const items = [{
       category: manualForm.category,
-      deviceType: (manualForm.category === "laptop" || manualForm.category === "desktop") 
-        ? manualForm.deviceType 
-        : null,
+      deviceType: requiresDeviceType(manualForm.category) ? manualForm.deviceType : null,
       make: manualForm.make,
       model: manualForm.model,
       serialNumber: manualForm.serialNumber,
@@ -174,22 +194,23 @@ const Inventory = () => {
 
       const items = lines.slice(1).map((line, index) => {
         const values = line.split(',').map(v => v.trim());
-        const category = values[categoryIdx]?.toLowerCase();
-        
+        const categoryInput = values[categoryIdx]?.trim() || '';
+        // Normalize to API category name (e.g. "laptop" -> "Laptop", "voip" -> "VOIP")
+        const category = assetCategories.find(c => c.name.toLowerCase() === categoryInput.toLowerCase())?.name ?? categoryInput;
+
         // Validate required fields based on category
-        if ((category === "laptop" || category === "desktop") && deviceTypeIdx >= 0 && !values[deviceTypeIdx]) {
+        if (requiresDeviceType(category) && deviceTypeIdx >= 0 && !values[deviceTypeIdx]) {
           toast.error(`Row ${index + 2}: Device Type (Windows/Apple) is required for ${category}`);
           return null;
         }
-        
-        if ((category === "mobile" || category === "tablet") && imeiIdx >= 0 && !values[imeiIdx]) {
+
+        if (requiresImei(category) && imeiIdx >= 0 && !values[imeiIdx]) {
           toast.error(`Row ${index + 2}: IMEI is required for ${category}`);
           return null;
         }
-        
-        // Extract deviceType (Windows/Apple) for laptop/desktop
-        const deviceType = (category === "laptop" || category === "desktop") && deviceTypeIdx >= 0 && values[deviceTypeIdx]
-          ? values[deviceTypeIdx] // Windows or Apple
+
+        const deviceType = requiresDeviceType(category) && deviceTypeIdx >= 0 && values[deviceTypeIdx]
+          ? values[deviceTypeIdx]
           : null;
         
         // Determine status: if client is selected, set to allocated, otherwise available
@@ -207,7 +228,7 @@ const Inventory = () => {
           status: status,
         };
       }).filter((item): item is NonNullable<typeof item> => 
-        item !== null && item.make && item.model && item.serialNumber && item.conditionCode
+        Boolean(item !== null && item.make && item.model && item.serialNumber && item.conditionCode)
       );
 
       if (items.length === 0) {
@@ -257,9 +278,12 @@ const Inventory = () => {
     delivered: "bg-purple-500/10 text-purple-500",
   };
 
+  // Category filter: show all API categories plus any in inventory (so VOIP, WEEE Waste appear even with 0 items)
   const uniqueDeviceTypes = useMemo(() => {
-    return Array.from(new Set(inventory.map(item => item.category))).sort();
-  }, [inventory]);
+    const fromInventory = Array.from(new Set(inventory.map(item => item.category)));
+    const fromApi = assetCategories.map(c => c.name);
+    return Array.from(new Set([...fromApi, ...fromInventory])).sort();
+  }, [inventory, assetCategories]);
 
   const uniqueConditionCodes = useMemo(() => {
     return Array.from(new Set(inventory.map(item => item.conditionCode))).sort();
@@ -316,8 +340,8 @@ const Inventory = () => {
                       value={manualForm.category} 
                       onValueChange={(value) => {
                         // Reset deviceType and imei when category changes
-                        const resetDeviceType = (value !== "laptop" && value !== "desktop");
-                        const resetImei = (value !== "mobile" && value !== "tablet");
+                        const resetDeviceType = !requiresDeviceType(value);
+                        const resetImei = !requiresImei(value);
                         setManualForm({ 
                           ...manualForm, 
                           category: value,
@@ -330,17 +354,15 @@ const Inventory = () => {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="laptop">Laptop</SelectItem>
-                        <SelectItem value="desktop">Desktop</SelectItem>
-                        <SelectItem value="mobile">Mobile (Smart Phones)</SelectItem>
-                        <SelectItem value="tablet">Tablet</SelectItem>
-                        <SelectItem value="server">Server</SelectItem>
-                        <SelectItem value="storage">Storage</SelectItem>
-                        <SelectItem value="networking">Networking</SelectItem>
+                        {assetCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>
+                            {cat.icon ? `${cat.icon} ` : ""}{cat.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  {(manualForm.category === "laptop" || manualForm.category === "desktop") && (
+                  {requiresDeviceType(manualForm.category) && (
                     <div className="space-y-2">
                       <Label htmlFor="deviceType">Device Type *</Label>
                       <Select 
@@ -394,7 +416,7 @@ const Inventory = () => {
                       placeholder="e.g., IBMA, IBMB"
                     />
                   </div>
-                  {(manualForm.category === "mobile" || manualForm.category === "tablet") && (
+                  {requiresImei(manualForm.category) && (
                     <div className="space-y-2">
                       <Label htmlFor="imei">IMEI *</Label>
                       <Input
@@ -443,12 +465,12 @@ const Inventory = () => {
                   <p className="text-sm text-muted-foreground">
                     Required columns: category, make, model, serialNumber, conditionCode<br />
                     Optional columns: deviceType (required if category is laptop or desktop), imei (required if category is mobile or tablet), clientId<br />
-                    Categories: laptop, desktop, mobile, tablet, server, storage, networking
+                    Categories: use exact names from the dropdown (e.g. Laptop, Desktop, Smart Phones, Tablets, Server, Storage, Networking, VOIP, WEEE Waste); lowercase is also accepted.
                   </p>
                   <div className="text-xs font-mono bg-muted p-2 rounded">
                     category,deviceType,make,model,serialNumber,conditionCode,imei,clientId<br />
-                    laptop,Windows,Dell,Latitude 7420,ABC123,IBMA,,<br />
-                    mobile,,Apple,iPhone 14,DEF456,IBMB,123456789,
+                    laptop,Windows,Dell,Latitude 7420,ABC123,IBMA,<br />
+                    mobile,Apple,iPhone 14,DEF456,IBMB,123456789,
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -542,6 +564,61 @@ const Inventory = () => {
             </Select>
           </div>
 
+          {isAdmin && totalFiltered > 0 && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground whitespace-nowrap">Show</span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value) as 10 | 20 | 50);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[90px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">per page</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  Page {page} of {totalPages}
+                  {totalFiltered > 0 && (
+                    <span className="ml-1">
+                      ({totalFiltered} device{totalFiltered !== 1 ? 's' : ''})
+                    </span>
+                  )}
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="text-center py-8">Loading...</div>
           ) : filteredInventory.length === 0 ? (
@@ -564,7 +641,7 @@ const Inventory = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInventory.map((item) => (
+                {(isAdmin ? paginatedInventory : filteredInventory).map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{getCategory(item.category)}</TableCell>
                     <TableCell>{item.make}</TableCell>

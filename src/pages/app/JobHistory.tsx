@@ -74,13 +74,11 @@ const JobHistory = () => {
     }
     
     return driverJobs.filter(job => {
-      // Use completedDate if available, otherwise use updatedAt or createdAt
+      // Use completedDate if available, otherwise use scheduledDate
       const dateToCheck = job.completedDate 
         ? new Date(job.completedDate)
-        : job.updatedAt 
-        ? new Date(job.updatedAt)
-        : job.createdAt 
-        ? new Date(job.createdAt)
+        : job.scheduledDate 
+        ? new Date(job.scheduledDate)
         : null;
       
       if (!dateToCheck) return false;
@@ -224,7 +222,7 @@ const JobHistory = () => {
                   {/* Main Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <h3 className="font-semibold text-foreground truncate">{job.organisationName || job.clientName}</h3>
+                      <h3 className="font-semibold text-foreground truncate">{job.organisationName}</h3>
                       <BookingTypeBadge 
                         bookingType={job.bookingType} 
                         jmlSubType={job.jmlSubType}

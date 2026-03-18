@@ -353,11 +353,6 @@ const Clients = () => {
                             <UserCheck className="h-3 w-3 mr-1" />
                             Active
                           </Badge>
-                        ) : client.status === 'declined' ? (
-                          <Badge variant="secondary" className="bg-destructive/10 text-destructive text-xs">
-                            <XCircle className="h-3 w-3 mr-1" />
-                            Declined
-                          </Badge>
                         ) : (
                           <Badge variant="secondary" className="bg-destructive/10 text-destructive text-xs">
                             <UserX className="h-3 w-3 mr-1" />

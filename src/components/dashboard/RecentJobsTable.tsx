@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { ArrowRight, MapPin, Loader2 } from "lucide-react";
+import { ArrowRight, MapPin, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { statusConfig } from "@/lib/constants";
@@ -52,7 +52,7 @@ export function RecentJobsTable() {
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <p className="font-medium text-foreground truncate">{job.clientName}</p>
+                  <p className="font-medium text-foreground truncate">{job.organisationName}</p>
                   <BookingTypeBadge 
                     bookingType={job.bookingType} 
                     jmlSubType={job.jmlSubType}
@@ -76,6 +76,15 @@ export function RecentJobsTable() {
                   )}
                   <span className="mx-1">•</span>
                   <span>{job.erpJobNumber}</span>
+                  {job.createdByName && (
+                    <>
+                      <span className="mx-1">•</span>
+                      <span className="flex items-center gap-1" title="Booked by">
+                        <User className="h-3 w-3" />
+                        <span className="truncate">{job.createdByName}</span>
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 

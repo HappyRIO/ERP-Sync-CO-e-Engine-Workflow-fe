@@ -325,17 +325,47 @@ const Assignment = () => {
                 <p className="font-mono">{booking.bookingNumber}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Client</p>
+                <p className="text-sm text-muted-foreground">Organisation</p>
                 <p className="font-semibold">{booking.organisationName || booking.clientName}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
+              {booking.createdByName && (
                 <div>
-                  <p className="text-sm text-muted-foreground">Site</p>
-                  <p>{booking.siteName}</p>
-                  <p className="text-sm text-muted-foreground">{booking.siteAddress}</p>
+                  <p className="text-sm text-muted-foreground">Booked by</p>
+                  <p>{booking.createdByName}</p>
                 </div>
-              </div>
+              )}
+              {booking.jmlSubType === 'mover' && (booking.currentAddress || booking.currentSiteName) ? (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">From</p>
+                      <p className="font-medium">{booking.currentSiteName || 'Current address'}</p>
+                      <p className="text-sm text-muted-foreground">{booking.currentAddress}</p>
+                      {booking.currentPostcode && (
+                        <p className="text-xs text-muted-foreground">{booking.currentPostcode}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-4 w-4 text-primary mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">To</p>
+                      <p className="font-medium">{booking.siteName}</p>
+                      <p className="text-sm text-muted-foreground">{booking.siteAddress}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Site</p>
+                    <p>{booking.siteName}</p>
+                    <p className="text-sm text-muted-foreground">{booking.siteAddress}</p>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <div>

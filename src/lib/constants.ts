@@ -13,6 +13,7 @@ export const statusConfig: Record<WorkflowStatus, { label: string; color: string
   'sanitised': { label: 'Sanitised', color: 'text-primary', bgColor: 'bg-primary/15' },
   'graded': { label: 'Graded', color: 'text-success', bgColor: 'bg-success/15' },
   'completed': { label: 'Completed', color: 'text-success-foreground', bgColor: 'bg-success/20' },
+  'cancelled': { label: 'Cancelled', color: 'text-muted-foreground', bgColor: 'bg-muted/20' },
   // JML-specific statuses
   'device-allocated': { label: 'Device Allocated', color: 'text-blue-600', bgColor: 'bg-blue-500/20' },
   'courier-booked': { label: 'Courier Booked', color: 'text-purple-600', bgColor: 'bg-purple-500/20' },
@@ -38,6 +39,7 @@ export function getWorkflowStatusColor(status: WorkflowStatus): string {
     'sanitised': 'bg-accent/10 text-accent',
     'graded': 'bg-success/10 text-success',
     'completed': 'bg-success/20 text-success',
+    'cancelled': 'bg-muted/10 text-muted-foreground',
     // JML-specific statuses
     'device-allocated': 'bg-blue-500/10 text-blue-600',
     'courier-booked': 'bg-purple-500/10 text-purple-600',

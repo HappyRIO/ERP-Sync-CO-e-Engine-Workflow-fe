@@ -276,11 +276,7 @@ const BookingApproval = () => {
             {isGraded ? 'Final Approval' : 'Booking Approval'}
           </h2>
           <div className="text-sm sm:text-base text-muted-foreground">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-0 sm:gap-1">
-              <span>{booking.bookingNumber}</span>
-              <span className="hidden sm:inline">-</span>
-              <span>{booking.organisationName || booking.clientName}</span>
-            </div>
+            <span>{booking.bookingNumber}</span>
           </div>
         </div>
         <Badge className={cn(
@@ -344,6 +340,16 @@ const BookingApproval = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="font-medium text-muted-foreground text-sm">Organisation</p>
+              <p className="font-semibold">{booking.organisationName || booking.clientName}</p>
+            </div>
+            {booking.createdByName && (
+              <div>
+                <p className="font-medium text-muted-foreground text-sm">Booked by</p>
+                <p>{booking.createdByName}</p>
+              </div>
+            )}
             {booking.jmlSubType === 'mover' && booking.currentAddress ? (
               <>
                 <div className="flex items-start gap-2 text-sm">
@@ -357,7 +363,7 @@ const BookingApproval = () => {
                 <div className="flex items-start gap-2 text-sm">
                   <MapPin className="h-4 w-4 text-primary mt-0.5" />
                   <div>
-                    <p className="font-medium">To (Delivery)</p>
+                    <p className="font-medium">To (Delivery) – Site</p>
                     <p className="text-muted-foreground">{booking.siteName}</p>
                     <p className="text-muted-foreground text-xs">{booking.siteAddress}</p>
                   </div>
@@ -367,7 +373,7 @@ const BookingApproval = () => {
               <div className="flex items-center gap-2 text-sm">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="font-medium">Collection Site</p>
+                  <p className="font-medium">Site</p>
                   <p className="text-muted-foreground">{booking.siteName}</p>
                   <p className="text-muted-foreground text-xs">{booking.siteAddress}</p>
                 </div>

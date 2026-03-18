@@ -179,9 +179,6 @@ const DriverJobView = () => {
     bookingType?: 'itad_collection' | 'jml',
     jmlSubType?: 'new_starter' | 'leaver' | 'breakfix' | 'mover'
   ): WorkflowStatus | null => {
-    // Normalize status (handle both en-route and en_route)
-    const normalizedStatus = currentStatus === 'en_route' ? 'en-route' : currentStatus;
-    
     // ITAD workflow
     if (!bookingType || bookingType === 'itad_collection') {
       // ITAD: booked → routed → en-route → arrived → collected → warehouse (driver final status)
@@ -193,7 +190,7 @@ const DriverJobView = () => {
         'collected': 'warehouse', // Driver final status
         // 'warehouse' has no next status for driver - admin moves to sanitised → graded → completed
       };
-      return itadTransitions[normalizedStatus] || null;
+      return itadTransitions[currentStatus] || null;
     }
     
     // JML workflows
@@ -510,7 +507,7 @@ const DriverJobView = () => {
             <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base sm:text-lg font-bold truncate">{job.organisationName || job.clientName}</h1>
+            <h1 className="text-base sm:text-lg font-bold truncate">{job.organisationName}</h1>
             <p className="text-xs text-muted-foreground font-mono truncate">
               {job.erpJobNumber}
             </p>

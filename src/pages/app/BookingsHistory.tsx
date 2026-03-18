@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, FileText, Truck } from "lucide-react";
+import { Search, Calendar, MapPin, Package, ArrowRight, Loader2, FileText, Truck, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -74,16 +74,24 @@ const BookingsHistory = () => {
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
+          <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="created">Created</SelectItem>
             <SelectItem value="scheduled">Scheduled</SelectItem>
+            <SelectItem value="collection_scheduled">Collection Scheduled</SelectItem>
             <SelectItem value="collected">Collected</SelectItem>
+            <SelectItem value="warehouse">At Warehouse</SelectItem>
             <SelectItem value="sanitised">Sanitised</SelectItem>
             <SelectItem value="graded">Graded</SelectItem>
+            <SelectItem value="inventory">Inventory</SelectItem>
+            <SelectItem value="device_allocated">Device Allocated</SelectItem>
+            <SelectItem value="courier_booked">Courier Booked</SelectItem>
+            <SelectItem value="dispatched">Dispatched</SelectItem>
+            <SelectItem value="delivered">Delivered</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
@@ -139,6 +147,12 @@ const BookingsHistory = () => {
                         <span className="font-mono text-xs bg-secondary px-2 py-0.5 rounded">
                           {booking.bookingNumber}
                         </span>
+                        {booking.createdByName && (
+                          <span className="flex items-center gap-1" title="Booked by">
+                            <User className="h-3.5 w-3.5" />
+                            {booking.createdByName}
+                          </span>
+                        )}
                         {booking.jmlSubType === 'mover' && booking.currentAddress ? (
                           <div className="flex flex-col gap-0.5">
                             <span className="flex items-center gap-1">

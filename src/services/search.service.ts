@@ -36,7 +36,7 @@ class SearchService {
         results.push({
           type: 'job',
           id: job.id,
-          title: job.organisationName || job.clientName,
+          title: job.organisationName,
           subtitle: `${job.erpJobNumber} • ${job.siteName}`,
           url: `/jobs/${job.id}`,
         });

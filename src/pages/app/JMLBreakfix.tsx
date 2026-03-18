@@ -395,6 +395,7 @@ const JMLBreakfix = () => {
             const bookingLat = selectedSite.lat;
             const bookingLng = selectedSite.lng;
 
+            const filteredBroken = brokenDevices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType);
             const booking = await jmlBookingService.createBreakfix({
               clientId,
               clientName,
@@ -404,7 +405,8 @@ const JMLBreakfix = () => {
               postcode: bookingPostcode,
               phone,
               siteName: selectedSite ? selectedSite.name : siteDetails.siteName,
-              brokenDevices: brokenDevices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType),
+              brokenDevices: filteredBroken,
+              deviceType: (filteredBroken[0]?.deviceType as 'Windows' | 'Apple') ?? 'Windows',
               lat: bookingLat,
               lng: bookingLng,
             });
@@ -447,6 +449,7 @@ const JMLBreakfix = () => {
         resolvedEmployeeName = user?.name || "User";
       }
 
+      const filteredBroken = brokenDevices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType);
       const booking = await jmlBookingService.createBreakfix({
         clientId,
         clientName,
@@ -456,7 +459,8 @@ const JMLBreakfix = () => {
         postcode: siteDetails.postcode,
         phone,
         siteName: siteDetails.siteName,
-        brokenDevices: brokenDevices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType),
+        brokenDevices: filteredBroken,
+        deviceType: (filteredBroken[0]?.deviceType as 'Windows' | 'Apple') ?? 'Windows',
         lat: siteLocation?.lat,
         lng: siteLocation?.lng,
       });

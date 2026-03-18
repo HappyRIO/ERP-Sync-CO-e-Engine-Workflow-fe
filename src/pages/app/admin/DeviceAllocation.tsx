@@ -306,33 +306,25 @@ const DeviceAllocation = () => {
               <CardTitle className="text-lg">Booking Details</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="space-y-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Booking Number</p>
                   <p className="font-mono text-xs">{booking.bookingNumber}</p>
                 </div>
-                <div>
-                  <p className="text-muted-foreground">Client</p>
-                  <p className="font-semibold">{booking.organisationName || booking.clientName}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-muted-foreground">Organisation</p>
+                    <p className="font-semibold">{booking.organisationName || booking.clientName}</p>
+                  </div>
+                  {booking.createdByName && (
+                    <div>
+                      <p className="text-muted-foreground">Booked by</p>
+                      <p>{booking.createdByName}</p>
+                    </div>
+                  )}
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Employee</p>
-                  <p>{booking.employeeName}</p>
-                </div>
-                {booking.employeeEmail && (
-                  <div>
-                    <p className="text-muted-foreground">Email</p>
-                    <p className="text-xs">{booking.employeeEmail}</p>
-                  </div>
-                )}
-                {booking.employeePhone && (
-                  <div>
-                    <p className="text-muted-foreground">Phone</p>
-                    <p>{booking.employeePhone}</p>
-                  </div>
-                )}
-                <div className="col-span-2">
-                  <p className="text-muted-foreground">Delivery Address</p>
+                  <p className="text-muted-foreground">Site</p>
                   <p className="text-xs">{booking.siteName}, {booking.siteAddress}</p>
                 </div>
                 <div>

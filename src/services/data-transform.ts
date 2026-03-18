@@ -2,13 +2,13 @@
 import type { Job, Asset, Driver, Evidence, Certificate } from '@/types/jobs';
 import type { WorkflowStatus } from '@/types/jobs';
 
-// Backend job format (from Prisma)
+// Backend job format (from API; clientName removed, organisationName is the company name)
 interface BackendJob {
   id: string;
   erpJobNumber: string;
   bookingId?: string | null;
-  clientName: string;
-  organisationName?: string; // Organisation/company name
+  organisationName: string; // Organisation/company name (from booking.client)
+  createdByName?: string;
   siteName: string;
   siteAddress: string;
   status: string; // 'en_route' format
@@ -64,6 +64,7 @@ interface BackendDriver {
   vehicleFuelType?: 'petrol' | 'diesel' | 'electric';
   phone?: string;
   eta?: string;
+  isEtaDelayed?: boolean;
 }
 
 interface BackendEvidence {
@@ -224,8 +225,8 @@ export function transformJob(backendJob: BackendJob): Job {
     id: backendJob.id,
     erpJobNumber: backendJob.erpJobNumber,
     bookingId: backendJob.bookingId || undefined,
-    clientName: backendJob.clientName,
     organisationName: backendJob.organisationName,
+    createdByName: backendJob.createdByName,
     siteName: backendJob.siteName,
     siteAddress: backendJob.siteAddress,
     status: transformStatus(backendJob.status),

@@ -108,7 +108,7 @@ const BookingGradingReport = () => {
               <p className="text-sm text-muted-foreground mt-2">
                 Current status: <Badge variant="outline" className="ml-1">{booking.status}</Badge>
               </p>
-              {(booking.status === 'sanitised' || booking.status === 'graded') && user?.role === 'admin' && (
+              {((booking.status as any) === 'sanitised' || (booking.status as any) === 'graded') && user?.role === 'admin' && (
                 <Button className="mt-4" asChild>
                   <Link to={`/admin/grading/${id}`} className="text-inherit no-underline">
                     Go to Asset Grading

@@ -10,6 +10,7 @@ export type WorkflowStatus =
   | 'sanitised' 
   | 'graded' 
   | 'completed'
+  | 'cancelled'
   | 'device-allocated'      // JML: Device allocated from inventory
   | 'courier-booked'         // JML: Courier assigned/booked
   | 'dispatched'             // JML: Courier picked up package
@@ -22,8 +23,8 @@ export interface Job {
   id: string;
   erpJobNumber: string;
   bookingId?: string; // Link to booking
-  clientName: string;
-  organisationName?: string; // Organisation/company name
+  organisationName: string; // Organisation/company name (from booking.client)
+  createdByName?: string; // Booker name (user who created the booking)
   siteName: string;
   siteAddress: string;
   status: WorkflowStatus;

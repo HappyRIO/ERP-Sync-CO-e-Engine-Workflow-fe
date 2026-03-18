@@ -21,22 +21,149 @@ import { useJob } from "@/hooks/useJobs";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useReassignDriver } from "@/hooks/useJobs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getStatusLabelExtended, getStatusColor } from "@/types/booking-lifecycle";
+import { getStatusLabelExtended, getStatusColor, getStatusLabel } from "@/types/booking-lifecycle";
 import type { BookingLifecycleStatus } from "@/types/booking-lifecycle";
 import { BookingTypeBadge } from "@/components/bookings/BookingTypeBadge";
 import { toast } from "sonner";
 
+// Group order and status mapping (aligned with ITAD / New Starter / Leaver / Breakfix / Mover flows)
 const statusGroups: { label: string; statuses: (BookingLifecycleStatus | 'cancelled')[] }[] = [
-  { label: "Pending Approval", statuses: ['pending'] },
+  { label: "Pending", statuses: ['pending'] },
   { label: "Created", statuses: ['created'] },
-  { label: "Scheduled", statuses: ['scheduled', 'collection_scheduled'] },
-  { label: "JML - Device Management", statuses: ['device_allocated', 'courier_booked'] },
+  { label: "Device allocated", statuses: ['device_allocated'] },
+  { label: "Scheduled", statuses: ['scheduled', 'collection_scheduled', 'courier_booked', 'dispatched'] },
   { label: "Collected", statuses: ['collected'] },
-  { label: "In Progress", statuses: ['warehouse', 'sanitised', 'graded'] },
   { label: "Delivered", statuses: ['delivered'] },
+  { label: "In Progress", statuses: ['warehouse', 'sanitised', 'graded', 'inventory'] },
   { label: "Completed", statuses: ['completed'] },
   { label: "Cancelled", statuses: ['cancelled'] },
 ];
+
+// Determine the single logical next status for a booking
+// This respects different workflows (ITAD, New Starter, Leaver, Breakfix, Mover)
+const getNextStatusForBooking = (booking: {
+  status: BookingLifecycleStatus | "cancelled";
+  bookingType?: "itad_collection" | "jml" | null;
+  jmlSubType?: "new_starter" | "leaver" | "breakfix" | "mover" | null;
+}): BookingLifecycleStatus | null => {
+  const { status, bookingType, jmlSubType } = booking;
+
+  // No next status for terminal states
+  if (status === "completed" || status === "cancelled") return null;
+
+  // Created, device_allocated, warehouse, sanitised, graded are driven by
+  // explicit actions (Assign Driver, Allocate Device, Record Sanitisation, Grade Assets, Final Approval)
+  if (
+    status === "created" ||
+    status === "device_allocated" ||
+    status === "warehouse" ||
+    status === "sanitised" ||
+    status === "graded"
+  ) {
+    return null;
+  }
+
+  // ITAD collection (non-JML)
+  const isItad = !bookingType || bookingType === "itad_collection";
+  const isJml = bookingType === "jml";
+
+  if (isItad) {
+    switch (status) {
+      // ITAD: driver moves created → scheduled → collected → warehouse.
+      // Admin only needs a helper from collected → warehouse if needed.
+      case "collected":
+        return "warehouse";
+      default:
+        return null;
+    }
+  }
+
+  // JML flows
+  if (isJml) {
+    switch (jmlSubType) {
+      case "new_starter":
+        switch (status) {
+          // Created → device_allocated (Allocate Device button)
+          // device_allocated → courier_booked (Book Courier button)
+          case "courier_booked":
+            return "dispatched";
+          case "dispatched":
+            return "delivered";
+          case "delivered":
+            return "completed";
+          default:
+            return null;
+        }
+      case "leaver":
+        switch (status) {
+          // Created → collection_scheduled (Book Courier button)
+          case "collection_scheduled":
+            return "collected";
+          case "collected":
+            return "warehouse";
+          case "warehouse":
+            return "sanitised";
+          case "sanitised":
+            return "graded";
+          case "graded":
+            return "inventory";
+          case "inventory":
+            return "completed";
+          default:
+            return null;
+        }
+      case "breakfix":
+        switch (status) {
+          // Created → device_allocated (Allocate Device button)
+          // device_allocated → courier_booked (Book Courier button)
+          case "courier_booked":
+            return "dispatched";
+          case "dispatched":
+            return "delivered";
+          case "delivered":
+            return "collected"; // Broken device collected
+          case "collected":
+            return "warehouse";
+          case "warehouse":
+            return "sanitised";
+          case "sanitised":
+            return "graded";
+          case "graded":
+            return "inventory";
+          case "inventory":
+            return "completed";
+          default:
+            return null;
+        }
+      case "mover":
+        switch (status) {
+          // Created → collection_scheduled (Book Courier button)
+          case "collection_scheduled":
+            return "collected";
+          case "collected":
+            return "warehouse";
+          case "warehouse":
+            return "inventory";
+          case "inventory":
+            return "device_allocated";
+          case "device_allocated":
+            return "courier_booked";
+          case "courier_booked":
+            return "dispatched";
+          case "dispatched":
+            return "delivered";
+          case "delivered":
+            return "completed";
+          default:
+            return null;
+        }
+      default:
+        return null;
+    }
+  }
+
+  return null;
+};
 
 const BookingQueue = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,13 +183,14 @@ const BookingQueue = () => {
   const bookingToReassign = bookings.find(b => b.id === reassignBookingId);
   const { data: relatedJob } = useJob(bookingToReassign?.jobId || null);
 
-  const handleMoveToSanitisation = (bookingId: string) => {
+  const handleUpdateStatus = (bookingId: string, status: BookingLifecycleStatus | 'cancelled') => {
     updateBookingStatus.mutate(
-      { bookingId, status: 'sanitised' },
+      { bookingId, status, notes: undefined },
       {
         onSuccess: () => {
-          toast.success("Booking moved to sanitisation", {
-            description: "Booking status updated to sanitised.",
+          const label = status === 'cancelled' ? 'Cancelled' : getStatusLabel(status as BookingLifecycleStatus);
+          toast.success("Status updated", {
+            description: `Booking moved to ${label}.`,
           });
         },
         onError: (error) => {
@@ -213,6 +341,12 @@ const BookingQueue = () => {
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-3">
+                            {booking.createdByName && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <User className="h-4 w-4" />
+                                <span className="truncate">{booking.createdByName}</span>
+                              </div>
+                            )}
                             {booking.jmlSubType === 'mover' && booking.currentAddress ? (
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -343,11 +477,45 @@ const BookingQueue = () => {
                             {booking.status === 'graded' && (
                               <Button asChild className="w-full mt-2" size="sm" variant="success">
                                 <Link to={`/admin/booking-approval/${booking.id}`} className="text-inherit no-underline">
-                                  Final Approval
+                                  Final Overview
                                 </Link>
                               </Button>
                             )}
-                            <Button variant="outline" asChild className="w-full" size="sm">
+                            {/* Single next-step button per status, only where there is no dedicated action */}
+                            {(() => {
+                              const nextStatus = getNextStatusForBooking(booking as any);
+                              if (!nextStatus) return null;
+
+                              // For any status that goes directly to Completed, send admin to final overview page
+                              if (nextStatus === 'completed') {
+                                return (
+                                  <Button
+                                    asChild
+                                    className="w-full mt-2"
+                                    size="sm"
+                                    variant="success"
+                                    disabled={updateBookingStatus.isPending}
+                                  >
+                                    <Link to={`/admin/booking-approval/${booking.id}`} className="text-inherit no-underline">
+                                      Final Overview
+                                    </Link>
+                                  </Button>
+                                );
+                              }
+
+                              return (
+                                <Button
+                                  variant="default"
+                                  className="w-full mt-2"
+                                  size="sm"
+                                  disabled={updateBookingStatus.isPending}
+                                  onClick={() => handleUpdateStatus(booking.id, nextStatus)}
+                                >
+                                  {`Move to ${getStatusLabel(nextStatus)}`}
+                                </Button>
+                              );
+                            })()}
+                            <Button variant="outline" asChild className="w-full mt-2" size="sm">
                               <Link to={`/bookings/${booking.id}`} className="text-inherit no-underline">
                                 View Details
                                 <ArrowRight className="h-4 w-4 ml-2" />

@@ -1,11 +1,11 @@
 // Image compression utilities for frontend
-import imageCompression from 'browser-image-compression';
+import imageCompression, { type Options } from 'browser-image-compression';
 
 // Maximum file size: 15MB
 export const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB in bytes
 
 // Compression options for photos (evidence photos)
-export const PHOTO_COMPRESSION_OPTIONS: imageCompression.Options = {
+export const PHOTO_COMPRESSION_OPTIONS: Options = {
   maxSizeMB: 2, // Target size: 2MB (will compress to fit within this)
   maxWidthOrHeight: 1920, // Maximum width or height
   useWebWorker: true, // Use web worker for better performance
@@ -15,7 +15,7 @@ export const PHOTO_COMPRESSION_OPTIONS: imageCompression.Options = {
 };
 
 // Compression options for signatures (smaller, simpler images)
-export const SIGNATURE_COMPRESSION_OPTIONS: imageCompression.Options = {
+export const SIGNATURE_COMPRESSION_OPTIONS: Options = {
   maxSizeMB: 0.5, // Target size: 500KB (signatures are simpler)
   maxWidthOrHeight: 1920, // Maximum width or height
   useWebWorker: true,
@@ -32,7 +32,7 @@ export const SIGNATURE_COMPRESSION_OPTIONS: imageCompression.Options = {
  */
 export async function compressImage(
   file: File,
-  options: imageCompression.Options = PHOTO_COMPRESSION_OPTIONS
+  options: Options = PHOTO_COMPRESSION_OPTIONS
 ): Promise<string> {
   try {
     // Check file size before compression
@@ -76,7 +76,7 @@ export async function compressImage(
  */
 export async function compressBase64Image(
   dataUrl: string,
-  options: imageCompression.Options = PHOTO_COMPRESSION_OPTIONS
+  options: Options = PHOTO_COMPRESSION_OPTIONS
 ): Promise<string> {
   try {
     // Convert data URL to File object

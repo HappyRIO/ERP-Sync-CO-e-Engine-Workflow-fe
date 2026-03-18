@@ -198,7 +198,7 @@ const JobDetail = () => {
         </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <h2 className="text-2xl font-bold text-foreground">{job.organisationName || job.clientName}</h2>
+            <h2 className="text-2xl font-bold text-foreground">{job.organisationName}</h2>
             <BookingTypeBadge 
               bookingType={job.bookingType} 
               jmlSubType={job.jmlSubType}

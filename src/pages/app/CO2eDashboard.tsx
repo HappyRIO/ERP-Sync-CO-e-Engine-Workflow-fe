@@ -142,7 +142,7 @@ const CO2eDashboard = () => {
     if (!isReseller) return [];
     
     return clients.map(client => {
-      const clientJobs = jobs.filter(j => j.clientName === client.name);
+      const clientJobs = jobs.filter(j => j.organisationName === client.name || j.organisationName === client.organisationName);
       const totalCO2e = clientJobs.reduce((sum, j) => sum + j.co2eSaved, 0);
       const totalTravel = clientJobs.reduce((sum, j) => sum + j.travelEmissions, 0);
       const netBenefit = totalCO2e - totalTravel;
@@ -656,7 +656,6 @@ const CO2eDashboard = () => {
                           return {
                             name: j.erpJobNumber, // Use full job number as key
                             jobNumber: j.erpJobNumber,
-                            clientName: j.clientName,
                             organisationName: j.organisationName,
                             siteName: j.siteName,
                             date: `${month} ${year}`,
@@ -1031,7 +1030,6 @@ const CO2eDashboard = () => {
                     return {
                       name: j.erpJobNumber, // Use full job number as key
                       jobNumber: j.erpJobNumber,
-                      clientName: j.clientName,
                       organisationName: j.organisationName,
                       siteName: j.siteName,
                       date: `${month} ${year}`,
