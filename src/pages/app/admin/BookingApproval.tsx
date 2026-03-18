@@ -28,8 +28,10 @@ import { useGradingRecords } from "@/hooks/useGrading";
 import { useSanitisationRecords } from "@/hooks/useSanitisation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { inventoryService } from "@/services/inventory.service";
 
 const BookingApproval = () => {
   const { id } = useParams();
@@ -51,7 +53,50 @@ const BookingApproval = () => {
   const isPending = booking?.status === 'pending';
   const isLeaverOrBreakfix = booking?.bookingType === 'jml' && (booking?.jmlSubType === 'leaver' || booking?.jmlSubType === 'breakfix');
   // Leaver/breakfix must be in inventory status to complete (graded → inventory → completed). Other types can complete from graded.
-  const canCompleteFromThisPage = (isGraded && !isLeaverOrBreakfix) || isInventory;
+  const isDeliveredNewStarter = booking?.bookingType === 'jml' && booking?.jmlSubType === 'new_starter' && booking?.status === 'delivered';
+  const canCompleteFromThisPage = (isGraded && !isLeaverOrBreakfix) || isInventory || isDeliveredNewStarter;
+
+  const { data: clientInventory = [], isLoading: isLoadingClientInventory } = useQuery({
+    queryKey: ['inventory', booking?.clientId, 'delivered-new-starter'],
+    queryFn: () =>
+      booking?.clientId ? inventoryService.getInventory(booking.clientId) : Promise.resolve([]),
+    enabled: isDeliveredNewStarter && !!booking?.clientId,
+    staleTime: 30000,
+  });
+
+  const deliveredSerialNumbers = useMemo(() => {
+    const history = booking?.statusHistory;
+    if (!history?.length) return [];
+
+    const serials = new Set<string>();
+    for (const h of history as any[]) {
+      const notes = (h?.notes || '').toString();
+
+      // Example: "Allocated 2 device(s): SN1, SN2"
+      const multiMatch = notes.match(/Allocated \d+ device\(s\):\s*(.+)$/);
+      if (multiMatch?.[1]) {
+        multiMatch[1].split(',').forEach((s) => {
+          const v = s.trim();
+          if (v) serials.add(v);
+        });
+      }
+
+      // Example: "Device allocated: SN1"
+      const singleMatch = notes.match(/Device allocated:\s*(.+)$/);
+      if (singleMatch?.[1]) {
+        const v = singleMatch[1].trim();
+        if (v) serials.add(v);
+      }
+    }
+
+    return Array.from(serials);
+  }, [booking?.statusHistory]);
+
+  const deliveredInventoryItems = useMemo(() => {
+    if (!deliveredSerialNumbers.length) return [];
+    const serialSet = new Set(deliveredSerialNumbers);
+    return clientInventory.filter((i) => serialSet.has(i.serialNumber));
+  }, [clientInventory, deliveredSerialNumbers]);
 
   const handleApprove = async () => {
     if (!id) return;
@@ -150,8 +195,8 @@ const BookingApproval = () => {
     );
   }
 
-  // Handle bookings that are not in pending, graded, or inventory status
-  if (!isPending && !isGraded && !isInventory) {
+  // Handle bookings that are not in pending, graded, inventory, or (JML new starter) delivered status
+  if (!isPending && !isGraded && !isInventory && !isDeliveredNewStarter) {
     const statusMessages: Record<string, { message: string; variant: 'default' | 'destructive' }> = {
       'created': {
         message: 'This booking has already been approved and is now active.',
@@ -626,7 +671,11 @@ const BookingApproval = () => {
       )}
 
       {/* Device Details - For JML bookings */}
-      {isPending && booking.bookingType === 'jml' && booking.statusHistory && booking.statusHistory.length > 0 && (() => {
+      {/* For new starter, this page can be reached in `delivered` status, so also render there. */}
+      {booking.bookingType === 'jml' &&
+        booking.statusHistory &&
+        booking.statusHistory.length > 0 &&
+        (isPending || isDeliveredNewStarter) && (() => {
         // Extract device details from status history notes
         const creationHistory = booking.statusHistory.find(h => 
           h.notes && h.notes.includes('Device details:')
@@ -640,11 +689,25 @@ const BookingApproval = () => {
               return (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Device Details</CardTitle>
+                    <CardTitle>
+                      {isDeliveredNewStarter ? 'Delivered Device Details' : 'Device Details'}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {deviceDetails.map((device: any, index: number) => (
+                      {deviceDetails.map((device: any, index: number) => {
+                        const deviceCategoryNorm = String(device?.category || "").toLowerCase();
+                        const matchingItems = isDeliveredNewStarter
+                          ? (deliveredInventoryItems as any[]).filter(
+                              (i) => String(i?.category || "").toLowerCase() === deviceCategoryNorm
+                            )
+                          : [];
+                        const deviceSerials = matchingItems.map((i) => i.serialNumber).filter(Boolean);
+                        const deviceConditionCodes = Array.from(
+                          new Set(matchingItems.map((i) => i.conditionCode).filter(Boolean))
+                        );
+
+                        return (
                         <div key={index} className="p-3 rounded-lg bg-muted/30 border">
                           <div className="grid gap-2">
                             <div className="flex items-center justify-between">
@@ -664,9 +727,35 @@ const BookingApproval = () => {
                                 <span className="font-medium">Quantity:</span> {device.quantity}
                               </div>
                             </div>
+
+                            {isDeliveredNewStarter && (
+                              <div className="space-y-1">
+                                <p className="text-sm text-muted-foreground">
+                                  <span className="font-medium">Serials:</span>{" "}
+                                  {isLoadingClientInventory ? (
+                                    "Loading..."
+                                  ) : deviceSerials.length > 0 ? (
+                                    <span className="font-mono">{deviceSerials.join(", ")}</span>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  <span className="font-medium">Condition Codes:</span>{" "}
+                                  {isLoadingClientInventory ? (
+                                    "Loading..."
+                                  ) : deviceConditionCodes.length > 0 ? (
+                                    <span className="font-mono">{deviceConditionCodes.join(", ")}</span>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
@@ -681,19 +770,25 @@ const BookingApproval = () => {
 
       {/* Approval Actions */}
       {!showCancelForm ? (
-        <Card className={isPostGrading && allProcessesComplete ? "border-2 border-success/20 bg-success/5" : "border-2 border-warning/20 bg-warning/5"}>
+        <Card
+          className={
+            (isPostGrading && allProcessesComplete) || isDeliveredNewStarter
+              ? "border-2 border-success/20 bg-success/5"
+              : "border-2 border-warning/20 bg-warning/5"
+          }
+        >
           <CardContent className="pt-6">
             <div className="space-y-4">
               <div
-                className={`flex items-center gap-2 ${isPostGrading && allProcessesComplete ? "text-success" : "text-warning"}`}
+                className={`flex items-center gap-2 ${((isPostGrading && allProcessesComplete) || isDeliveredNewStarter) ? "text-success" : "text-warning"}`}
               >
-                {isPostGrading && allProcessesComplete ? (
+                {((isPostGrading && allProcessesComplete) || isDeliveredNewStarter) ? (
                   <CheckCircle2 className="h-5 w-5" />
                 ) : (
                   <AlertCircle className="h-5 w-5" />
                 )}
                 <p className="font-medium">
-                  {isPostGrading && allProcessesComplete
+                  {(isPostGrading && allProcessesComplete) || isDeliveredNewStarter
                     ? 'All requirements met. Ready for final approval.'
                     : 'Review booking details before approval'}
                 </p>
@@ -733,7 +828,7 @@ const BookingApproval = () => {
               )}
 
               <div className="flex flex-col sm:flex-row gap-3 justify-end">
-                {isPostGrading ? (
+                {isPostGrading || isDeliveredNewStarter ? (
                   canCompleteFromThisPage ? (
                     <>
                       <Button
@@ -755,17 +850,19 @@ const BookingApproval = () => {
                           </>
                         )}
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        asChild
-                        className="w-full sm:w-auto"
-                      >
-                        <Link to={`/bookings/${id}/grading`}>
-                          <Download />
-                          View Full Report
-                        </Link>
-                      </Button>
+                      {isPostGrading && (
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          asChild
+                          className="w-full sm:w-auto"
+                        >
+                          <Link to={`/bookings/${id}/grading`}>
+                            <Download />
+                            View Full Report
+                          </Link>
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <>
