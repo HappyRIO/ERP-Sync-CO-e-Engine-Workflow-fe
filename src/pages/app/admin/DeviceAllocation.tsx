@@ -57,26 +57,44 @@ const DeviceAllocation = () => {
       const jsonMatch = deviceHistory.notes.match(/Device details:\s*(\[.*?\])/);
       if (jsonMatch && jsonMatch[1]) {
         const devices = JSON.parse(jsonMatch[1]);
-        return devices.map((d: any) => ({
-          category: d.category?.toLowerCase() || '',
-          make: d.make || '',
-          model: d.model || '',
-          quantity: d.quantity || 1,
-          deviceType: d.deviceType || undefined,
-        }));
+        return devices
+          .map((d: any) => ({
+            category: (() => {
+              const raw = (d.category || "").toString().trim();
+              const lower = raw.toLowerCase();
+              // Map JML display categories to underlying inventory categories
+              if (lower.endsWith("laptop")) return "laptop";
+              if (lower.endsWith("phone")) return "smart phones";
+              return lower;
+            })(),
+            make: d.make || '',
+            model: d.model || '',
+            quantity: d.quantity || 1,
+            deviceType: d.deviceType || undefined,
+          }))
+          // Accessories are captured as notes/qty only and are not allocated from inventory
+          .filter((d: any) => d.category && d.category !== 'accessories');
       }
 
       // Try alternative format for breakfix
       const brokenDevicesMatch = deviceHistory.notes.match(/broken devices:.*?Device details:\s*(\[.*?\])/);
       if (brokenDevicesMatch && brokenDevicesMatch[1]) {
         const devices = JSON.parse(brokenDevicesMatch[1]);
-        return devices.map((d: any) => ({
-          category: d.category?.toLowerCase() || '',
-          make: d.make || '',
-          model: d.model || '',
-          quantity: d.quantity || 1,
-          deviceType: d.deviceType || undefined,
-        }));
+        return devices
+          .map((d: any) => ({
+            category: (() => {
+              const raw = (d.category || "").toString().trim();
+              const lower = raw.toLowerCase();
+              if (lower.endsWith("laptop")) return "laptop";
+              if (lower.endsWith("phone")) return "smart phones";
+              return lower;
+            })(),
+            make: d.make || '',
+            model: d.model || '',
+            quantity: d.quantity || 1,
+            deviceType: d.deviceType || undefined,
+          }))
+          .filter((d: any) => d.category && d.category !== 'accessories');
       }
     } catch (error) {
       console.error('Error parsing device requirements:', error);

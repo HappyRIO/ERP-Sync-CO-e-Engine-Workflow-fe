@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Award, Loader2, Plus, PoundSterling, CheckCircle2, FileCheck, ArrowRight } from "lucide-react";
+import { ArrowLeft, Award, Loader2, Plus, PoundSterling, CheckCircle2, FileCheck, ArrowRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,11 +16,12 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
-const grades: { value: 'A' | 'B' | 'C' | 'D'; label: string; color: string }[] = [
+const grades: { value: 'A' | 'B' | 'C' | 'D' | 'Q'; label: string; color: string }[] = [
   { value: 'A', label: 'Grade A', color: 'bg-success/10 text-success' },
   { value: 'B', label: 'Grade B', color: 'bg-info/10 text-info' },
   { value: 'C', label: 'Grade C', color: 'bg-warning/10 text-warning' },
   { value: 'D', label: 'Grade D', color: 'bg-destructive/10 text-destructive' },
+  { value: 'Q', label: 'Grade Q', color: 'bg-destructive/10 text-destructive' },
 ];
 
 const Grading = () => {
@@ -36,15 +37,86 @@ const Grading = () => {
   // State declarations must come before they're used
   const [selectedAssetId, setSelectedAssetId] = useState<string>("");
   const [grade, setGrade] = useState<string>("");
-  const [condition, setCondition] = useState<string>("");
+  const [condition, setCondition] = useState<string>(""); // conditionCode
   const [notes, setNotes] = useState<string>("");
+  const [quantity, setQuantity] = useState<number>(1);
+  const [serialNumbersText, setSerialNumbersText] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
+  const [serialInput, setSerialInput] = useState<string>("");
   
   const selectedAsset = booking?.assets.find(a => a.categoryId === selectedAssetId);
+
+  // Pull device make/model from booking status history (JML creates these notes).
+  const deviceDetailsMap = useMemo(() => {
+    const map = new Map<string, { make?: string; model?: string; deviceType?: string }>();
+    if (!booking) return map;
+
+    const statusHistory = (booking as any).statusHistory as Array<{ notes?: string }> | undefined;
+    if (!statusHistory?.length) return map;
+
+    const creationHistory = statusHistory.find(h => h.notes && h.notes.includes('Device details:'));
+    if (!creationHistory?.notes) return map;
+
+    try {
+      const deviceDetailsMatch = creationHistory.notes.match(/Device details: (\[.*\])/);
+      if (!deviceDetailsMatch) return map;
+
+      const deviceDetails = JSON.parse(deviceDetailsMatch[1]);
+      deviceDetails.forEach((device: any) => {
+        if (!device?.category) return;
+        map.set(device.category, {
+          make: device.make,
+          model: device.model,
+          deviceType: device.deviceType,
+        });
+      });
+    } catch {
+      // Ignore parse errors; grading can still proceed without device details.
+    }
+
+    return map;
+  }, [booking]);
+
+  const selectedAssetDevice = useMemo(() => {
+    if (!selectedAsset) return undefined;
+    // Prefer matching by categoryName (JML uses category name as key), fallback to categoryId.
+    return deviceDetailsMap.get(selectedAsset.categoryName) || deviceDetailsMap.get(selectedAsset.categoryId);
+  }, [deviceDetailsMap, selectedAsset]);
+
+  const autoConditionCode = useMemo(() => {
+    const g = (grade || '').trim().toUpperCase();
+    if (!g) return '';
+
+    const make = (selectedAssetDevice?.make || '').trim();
+    if (!make) return '';
+
+    const prefix = make.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3);
+    if (prefix.length < 3) return '';
+    return `${prefix}${g.slice(0, 1)}`;
+  }, [grade, selectedAssetDevice?.make]);
+
+  useEffect(() => {
+    if (autoConditionCode) setCondition(autoConditionCode);
+  }, [autoConditionCode]);
+  const alreadyGradedQtyForSelected = useMemo(() => {
+    if (!selectedAssetId) return 0;
+    return records
+      .filter(r => r.assetId === selectedAssetId)
+      .reduce((sum, r) => sum + (r.quantity || 0), 0);
+  }, [records, selectedAssetId]);
+  const remainingQtyForSelected = Math.max(0, (selectedAsset?.quantity || 0) - alreadyGradedQtyForSelected);
+
+  const parsedSerialNumbers = useMemo(() => {
+    return serialNumbersText
+      .split(/[\n,]+/g)
+      .map(s => s.trim())
+      .filter(Boolean);
+  }, [serialNumbersText]);
+
   const { data: estimatedResaleValue = 0 } = useCalculateResaleValue(
     selectedAsset?.categoryName || selectedAsset?.categoryId,
     grade as any,
-    selectedAsset?.quantity || 0
+    quantity || 0
   );
 
   const handleCreateRecord = async () => {
@@ -59,7 +131,33 @@ const Grading = () => {
       return;
     }
 
-    const resaleValue = await calculateResaleValueFn(asset.categoryName || asset.categoryId, grade as any, asset.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      toast.error("Quantity must be a positive whole number");
+      return;
+    }
+    if (quantity > remainingQtyForSelected) {
+      toast.error("Quantity exceeds remaining ungraded units", {
+        description: `Remaining: ${remainingQtyForSelected}`,
+      });
+      return;
+    }
+    const finalCondition = (autoConditionCode || condition).trim();
+    if (!finalCondition) {
+      toast.error("Condition code is required", {
+        description: "Device make is missing, so condition code could not be auto-generated.",
+      });
+      return;
+    }
+    if (['A', 'B', 'C'].includes(grade)) {
+      if (parsedSerialNumbers.length !== quantity) {
+        toast.error("Serial numbers required for inventory grades", {
+          description: `Enter exactly ${quantity} serial number(s) for Grade ${grade}.`,
+        });
+        return;
+      }
+    }
+
+    const resaleValue = await calculateResaleValueFn(asset.categoryName || asset.categoryId, grade as any, quantity);
 
     createRecord.mutate(
       {
@@ -68,8 +166,10 @@ const Grading = () => {
         assetCategory: asset.categoryName || asset.categoryId, // Use category name, fallback to ID
         grade: grade as any,
         gradedBy: user.id,
-        condition: condition || undefined,
+        condition: finalCondition || undefined,
         notes: notes || undefined,
+        quantity,
+        serialNumbers: ['A', 'B', 'C'].includes(grade) ? parsedSerialNumbers : [],
       },
       {
         onSuccess: () => {
@@ -81,6 +181,8 @@ const Grading = () => {
           setGrade("");
           setCondition("");
           setNotes("");
+          setQuantity(1);
+          setSerialNumbersText("");
         },
         onError: (error) => {
           toast.error("Failed to create grading record", {
@@ -136,10 +238,13 @@ const Grading = () => {
     return acc;
   }, {} as Record<string, typeof records>);
 
-  const totalResaleValue = records.reduce((sum, r) => sum + (r.resaleValue * (booking.assets.find(a => a.categoryId === r.assetId)?.quantity || 1)), 0);
+  const totalResaleValue = records.reduce((sum, r) => sum + (r.resaleValue * (r.quantity || 1)), 0);
 
   const allAssetsGraded = booking?.assets.every(asset => {
-    return records.some(record => record.assetId === asset.categoryId);
+    const gradedQty = records
+      .filter(r => r.assetId === asset.categoryId)
+      .reduce((s, r) => s + (r.quantity || 0), 0);
+    return gradedQty >= asset.quantity;
   });
 
   return (
@@ -179,15 +284,7 @@ const Grading = () => {
             </div>
             <PoundSterling className="h-8 w-8 text-accent" />
           </div>
-          {allAssetsGraded && booking.status === 'graded' && (
-            <div className="mt-4 pt-4 border-t border-accent/20">
-              <Button variant="success" className="w-full" onClick={() => navigate(`/admin/booking-approval/${id}`)}>
-                <FileCheck className="h-4 w-4 mr-2" />
-                Proceed to Final Approval
-              </Button>
-            </div>
-          )}
-          {allAssetsGraded && booking.status === 'sanitised' && (
+          {allAssetsGraded && (booking.status === 'sanitised' || booking.status === 'graded') && (
             <div className="mt-4 pt-4 border-t border-accent/20">
               <Button 
                 variant="success" 
@@ -195,14 +292,20 @@ const Grading = () => {
                 className="w-full" 
                 onClick={() => {
                   if (!id) return;
+                  const isLeaverOrBreakfix = booking.bookingType === 'jml' && (booking.jmlSubType === 'leaver' || booking.jmlSubType === 'breakfix');
+                  // From sanitised we can only transition to graded; from graded we can go to inventory or completed
+                  const nextStatus = booking.status === 'sanitised'
+                    ? 'graded'
+                    : (isLeaverOrBreakfix ? 'inventory' : 'completed');
+                  const targetPath = isLeaverOrBreakfix ? `/admin/booking-inventory/${id}` : `/admin/booking-approval/${id}`;
                   updateBookingStatus.mutate(
-                    { bookingId: id, status: 'graded' },
+                    { bookingId: id, status: nextStatus as any },
                     {
                       onSuccess: () => {
-                        toast.success("Booking moved to graded status", {
-                          description: "All assets have been graded.",
+                        toast.success(`Booking moved to ${nextStatus} status`, {
+                          description: nextStatus === 'graded' ? "All assets have been graded. Proceeding to next step." : "All assets have been graded.",
                         });
-                        navigate(`/admin/booking-approval/${id}`);
+                        navigate(targetPath);
                       },
                       onError: (error) => {
                         toast.error("Failed to update booking status", {
@@ -222,7 +325,9 @@ const Grading = () => {
                 ) : (
                   <>
                     <ArrowRight className="h-4 w-4 mr-2" />
-                    Approve & Move to Graded
+                    {booking.bookingType === 'jml' && (booking.jmlSubType === 'leaver' || booking.jmlSubType === 'breakfix')
+                      ? 'Approve & Move to Inventory'
+                      : 'Approve & Complete'}
                   </>
                 )}
               </Button>
@@ -244,14 +349,22 @@ const Grading = () => {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="asset">Asset Category</Label>
-                <Select value={selectedAssetId} onValueChange={setSelectedAssetId}>
+                <Select value={selectedAssetId} onValueChange={(v) => {
+                  setSelectedAssetId(v);
+                  setQuantity(1);
+                  setSerialNumbersText("");
+                }}>
                   <SelectTrigger id="asset">
                     <SelectValue placeholder="Select asset category..." />
                   </SelectTrigger>
                   <SelectContent>
                     {booking.assets.map((asset) => (
                       <SelectItem key={asset.categoryId} value={asset.categoryId}>
-                        {asset.categoryName} ({asset.quantity} units)
+                        {asset.categoryName} ({asset.quantity} units
+                        {recordsByAsset[asset.categoryId]?.length
+                          ? ` • ${recordsByAsset[asset.categoryId].reduce((s, r) => s + (r.quantity || 0), 0)}/${asset.quantity} graded`
+                          : ''}
+                        )
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -284,14 +397,126 @@ const Grading = () => {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="condition">Physical Condition</Label>
+                <Label htmlFor="quantity">Quantity *</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min={1}
+                  max={Math.max(1, remainingQtyForSelected || 1)}
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, Math.floor(Number(e.target.value || 1))))}
+                  disabled={!selectedAssetId}
+                />
+                {selectedAssetId && (
+                  <p className="text-xs text-muted-foreground">
+                    Remaining ungraded: {remainingQtyForSelected}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="condition">Condition Code *</Label>
                 <Input
                   id="condition"
                   value={condition}
                   onChange={(e) => setCondition(e.target.value)}
-                  placeholder="Describe the physical condition..."
+                  placeholder={autoConditionCode ? autoConditionCode : "Auto-generated from device make + grade (e.g., DELA)"}
+                  disabled={!!autoConditionCode}
                 />
+                {autoConditionCode ? (
+                  <p className="text-xs text-muted-foreground">
+                    Auto-generated from device make + grade.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Rule: first 3 letters of device make + grade (e.g., DELL + A → DELA).
+                  </p>
+                )}
               </div>
+
+              {['A', 'B', 'C'].includes(grade) && (
+                <div className="space-y-2">
+                  <Label htmlFor="serialInput">Serial Numbers *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="serialInput"
+                      value={serialInput}
+                      onChange={(e) => setSerialInput(e.target.value)}
+                      placeholder={
+                        parsedSerialNumbers.length >= quantity
+                          ? `Maximum ${quantity} serial(s) added`
+                          : "Enter serial and press Enter or Add"
+                      }
+                      className="font-mono"
+                      disabled={parsedSerialNumbers.length >= quantity}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const value = serialInput.trim();
+                          if (!value) return;
+                          if (parsedSerialNumbers.length >= quantity) return;
+                          if (!parsedSerialNumbers.includes(value)) {
+                            setSerialNumbersText(prev =>
+                              prev ? `${prev}\n${value}` : value
+                            );
+                          }
+                          setSerialInput("");
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={parsedSerialNumbers.length >= quantity}
+                      onClick={() => {
+                        const value = serialInput.trim();
+                        if (!value) return;
+                        if (parsedSerialNumbers.length >= quantity) return;
+                        if (!parsedSerialNumbers.includes(value)) {
+                          setSerialNumbersText(prev =>
+                            prev ? `${prev}\n${value}` : value
+                          );
+                        }
+                        setSerialInput("");
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Add up to {quantity} serial number{quantity !== 1 ? "s" : ""}: {parsedSerialNumbers.length}/{quantity}
+                  </p>
+                  {parsedSerialNumbers.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {parsedSerialNumbers.map((sn) => (
+                        <span
+                          key={sn}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-xs font-mono border"
+                        >
+                          {sn}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSerialNumbersText(prev =>
+                                prev
+                                  .split(/[\n,]+/g)
+                                  .map(s => s.trim())
+                                  .filter(Boolean)
+                                  .filter(s => s !== sn)
+                                  .join("\n")
+                              );
+                            }}
+                            className="rounded-full p-0.5 hover:bg-muted-foreground/20 focus:outline-none focus:ring-1 focus:ring-ring"
+                            aria-label={`Remove ${sn}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes (Optional)</Label>
@@ -335,50 +560,62 @@ const Grading = () => {
       <div className="space-y-4">
         {booking.assets.map((asset) => {
           const assetRecords = recordsByAsset[asset.categoryId] || [];
-          const assetRecord = assetRecords[0]; // Use first record if multiple
+          const gradedQty = assetRecords.reduce((s, r) => s + (r.quantity || 0), 0);
 
           return (
             <Card key={asset.categoryId}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{asset.categoryName}</CardTitle>
-                  <Badge variant="secondary">{asset.quantity} units</Badge>
+                  <Badge variant="secondary">{gradedQty}/{asset.quantity} units graded</Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                {!assetRecord ? (
+                {assetRecords.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
                     Not yet graded
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    <div className="flex items-start justify-between p-4 rounded-lg border bg-muted/50">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Award className="h-4 w-4 text-muted-foreground" />
-                          <Badge className={cn("text-sm", grades.find(g => g.value === assetRecord.grade)?.color)}>
-                            Grade {assetRecord.grade}
-                          </Badge>
-                        </div>
-                        <div className="text-sm space-y-1">
-                          <p>
-                            <span className="text-muted-foreground">Resale Value:</span> <span className="font-semibold text-foreground">£{assetRecord.resaleValue.toLocaleString()} per unit</span>
-                          </p>
-                          <p>
-                            <span className="text-muted-foreground">Total Value:</span> <span className="font-semibold text-foreground">£{(assetRecord.resaleValue * asset.quantity).toLocaleString()}</span>
-                          </p>
-                          <p>
-                            <span className="text-muted-foreground">Graded:</span> <span className="text-foreground">{new Date(assetRecord.gradedAt).toLocaleString("en-GB")}</span>
-                          </p>
-                          {assetRecord.condition && (
-                            <p><span className="text-muted-foreground">Condition:</span> <span className="text-foreground">{assetRecord.condition}</span></p>
-                          )}
-                          {assetRecord.notes && (
-                            <p><span className="text-muted-foreground">Notes:</span> <span className="text-foreground">{assetRecord.notes}</span></p>
-                          )}
+                    {assetRecords.map((r) => (
+                      <div key={r.id} className="flex items-start justify-between p-4 rounded-lg border bg-muted/50">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Award className="h-4 w-4 text-muted-foreground" />
+                            <Badge className={cn("text-sm", grades.find(g => g.value === r.grade)?.color)}>
+                              Grade {r.grade}
+                            </Badge>
+                            <Badge variant="outline">{r.quantity} unit{r.quantity === 1 ? '' : 's'}</Badge>
+                          </div>
+                          <div className="text-sm space-y-1">
+                            <p>
+                              <span className="text-muted-foreground">Resale Value:</span>{" "}
+                              <span className="font-semibold text-foreground">£{r.resaleValue.toLocaleString()} per unit</span>
+                            </p>
+                            <p>
+                              <span className="text-muted-foreground">Total Value:</span>{" "}
+                              <span className="font-semibold text-foreground">£{(r.resaleValue * (r.quantity || 1)).toLocaleString()}</span>
+                            </p>
+                            <p>
+                              <span className="text-muted-foreground">Graded:</span>{" "}
+                              <span className="text-foreground">{new Date(r.gradedAt).toLocaleString("en-GB")}</span>
+                            </p>
+                            {r.condition && (
+                              <p><span className="text-muted-foreground">Condition:</span> <span className="text-foreground">{r.condition}</span></p>
+                            )}
+                            {r.serialNumbers?.length ? (
+                              <p>
+                                <span className="text-muted-foreground">Serials:</span>{" "}
+                                <span className="text-foreground font-mono">{r.serialNumbers.join(", ")}</span>
+                              </p>
+                            ) : null}
+                            {r.notes && (
+                              <p><span className="text-muted-foreground">Notes:</span> <span className="text-foreground">{r.notes}</span></p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 )}
               </CardContent>

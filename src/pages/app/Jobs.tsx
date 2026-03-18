@@ -13,7 +13,7 @@ import { useJobs } from "@/hooks/useJobs";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// All workflow status filters (aligned with WorkflowStatus type)
+// All workflow status filters (aligned with WorkflowStatus type). Dispatched statuses are kept in types but skipped in UI for now.
 const allStatusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
   // ITAD collection flow
@@ -30,6 +30,7 @@ const allStatusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
   // JML flow
   { value: "device-allocated", label: "Device Allocated" },
   { value: "courier-booked", label: "Courier Booked" },
+  // dispatched / delivery-dispatched skipped in filter UI but not removed from types
   { value: "dispatched", label: "Dispatched" },
   { value: "delivered", label: "Delivered" },
   { value: "delivery-courier-booked", label: "Delivery Courier Booked" },
@@ -37,14 +38,19 @@ const allStatusFilters: { value: WorkflowStatus | "all"; label: string }[] = [
   { value: "inventory", label: "Inventory" },
 ];
 
+const STATUS_FILTER_SKIP_JOB = ["dispatched", "delivery-dispatched"] as const;
+
 // Statuses drivers care about (assigned / in-transit jobs only)
 const driverStatuses: (WorkflowStatus | "all")[] = ["all", "routed", "en-route", "arrived", "collected"];
 
 const getStatusFilters = (userRole?: string) => {
+  let list = allStatusFilters;
   if (userRole === "driver") {
-    return allStatusFilters.filter((f) => driverStatuses.includes(f.value));
+    list = allStatusFilters.filter((f) => driverStatuses.includes(f.value));
+  } else {
+    list = allStatusFilters.filter((f) => f.value === "all" || !STATUS_FILTER_SKIP_JOB.includes(f.value as any));
   }
-  return allStatusFilters;
+  return list;
 };
 
 const Jobs = () => {

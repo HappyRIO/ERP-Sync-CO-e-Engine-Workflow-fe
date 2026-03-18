@@ -7,7 +7,7 @@ export function useInventory(clientId?: string | null) {
   const { user } = useAuth();
   
   return useQuery({
-    queryKey: ['inventory', clientId || user?.userId],
+    queryKey: ['inventory', clientId || user?.id],
     queryFn: () => inventoryService.getInventory(clientId || undefined),
     enabled: !!user,
   });
@@ -29,9 +29,15 @@ export function useUploadInventory() {
     mutationFn: ({ items, clientId }: { items: InventoryUploadItem[]; clientId?: string }) =>
       inventoryService.uploadInventory(items, clientId),
     onSuccess: async (data) => {
-      toast.success("Inventory uploaded successfully", {
-        description: `Created ${data.created} items`,
-      });
+      if (data.created === 0) {
+        toast.success("Devices already in inventory", {
+          description: "No new items were added.",
+        });
+      } else {
+        toast.success("Inventory uploaded successfully", {
+          description: `Created ${data.created} item(s).`,
+        });
+      }
       // Invalidate all inventory queries (with any clientId or userId) to ensure the list refreshes
       // Using exact: false will match all queries that start with ['inventory']
       await queryClient.invalidateQueries({ 

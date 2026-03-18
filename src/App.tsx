@@ -27,6 +27,7 @@ import Assignment from "./pages/app/admin/Assignment";
 import DeviceAllocation from "./pages/app/admin/DeviceAllocation";
 import Sanitisation from "./pages/app/admin/Sanitisation";
 import Grading from "./pages/app/admin/Grading";
+import BookingInventory from "./pages/app/admin/BookingInventory";
 import BookingDetail from "./pages/app/BookingDetail";
 import BookingTimeline from "./pages/app/BookingTimeline";
 import BookingCertificates from "./pages/app/BookingCertificates";
@@ -249,6 +250,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['admin']}>
                       <Grading />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/booking-inventory/:id"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <BookingInventory />
                     </ProtectedRoute>
                   }
                 />

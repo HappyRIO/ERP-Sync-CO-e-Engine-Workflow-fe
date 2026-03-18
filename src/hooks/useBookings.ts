@@ -28,11 +28,11 @@ export function useAssignDriver() {
   return useMutation({
     mutationFn: ({ bookingId, driverId, vehicleId }: { bookingId: string; driverId: string; vehicleId?: string }) =>
       bookingService.assignDriver(bookingId, driverId, user?.id || '', vehicleId),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      // Refresh notifications and unread count, as driver assignment triggers notifications
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      await queryClient.refetchQueries({ queryKey: ['jobs'] });
     },
   });
 }
@@ -56,12 +56,13 @@ export function useCompleteBooking() {
   return useMutation({
     mutationFn: (bookingId: string) =>
       bookingService.completeBooking(bookingId, user?.id || ''),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
-      // Completing a booking triggers notifications for client and admin
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      await queryClient.refetchQueries({ queryKey: ['jobs'] });
     },
   });
 }
@@ -72,12 +73,12 @@ export function useApproveBooking() {
   return useMutation({
     mutationFn: ({ bookingId, erpJobNumber, notes }: { bookingId: string; erpJobNumber: string; notes?: string }) =>
       bookingService.approveBooking(bookingId, erpJobNumber, notes),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
-      // Booking approval triggers notifications
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      await queryClient.refetchQueries({ queryKey: ['jobs'] });
     },
   });
 }
@@ -88,12 +89,14 @@ export function useUpdateBookingStatus() {
   return useMutation({
     mutationFn: ({ bookingId, status, notes }: { bookingId: string; status: string; notes?: string }) =>
       bookingService.updateBookingStatus(bookingId, status as any, notes),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
-      // Many booking status changes generate notifications
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      // Refetch job list so status label updates immediately (backend syncs job when booking status changes)
+      await queryClient.refetchQueries({ queryKey: ['jobs'] });
     },
   });
 }

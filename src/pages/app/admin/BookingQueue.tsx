@@ -56,10 +56,14 @@ const getNextStatusForBooking = (booking: {
   if (
     status === "created" ||
     status === "device_allocated" ||
-    status === "warehouse" ||
+    // Warehouse transitions are handled by dedicated actions.
+    // Exception: Mover needs warehouse → inventory (no sanitised/graded).
+    (status === "warehouse" && !(bookingType === "jml" && jmlSubType === "mover")) ||
     status === "sanitised" ||
     status === "graded"
   ) {
+    // Exception: Mover needs warehouse → inventory (no sanitised/graded)
+    if (status === "warehouse" && bookingType === "jml" && jmlSubType === "mover") return "inventory";
     return null;
   }
 
@@ -101,10 +105,6 @@ const getNextStatusForBooking = (booking: {
             return "collected";
           case "collected":
             return "warehouse";
-          case "warehouse":
-            return "sanitised";
-          case "sanitised":
-            return "graded";
           case "graded":
             return "inventory";
           case "inventory":
@@ -124,10 +124,6 @@ const getNextStatusForBooking = (booking: {
             return "collected"; // Broken device collected
           case "collected":
             return "warehouse";
-          case "warehouse":
-            return "sanitised";
-          case "sanitised":
-            return "graded";
           case "graded":
             return "inventory";
           case "inventory":
@@ -460,7 +456,8 @@ const BookingQueue = () => {
                                 </Link>
                               </Button>
                             )}
-                            {booking.status === 'warehouse' && (
+                            {booking.status === 'warehouse' &&
+                              !(booking.bookingType === 'jml' && booking.jmlSubType === 'mover') && (
                               <Button asChild className="w-full mt-2" size="sm" variant="default">
                                 <Link to={`/admin/sanitisation/${booking.id}`} className="text-inherit no-underline">
                                   Record Sanitisation
@@ -474,13 +471,16 @@ const BookingQueue = () => {
                                 </Link>
                               </Button>
                             )}
-                            {booking.status === 'graded' && (
-                              <Button asChild className="w-full mt-2" size="sm" variant="success">
-                                <Link to={`/admin/booking-approval/${booking.id}`} className="text-inherit no-underline">
-                                  Final Overview
+                            {booking.status === 'graded' &&
+                              booking.bookingType === 'jml' &&
+                              (booking.jmlSubType === 'leaver' || booking.jmlSubType === 'breakfix') && (
+                              <Button asChild className="w-full mt-2" size="sm" variant="default">
+                                <Link to={`/admin/booking-inventory/${booking.id}`} className="text-inherit no-underline">
+                                  Add to Inventory List
                                 </Link>
                               </Button>
                             )}
+                            {/* Next-step button: for inventory status nextStatus is 'completed', so dynamic block below shows Final Overview */}
                             {/* Single next-step button per status, only where there is no dedicated action */}
                             {(() => {
                               const nextStatus = getNextStatusForBooking(booking as any);

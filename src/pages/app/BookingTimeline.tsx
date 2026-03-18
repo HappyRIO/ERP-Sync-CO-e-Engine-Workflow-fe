@@ -81,7 +81,7 @@ function getTimelineSteps(
         { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Broken device at warehouse' },
         { status: 'sanitised', label: 'Sanitised', icon: Shield, description: 'Data sanitisation completed' },
         { status: 'graded', label: 'Graded', icon: Award, description: 'Broken device graded' },
-        { status: 'inventory', label: 'Inventory', icon: Package, description: 'Broken device added to inventory' },
+         { status: 'inventory', label: 'Inventory', icon: Package, description: 'Broken device added to inventory' },
         { status: 'completed', label: 'Completed', icon: FileCheck, description: 'Booking completed' },
       ];
     }

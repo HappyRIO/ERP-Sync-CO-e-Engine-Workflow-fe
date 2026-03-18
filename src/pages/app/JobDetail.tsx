@@ -600,7 +600,7 @@ const JobDetail = () => {
                     
                     // Breakfix: device-allocated, courier-booked, dispatched, delivered, collected, warehouse, sanitised, graded, inventory
                     if (bookingType === 'jml' && jmlSubType === 'breakfix') {
-                      return ['device-allocated', 'courier-booked', 'dispatched', 'delivered', 'collected', 'warehouse', 'sanitised', 'graded', 'inventory'];
+                      return ['device-allocated', 'courier-booked', 'dispatched', 'delivered', 'collected', 'warehouse', 'sanitised', 'graded'];
                     }
                     
                     // Default: ITAD workflow

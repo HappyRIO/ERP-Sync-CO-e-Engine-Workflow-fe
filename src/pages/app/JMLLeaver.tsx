@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/booking/DatePicker";
 import { MapPicker } from "@/components/booking/MapPicker";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -27,13 +28,15 @@ import { cn } from "@/lib/utils";
 import { useCO2Calculation } from "@/hooks/useCO2";
 import { useBuybackCalculation } from "@/hooks/useBuyback";
 import { co2eEquivalencies } from "@/lib/constants";
+import { filterJmlAssetCategories, getDeviceTypeOptionsForJmlCategory, getUnderlyingAssetCategoryNameForJml, inferDeviceTypeFromJmlCategory, isAccessoriesCategory, shouldShowDeviceTypeForJmlCategory, type JmlDeviceType } from "@/lib/jml-assets";
 
 interface LeaverDevice {
   make: string;
   model: string;
   category: string;
   quantity: number;
-  deviceType: 'Windows' | 'Apple';
+  deviceType: JmlDeviceType;
+  notes?: string;
 }
 
 const steps = [
@@ -46,6 +49,7 @@ const JMLLeaver = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: assetCategories = [] } = useAssetCategories();
+  const jmlAssetCategories = useMemo(() => filterJmlAssetCategories(assetCategories), [assetCategories]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -84,16 +88,19 @@ const JMLLeaver = () => {
   // Convert devices to asset selection format for CO2/buyback calculations
   const selectedAssets = useMemo(() => {
     return devices
-      .filter(d => d.category && d.quantity > 0)
+      .filter(d => d.category && d.quantity > 0 && !isAccessoriesCategory(d.category))
       .map(d => {
-        const category = assetCategories.find(c => c.name === d.category);
+        const underlyingName = getUnderlyingAssetCategoryNameForJml(d.category);
+        const category = underlyingName
+          ? assetCategories.find(c => c.name === underlyingName)
+          : assetCategories.find(c => c.name === d.category);
         return {
           categoryId: category?.id || '',
           quantity: d.quantity,
         };
       })
       .filter(a => a.categoryId); // Filter out any without valid categoryId
-  }, [devices, assetCategories]);
+  }, [devices, assetCategories, isAccessoriesCategory]);
 
   // Calculate CO2e when assets change
   const co2CalculationRequest = useMemo(() => {
@@ -273,11 +280,16 @@ const JMLLeaver = () => {
     const last = devices[devices.length - 1];
     const requiresDeviceType = shouldShowDeviceType(last.category);
     const hasDeviceType = !requiresDeviceType || last.deviceType;
-    
-    if (!last.make.trim() || !last.model.trim() || !last.category.trim() || !last.quantity || last.quantity < 1 || !hasDeviceType) {
-      const errorMsg = requiresDeviceType 
-        ? "Category, make, model, quantity and device type are required."
-        : "Category, make, model and quantity are required.";
+
+    const isAccessories = isAccessoriesCategory(last.category);
+    const hasMakeModel = isAccessories ? true : (!!last.make.trim() && !!last.model.trim());
+
+    if (!last.category.trim() || !last.quantity || last.quantity < 1 || !hasDeviceType || !hasMakeModel) {
+      const errorMsg = isAccessories
+        ? "Category and quantity are required."
+        : (requiresDeviceType
+            ? "Category, make, model, quantity and device type are required."
+            : "Category, make, model and quantity are required.");
       toast.error("Please complete the current device details before adding another.", {
         description: errorMsg,
       });
@@ -293,12 +305,7 @@ const JMLLeaver = () => {
   };
 
   // Helper function to check if Device Type should be shown for a category
-  const shouldShowDeviceType = (category: string): boolean => {
-    const categoryLower = category.toLowerCase();
-    // Only show Device Type for categories where Windows/Apple distinction is meaningful
-    // Hide for: Smart Phones, Tablets, Networking, Server, Storage (these don't use Windows/Apple)
-    return categoryLower.includes('laptop') || categoryLower.includes('desktop');
-  };
+  const shouldShowDeviceType = (category: string): boolean => shouldShowDeviceTypeForJmlCategory(category);
 
   // Helper function to auto-assign device type based on make/model
   const inferDeviceType = (make: string, model: string): 'Windows' | 'Apple' | null => {
@@ -325,26 +332,31 @@ const JMLLeaver = () => {
   };
 
   const updateDevice = (index: number, field: keyof LeaverDevice, value: string | number) => {
-    const updated = [...devices];
-    const device = updated[index];
-    
-    // If updating make or model, try to auto-assign device type
-    if (field === 'make' || field === 'model') {
-      const newMake = field === 'make' ? (value as string) : device.make;
-      const newModel = field === 'model' ? (value as string) : device.model;
-      const inferredType = inferDeviceType(newMake, newModel);
+    setDevices((prev) => {
+      const updated = [...prev];
+      const device = updated[index];
+      if (!device) return prev;
       
-      updated[index] = { 
-        ...device, 
-        [field]: value,
-        // Auto-assign device type if it can be inferred, but only if category requires it
-        ...(shouldShowDeviceType(device.category) && inferredType ? { deviceType: inferredType } : {})
-      };
-    } else {
-      updated[index] = { ...device, [field]: value };
-    }
-    
-    setDevices(updated);
+      // If updating make or model, try to auto-assign device type
+      if (field === 'make' || field === 'model') {
+        const newMake = field === 'make' ? (value as string) : device.make;
+        const newModel = field === 'model' ? (value as string) : device.model;
+        const inferredType = inferDeviceType(newMake, newModel);
+        
+        updated[index] = { 
+          ...device, 
+          [field]: value,
+          // Auto-assign device type if it can be inferred, but only if category requires it
+          ...((device.category.toLowerCase().includes('laptop') || device.category.toLowerCase().includes('desktop')) && inferredType
+            ? { deviceType: inferredType }
+            : {})
+        };
+      } else {
+        updated[index] = { ...device, [field]: value };
+      }
+      
+      return updated;
+    });
   };
 
   const validateStep1 = (): string | null => {
@@ -378,8 +390,10 @@ const JMLLeaver = () => {
     for (let i = 0; i < devices.length; i++) {
       const device = devices[i];
       if (!device.category.trim()) return `Device ${i + 1}: Category is required`;
-      if (!device.make.trim()) return `Device ${i + 1}: Make is required`;
-      if (!device.model.trim()) return `Device ${i + 1}: Model is required`;
+      if (!isAccessoriesCategory(device.category)) {
+        if (!device.make.trim()) return `Device ${i + 1}: Make is required`;
+        if (!device.model.trim()) return `Device ${i + 1}: Model is required`;
+      }
       if (!device.quantity || device.quantity < 1) return `Device ${i + 1}: Quantity must be at least 1`;
       // Only require device type if it should be shown for this category
       if (shouldShowDeviceType(device.category) && !device.deviceType) {
@@ -481,7 +495,10 @@ const JMLLeaver = () => {
               siteName: selectedSite ? selectedSite.name : siteDetails.siteName,
               lat: bookingLat,
               lng: bookingLng,
-              devices: devices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType),
+              devices: devices
+                .filter(d => d.category && d.quantity >= 1)
+                .map(d => ({ ...d, deviceType: d.deviceType || inferDeviceTypeFromJmlCategory(d.category) }))
+                .filter(d => isAccessoriesCategory(d.category) ? true : (!!d.make && !!d.model)),
               charityPercent,
               preferredVehicleType: selectedVehicleType,
               assets: selectedAssets,
@@ -537,7 +554,10 @@ const JMLLeaver = () => {
         siteName: siteDetails.siteName,
         lat: siteLocation?.lat,
         lng: siteLocation?.lng,
-        devices: devices.filter(d => d.category && d.make && d.model && d.quantity >= 1 && d.deviceType),
+        devices: devices
+          .filter(d => d.category && d.quantity >= 1)
+          .map(d => ({ ...d, deviceType: d.deviceType || inferDeviceTypeFromJmlCategory(d.category) }))
+          .filter(d => isAccessoriesCategory(d.category) ? true : (!!d.make && !!d.model)),
         charityPercent,
         preferredVehicleType: selectedVehicleType,
         assets: selectedAssets,
@@ -1031,11 +1051,12 @@ const JMLLeaver = () => {
                           </Label>
                           <Select value={device.category} onValueChange={(value) => {
                             updateDevice(index, 'category', value);
+                            updateDevice(index, 'deviceType', inferDeviceTypeFromJmlCategory(value));
                             // Auto-assign device type if make/model are already set
                             const device = devices[index];
                             if (device.make.trim() && device.model.trim()) {
                               const inferredType = inferDeviceType(device.make, device.model);
-                              if (shouldShowDeviceType(value) && inferredType) {
+                              if ((value.toLowerCase().includes('laptop') || value.toLowerCase().includes('desktop')) && inferredType) {
                                 updateDevice(index, 'deviceType', inferredType);
                               }
                             }
@@ -1044,7 +1065,7 @@ const JMLLeaver = () => {
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
-                              {assetCategories.map((category) => (
+                              {jmlAssetCategories.map((category) => (
                                 <SelectItem key={category.id} value={category.name}>
                                   {category.name}
                                 </SelectItem>
@@ -1052,26 +1073,40 @@ const JMLLeaver = () => {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-2">
-                          <Label>
-                            Device Make <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            value={device.make}
-                            onChange={(e) => updateDevice(index, 'make', e.target.value)}
-                            placeholder="Dell, HP, Lenovo, etc."
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>
-                            Device Model <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            value={device.model}
-                            onChange={(e) => updateDevice(index, 'model', e.target.value)}
-                            placeholder="Latitude 7420, ThinkPad X1, etc."
-                          />
-                        </div>
+                        {!isAccessoriesCategory(device.category) ? (
+                          <>
+                            <div className="space-y-2">
+                              <Label>
+                                Device Make <span className="text-destructive">*</span>
+                              </Label>
+                              <Input
+                                value={device.make}
+                                onChange={(e) => updateDevice(index, 'make', e.target.value)}
+                                placeholder="Dell, HP, Lenovo, etc."
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>
+                                Device Model <span className="text-destructive">*</span>
+                              </Label>
+                              <Input
+                                value={device.model}
+                                onChange={(e) => updateDevice(index, 'model', e.target.value)}
+                                placeholder="Latitude 7420, ThinkPad X1, etc."
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="md:col-span-2 space-y-2">
+                            <Label>Accessories Notes</Label>
+                            <Textarea
+                              value={device.notes || ""}
+                              onChange={(e) => updateDevice(index, "notes", e.target.value)}
+                              placeholder="e.g., charger, dock, keyboard, mouse, monitor cable..."
+                              className="min-h-[92px]"
+                            />
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-3 items-end">
                         <div className="space-y-2 w-24">
@@ -1091,15 +1126,19 @@ const JMLLeaver = () => {
                             <Label>
                               Device Type <span className="text-destructive">*</span>
                             </Label>
-                            <RadioGroup value={device.deviceType || 'Windows'} onValueChange={(value) => updateDevice(index, 'deviceType', value as 'Windows' | 'Apple')}>
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="Windows" id={`windows-${index}`} />
-                                <Label htmlFor={`windows-${index}`} className="cursor-pointer">Windows</Label>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="Apple" id={`apple-${index}`} />
-                                <Label htmlFor={`apple-${index}`} className="cursor-pointer">Apple</Label>
-                              </div>
+                            <RadioGroup
+                              value={device.deviceType || inferDeviceTypeFromJmlCategory(device.category)}
+                              onValueChange={(value) => updateDevice(index, 'deviceType', value as JmlDeviceType)}
+                            >
+                              {getDeviceTypeOptionsForJmlCategory(device.category).map((opt) => {
+                                const optId = `${opt.toLowerCase()}-${index}`;
+                                return (
+                                  <div key={opt} className="flex items-center space-x-2">
+                                    <RadioGroupItem value={opt} id={optId} />
+                                    <Label htmlFor={optId} className="cursor-pointer">{opt}</Label>
+                                  </div>
+                                );
+                              })}
                             </RadioGroup>
                           </div>
                         )}
@@ -1363,10 +1402,13 @@ const JMLLeaver = () => {
                       const typeLabel = shouldShowDeviceType(device.category) && device.deviceType
                         ? ` • ${device.deviceType}`
                         : "";
+                      const details = isAccessoriesCategory(device.category)
+                        ? (device.notes?.trim() || "Accessories")
+                        : `${device.make} • ${device.model}${typeLabel}`;
                       return (
                         <div key={index} className="flex justify-between text-xs sm:text-sm py-1">
                           <span className="text-muted-foreground">
-                            {category?.icon} {device.category} – {device.make} • {device.model}{typeLabel}
+                            {category?.icon} {device.category} – {details}
                           </span>
                           <span className="font-semibold text-foreground">×{device.quantity}</span>
                         </div>

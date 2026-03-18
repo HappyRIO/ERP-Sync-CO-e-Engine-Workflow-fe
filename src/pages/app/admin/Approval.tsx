@@ -35,7 +35,10 @@ const Approval = () => {
 
   // Check if all assets are graded
   const allAssetsGraded = booking?.assets.every(asset => {
-    return gradingRecords.some(record => record.assetId === asset.categoryId);
+    const gradedQty = gradingRecords
+      .filter(r => r.assetId === asset.categoryId)
+      .reduce((s, r) => s + (r.quantity || 0), 0);
+    return gradedQty >= asset.quantity;
   });
 
   // Check if all assets are sanitised
@@ -45,8 +48,7 @@ const Approval = () => {
 
   // Calculate totals
   const totalResaleValue = gradingRecords.reduce((sum, record) => {
-    const asset = booking?.assets.find(a => a.categoryId === record.assetId);
-    return sum + (record.resaleValue * (asset?.quantity || 1));
+    return sum + (record.resaleValue * (record.quantity || 1));
   }, 0);
 
   const totalAssets = booking?.assets.reduce((sum, a) => sum + a.quantity, 0) || 0;
@@ -245,14 +247,14 @@ const Approval = () => {
           <div className="space-y-3">
             {booking.assets.map((asset) => {
               const records = gradingRecords.filter(r => r.assetId === asset.categoryId);
-              const totalValue = records.reduce((sum, r) => sum + (r.resaleValue * asset.quantity), 0);
+              const totalValue = records.reduce((sum, r) => sum + (r.resaleValue * (r.quantity || 1)), 0);
               
               return (
                 <div key={asset.categoryId} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                   <div>
                     <p className="font-medium">{asset.categoryName}</p>
                     <p className="text-sm text-muted-foreground">
-                      {asset.quantity} units • {records.length > 0 ? `Grade: ${records[0].grade}` : 'Not graded'}
+                      {asset.quantity} units • {records.length > 0 ? `Graded entries: ${records.length}` : 'Not graded'}
                     </p>
                   </div>
                   <div className="text-right">

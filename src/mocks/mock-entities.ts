@@ -104,10 +104,12 @@ export interface GradingRecord {
   jobId?: string;
   assetId: string;
   assetCategory: string;
-  grade: 'A' | 'B' | 'C' | 'D' | 'Recycled';
+  grade: 'A' | 'B' | 'C' | 'D' | 'Q';
+  quantity: number;
   resaleValue: number;
   gradedAt: string;
   gradedBy: string;
   notes?: string;
   condition?: string;
+  serialNumbers?: string[];
 }

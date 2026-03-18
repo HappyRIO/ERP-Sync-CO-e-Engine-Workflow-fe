@@ -21,7 +21,7 @@ export const lifecycleTransitions: Record<BookingLifecycleStatus, (BookingLifecy
   collected: ['sanitised', 'warehouse', 'dispatched'], // ITAD: sanitised, Leaver: warehouse, New-starter/Mover: dispatched
   warehouse: ['sanitised', 'inventory'], // ITAD: sanitised, Mover: inventory
   sanitised: ['graded'],
-  graded: ['completed', 'inventory'], // ITAD: completed, Leaver: inventory
+  graded: ['completed', 'inventory'], // ITAD: completed, Leaver/Breakfix: inventory
   inventory: ['completed', 'device_allocated'], // Added to inventory (handles both reuse and disposal), Mover: device_allocated
   completed: [], // Terminal state
   device_allocated: ['courier_booked', 'cancelled'],

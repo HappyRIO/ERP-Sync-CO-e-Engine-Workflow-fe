@@ -11,7 +11,7 @@ export interface NewStarterRequest {
   postcode: string;
   phone: string;
   startDate: string;
-  deviceType: 'Windows' | 'Apple';
+  deviceType: 'Windows' | 'Apple' | 'Android';
   siteName: string;
   lat?: number;
   lng?: number;
@@ -20,7 +20,8 @@ export interface NewStarterRequest {
     make: string;
     model: string;
     quantity: number;
-    deviceType: 'Windows' | 'Apple';
+    deviceType: 'Windows' | 'Apple' | 'Android';
+    notes?: string;
   }>;
 }
 
@@ -41,7 +42,8 @@ export interface LeaverRequest {
     make: string;
     model: string;
     quantity: number;
-    deviceType: 'Windows' | 'Apple';
+    deviceType: 'Windows' | 'Apple' | 'Android';
+    notes?: string;
   }>;
   charityPercent?: number;
   preferredVehicleType?: 'petrol' | 'diesel' | 'electric';
@@ -65,9 +67,10 @@ export interface BreakfixRequest {
     make: string;
     model: string;
     quantity: number;
-    deviceType: 'Windows' | 'Apple';
+    deviceType: 'Windows' | 'Apple' | 'Android';
+    notes?: string;
   }>;
-  deviceType: 'Windows' | 'Apple';
+  deviceType: 'Windows' | 'Apple' | 'Android';
   lat?: number;
   lng?: number;
 }
@@ -92,9 +95,10 @@ export interface MoverRequest {
     make: string;
     model: string;
     quantity: number;
-    deviceType: 'Windows' | 'Apple';
+    deviceType: 'Windows' | 'Apple' | 'Android';
+    notes?: string;
   }>;
-  deviceType?: 'Windows' | 'Apple'; // Optional - removed replacement device section
+  deviceType?: 'Windows' | 'Apple' | 'Android'; // Optional - removed replacement device section
   lat?: number; // New address latitude
   lng?: number; // New address longitude
 }

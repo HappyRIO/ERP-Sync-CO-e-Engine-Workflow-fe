@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { 
   Building2, 
@@ -480,7 +480,7 @@ const Booking = () => {
       {
         onSuccess: (booking) => {
           toast.success("Booking submitted successfully!", {
-            description: `Booking ${booking.bookingNumber || booking.id} has been created.`,
+            description: `Booking ${booking.erpJobNumber || booking.id} has been created.`,
           });
           // Redirect to Booking Queue page for admin, or bookings page for others
           if (user?.role === 'admin') {
@@ -534,18 +534,19 @@ const Booking = () => {
 
   // For JML bookings, redirect to JML-specific pages
   if (bookingType === 'jml' && jmlSubType) {
-    if (jmlSubType === 'new_starter') {
-      navigate('/bookings/jml/new-starter');
-      return null;
-    } else if (jmlSubType === 'leaver') {
-      navigate('/bookings/jml/leaver');
-      return null;
-    } else if (jmlSubType === 'breakfix') {
-      navigate('/bookings/jml/breakfix');
-      return null;
-    } else if (jmlSubType === 'mover') {
-      navigate('/bookings/jml/mover');
-      return null;
+    const to =
+      jmlSubType === "new_starter"
+        ? "/bookings/jml/new-starter"
+        : jmlSubType === "leaver"
+          ? "/bookings/jml/leaver"
+          : jmlSubType === "breakfix"
+            ? "/bookings/jml/breakfix"
+            : jmlSubType === "mover"
+              ? "/bookings/jml/mover"
+              : null;
+
+    if (to) {
+      return <Navigate to={to} replace />;
     }
   }
 
