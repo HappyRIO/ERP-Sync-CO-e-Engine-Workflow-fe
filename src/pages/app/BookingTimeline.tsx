@@ -62,6 +62,7 @@ function getTimelineSteps(
         { status: 'collection_scheduled', label: 'Collection Scheduled', icon: Calendar, description: 'Courier collection scheduled' },
         { status: 'collected', label: 'Collected', icon: Truck, description: 'Devices collected by courier from old location' },
         { status: 'warehouse', label: 'At Warehouse', icon: Warehouse, description: 'Devices at warehouse' },
+        { status: 'graded', label: 'Graded', icon: Award, description: 'Devices graded' },
         { status: 'inventory', label: 'Inventory', icon: Package, description: 'Devices added to inventory' },
         { status: 'device_allocated', label: 'Device Allocated', icon: Package, description: 'Device allocated from inventory' },
         { status: 'courier_booked', label: 'Courier Booked', icon: Calendar, description: 'Device courier booked' },

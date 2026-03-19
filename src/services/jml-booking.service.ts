@@ -62,6 +62,16 @@ export interface BreakfixRequest {
   postcode: string;
   phone: string;
   siteName: string;
+  // Replacement device requirements (what admin will allocate from inventory)
+  devices?: Array<{
+    category: string;
+    make: string;
+    model: string;
+    quantity: number;
+    deviceType: 'Windows' | 'Apple' | 'Android';
+    notes?: string;
+  }>;
+  // Broken/damaged devices (what admin will receive, then sanitize/grade)
   brokenDevices: Array<{
     category: string;
     make: string;
@@ -156,6 +166,41 @@ class JMLBookingService {
 
   async allocateDeviceBySerial(bookingId: string, serialNumber: string): Promise<{ booking: BookingResponse; allocatedSerialNumbers: string[]; quantity: number }> {
     return this.allocateDevice(bookingId, { serialNumber });
+  }
+
+  /** Mover: allocate all inventory rows linked to this booking (mover_allocated + moverSourceBookingId). */
+  async allocateMoverAll(
+    bookingId: string,
+    options?: { advanceBookingStatus?: boolean }
+  ): Promise<{
+    booking: BookingResponse;
+    allocatedSerialNumbers: string[];
+    quantity: number;
+    allMoverDevicesLinked?: boolean;
+    linkedSerialNumbers?: string[];
+  }> {
+    const body =
+      options && typeof options.advanceBookingStatus === 'boolean'
+        ? { advanceBookingStatus: options.advanceBookingStatus }
+        : {};
+    return apiClient.post(
+      `/bookings/${bookingId}/allocate-mover-all`,
+      body
+    );
+  }
+
+  /** Mover @ inventory: commit selected serials in one step (matches booking line-item quantities). */
+  async commitMoverSelectedDevices(
+    bookingId: string,
+    serialNumbers: string[]
+  ): Promise<{
+    booking: BookingResponse;
+    allocatedSerialNumbers: string[];
+    quantity: number;
+  }> {
+    return apiClient.post(`/bookings/${bookingId}/mover-commit-devices`, {
+      serialNumbers,
+    });
   }
 
   async updateCourierTracking(bookingId: string, trackingNumber: string, courierService: string): Promise<BookingResponse> {

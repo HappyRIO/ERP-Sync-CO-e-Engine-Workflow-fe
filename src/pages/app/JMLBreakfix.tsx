@@ -78,6 +78,10 @@ const JMLBreakfix = () => {
   const [brokenDevices, setBrokenDevices] = useState<BrokenDevice[]>([
     { make: "", model: "", category: "", quantity: 1, deviceType: 'Windows' }
   ]);
+  // Replacement device requirements (what admin allocates from inventory)
+  const [replacementDevices, setReplacementDevices] = useState<BrokenDevice[]>([
+    { make: "", model: "", category: "", quantity: 1, deviceType: 'Windows' }
+  ]);
 
   // Structured address fields (like ITAD booking)
   const [siteDetails, setSiteDetails] = useState({
@@ -221,9 +225,41 @@ const JMLBreakfix = () => {
     setBrokenDevices([...brokenDevices, { make: "", model: "", category: "", quantity: 1, deviceType: 'Windows' }]);
   };
 
+  const addReplacementDevice = () => {
+    const last = replacementDevices[replacementDevices.length - 1];
+    const requiresDeviceType = shouldShowDeviceType(last.category);
+    const hasDeviceType = !requiresDeviceType || last.deviceType;
+
+    const isAccessories = isAccessoriesCategory(last.category);
+    const hasMakeModel = isAccessories ? true : (!!last.make.trim() && !!last.model.trim());
+
+    if (!last.category.trim() || !last.quantity || last.quantity < 1 || !hasDeviceType || !hasMakeModel) {
+      const errorMsg = isAccessories
+        ? "Category and quantity are required."
+        : (requiresDeviceType
+            ? "Category, make, model, quantity and device type are required."
+            : "Category, make, model and quantity are required.");
+      toast.error("Please complete the current replacement device details before adding another.", {
+        description: errorMsg,
+      });
+      return;
+    }
+
+    setReplacementDevices([
+      ...replacementDevices,
+      { make: "", model: "", category: "", quantity: 1, deviceType: "Windows" },
+    ]);
+  };
+
   const removeBrokenDevice = (index: number) => {
     if (brokenDevices.length > 1) {
       setBrokenDevices(brokenDevices.filter((_, i) => i !== index));
+    }
+  };
+
+  const removeReplacementDevice = (index: number) => {
+    if (replacementDevices.length > 1) {
+      setReplacementDevices(replacementDevices.filter((_, i) => i !== index));
     }
   };
 
@@ -282,6 +318,32 @@ const JMLBreakfix = () => {
     });
   };
 
+  const updateReplacementDevice = (index: number, field: keyof BrokenDevice, value: string | number) => {
+    setReplacementDevices((prev) => {
+      const updated = [...prev];
+      const device = updated[index];
+      if (!device) return prev;
+
+      if (field === "make" || field === "model") {
+        const newMake = field === "make" ? (value as string) : device.make;
+        const newModel = field === "model" ? (value as string) : device.model;
+        const inferredType = inferDeviceType(newMake, newModel);
+
+        updated[index] = {
+          ...device,
+          [field]: value,
+          ...((device.category.toLowerCase().includes("laptop") || device.category.toLowerCase().includes("desktop")) && inferredType
+            ? { deviceType: inferredType }
+            : {}),
+        };
+      } else {
+        updated[index] = { ...device, [field]: value };
+      }
+
+      return updated;
+    });
+  };
+
   const validateStep1 = (): string | null => {
     if ((isAdmin || isReseller) && !selectedClientId) return "Client selection is required";
     if (!email.trim()) return "Email address is required";
@@ -305,21 +367,37 @@ const JMLBreakfix = () => {
   };
 
   const validateStep2 = (): string | null => {
+    if (replacementDevices.length === 0) {
+      return "At least one replacement device is required";
+    }
+
+    for (let i = 0; i < replacementDevices.length; i++) {
+      const device = replacementDevices[i];
+      if (!device.category.trim()) return `Replacement device ${i + 1}: Category is required`;
+      if (!isAccessoriesCategory(device.category)) {
+        if (!device.make.trim()) return `Replacement device ${i + 1}: Make is required`;
+        if (!device.model.trim()) return `Replacement device ${i + 1}: Model is required`;
+      }
+      if (!device.quantity || device.quantity < 1) return `Replacement device ${i + 1}: Quantity must be at least 1`;
+      if (shouldShowDeviceType(device.category) && !device.deviceType) {
+        return `Replacement device ${i + 1}: Device type is required`;
+      }
+    }
+
     if (brokenDevices.length === 0) {
       return "At least one broken device is required";
     }
 
     for (let i = 0; i < brokenDevices.length; i++) {
       const device = brokenDevices[i];
-      if (!device.category.trim()) return `Device ${i + 1}: Category is required`;
+      if (!device.category.trim()) return `Broken device ${i + 1}: Category is required`;
       if (!isAccessoriesCategory(device.category)) {
-        if (!device.make.trim()) return `Device ${i + 1}: Make is required`;
-        if (!device.model.trim()) return `Device ${i + 1}: Model is required`;
+        if (!device.make.trim()) return `Broken device ${i + 1}: Make is required`;
+        if (!device.model.trim()) return `Broken device ${i + 1}: Model is required`;
       }
-      if (!device.quantity || device.quantity < 1) return `Device ${i + 1}: Quantity must be at least 1`;
-      // Only require device type if it should be shown for this category
+      if (!device.quantity || device.quantity < 1) return `Broken device ${i + 1}: Quantity must be at least 1`;
       if (shouldShowDeviceType(device.category) && !device.deviceType) {
-        return `Device ${i + 1}: Device type is required`;
+        return `Broken device ${i + 1}: Device type is required`;
       }
     }
 
@@ -413,6 +491,14 @@ const JMLBreakfix = () => {
                 deviceType: d.deviceType || inferDeviceTypeFromJmlCategory(d.category),
               }))
               .filter(d => isAccessoriesCategory(d.category) ? true : (!!d.make && !!d.model));
+
+            const filteredReplacement = replacementDevices
+              .filter(d => d.category && d.quantity >= 1)
+              .map(d => ({
+                ...d,
+                deviceType: d.deviceType || inferDeviceTypeFromJmlCategory(d.category),
+              }))
+              .filter(d => isAccessoriesCategory(d.category) ? true : (!!d.make && !!d.model));
             const booking = await jmlBookingService.createBreakfix({
               clientId,
               clientName,
@@ -422,8 +508,9 @@ const JMLBreakfix = () => {
               postcode: bookingPostcode,
               phone,
               siteName: selectedSite ? selectedSite.name : siteDetails.siteName,
+              devices: filteredReplacement,
               brokenDevices: filteredBroken,
-              deviceType: filteredBroken[0]?.deviceType ?? 'Windows',
+              deviceType: filteredReplacement[0]?.deviceType ?? filteredBroken[0]?.deviceType ?? 'Windows',
               lat: bookingLat,
               lng: bookingLng,
             });
@@ -473,6 +560,14 @@ const JMLBreakfix = () => {
           deviceType: d.deviceType || inferDeviceTypeFromJmlCategory(d.category),
         }))
         .filter(d => isAccessoriesCategory(d.category) ? true : (!!d.make && !!d.model));
+
+      const filteredReplacement = replacementDevices
+        .filter(d => d.category && d.quantity >= 1)
+        .map(d => ({
+          ...d,
+          deviceType: d.deviceType || inferDeviceTypeFromJmlCategory(d.category),
+        }))
+        .filter(d => isAccessoriesCategory(d.category) ? true : (!!d.make && !!d.model));
       const booking = await jmlBookingService.createBreakfix({
         clientId,
         clientName,
@@ -482,8 +577,9 @@ const JMLBreakfix = () => {
         postcode: siteDetails.postcode,
         phone,
         siteName: siteDetails.siteName,
+        devices: filteredReplacement,
         brokenDevices: filteredBroken,
-        deviceType: filteredBroken[0]?.deviceType ?? 'Windows',
+        deviceType: filteredReplacement[0]?.deviceType ?? filteredBroken[0]?.deviceType ?? 'Windows',
         lat: siteLocation?.lat,
         lng: siteLocation?.lng,
       });
@@ -925,6 +1021,145 @@ const JMLBreakfix = () => {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
+                <CardTitle>Replacement Device Requirements</CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addReplacementDevice}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Device
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {replacementDevices.map((device, index) => (
+                <Card key={index} className="border-2">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-semibold">Device {index + 1}</Label>
+                      {replacementDevices.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeReplacementDevice(index)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="space-y-2">
+                          <Label>
+                            Category <span className="text-destructive">*</span>
+                          </Label>
+                          <Select value={device.category} onValueChange={(value) => {
+                            updateReplacementDevice(index, 'category', value);
+                            updateReplacementDevice(index, 'deviceType', inferDeviceTypeFromJmlCategory(value));
+                            // Auto-assign device type if make/model are already set
+                            const current = replacementDevices[index];
+                            if (current?.make?.trim() && current?.model?.trim()) {
+                              const inferredType = inferDeviceType(current.make, current.model);
+                              if ((value.toLowerCase().includes('laptop') || value.toLowerCase().includes('desktop')) && inferredType) {
+                                updateReplacementDevice(index, 'deviceType', inferredType);
+                              }
+                            }
+                          }}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {jmlAssetCategories.map((category) => (
+                                <SelectItem key={category.id} value={category.name}>
+                                  {category.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {!isAccessoriesCategory(device.category) ? (
+                          <>
+                            <div className="space-y-2">
+                              <Label>
+                                Device Make <span className="text-destructive">*</span>
+                              </Label>
+                              <Input
+                                value={device.make}
+                                onChange={(e) => updateReplacementDevice(index, 'make', e.target.value)}
+                                placeholder="Dell, HP, Lenovo, etc."
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>
+                                Device Model <span className="text-destructive">*</span>
+                              </Label>
+                              <Input
+                                value={device.model}
+                                onChange={(e) => updateReplacementDevice(index, 'model', e.target.value)}
+                                placeholder="Latitude 7420, ThinkPad X1, etc."
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="md:col-span-2 space-y-2">
+                            <Label>Accessories Notes</Label>
+                            <Textarea
+                              value={device.notes || ""}
+                              onChange={(e) => updateReplacementDevice(index, "notes", e.target.value)}
+                              placeholder="e.g., charger, dock, keyboard, mouse, monitor cable..."
+                              className="min-h-[92px]"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-3 items-end">
+                        <div className="space-y-2 w-24">
+                          <Label>
+                            Quantity <span className="text-destructive">*</span>
+                          </Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={device.quantity}
+                            onChange={(e) => updateReplacementDevice(index, 'quantity', parseInt(e.target.value) || 1)}
+                            placeholder="1"
+                          />
+                        </div>
+                        {shouldShowDeviceType(device.category) && (
+                          <div className="space-y-2 flex-1">
+                            <Label>
+                              Device Type <span className="text-destructive">*</span>
+                            </Label>
+                            <RadioGroup
+                              value={device.deviceType || inferDeviceTypeFromJmlCategory(device.category)}
+                              onValueChange={(value) => updateReplacementDevice(index, 'deviceType', value as JmlDeviceType)}
+                            >
+                              {getDeviceTypeOptionsForJmlCategory(device.category).map((opt) => {
+                                const optId = `${opt.toLowerCase()}-${index}`;
+                                return (
+                                  <div key={opt} className="flex items-center space-x-2">
+                                    <RadioGroupItem value={opt} id={optId} />
+                                    <Label htmlFor={optId} className="cursor-pointer">{opt}</Label>
+                                  </div>
+                                );
+                              })}
+                            </RadioGroup>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
                 <CardTitle>Broken Device Details</CardTitle>
                 <Button
                   type="button"
@@ -1109,30 +1344,66 @@ const JMLBreakfix = () => {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Total Devices</span>
+                    <span className="text-muted-foreground">Replacement Devices</span>
+                    <span className="font-semibold text-foreground">
+                      {replacementDevices.reduce((sum, d) => sum + d.quantity, 0)} units
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Broken/Damaged Devices</span>
                     <span className="font-semibold text-foreground">
                       {brokenDevices.reduce((sum, d) => sum + d.quantity, 0)} units
                     </span>
                   </div>
-                  <div className="pt-3 border-t space-y-2">
-                    {brokenDevices.map((device, index) => {
-                      const category = assetCategories.find(c => c.name === device.category);
-                      const deviceInfo = isAccessoriesCategory(device.category)
-                        ? (device.notes?.trim() || "Accessories")
-                        : [
-                            device.make,
-                            device.model,
-                            shouldShowDeviceType(device.category) ? device.deviceType : null
-                          ].filter(Boolean).join(' • ');
-                      return (
-                        <div key={index} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {category?.icon} {device.category} ({deviceInfo})
-                          </span>
-                          <span className="font-semibold text-foreground">{device.quantity}</span>
-                        </div>
-                      );
-                    })}
+
+                  <div className="pt-3 border-t space-y-4">
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium">Replacement</div>
+                      <div className="space-y-2">
+                        {replacementDevices.map((device, index) => {
+                          const category = assetCategories.find(c => c.name === device.category);
+                          const deviceInfo = isAccessoriesCategory(device.category)
+                            ? (device.notes?.trim() || "Accessories")
+                            : [
+                                device.make,
+                                device.model,
+                                shouldShowDeviceType(device.category) ? device.deviceType : null
+                              ].filter(Boolean).join(' • ');
+                          return (
+                            <div key={index} className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                {category?.icon} {device.category} ({deviceInfo})
+                              </span>
+                              <span className="font-semibold text-foreground">{device.quantity}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium">Broken/Damaged</div>
+                      <div className="space-y-2">
+                        {brokenDevices.map((device, index) => {
+                          const category = assetCategories.find(c => c.name === device.category);
+                          const deviceInfo = isAccessoriesCategory(device.category)
+                            ? (device.notes?.trim() || "Accessories")
+                            : [
+                                device.make,
+                                device.model,
+                                shouldShowDeviceType(device.category) ? device.deviceType : null
+                              ].filter(Boolean).join(' • ');
+                          return (
+                            <div key={index} className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                {category?.icon} {device.category} ({deviceInfo})
+                              </span>
+                              <span className="font-semibold text-foreground">{device.quantity}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

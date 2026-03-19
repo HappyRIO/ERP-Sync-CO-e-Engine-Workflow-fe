@@ -112,4 +112,5 @@ export interface GradingRecord {
   notes?: string;
   condition?: string;
   serialNumbers?: string[];
+  imeiNumbers?: string[];
 }

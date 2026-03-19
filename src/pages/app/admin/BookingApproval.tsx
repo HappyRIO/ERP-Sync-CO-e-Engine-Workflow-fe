@@ -32,6 +32,28 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { inventoryService } from "@/services/inventory.service";
+import { getUnderlyingAssetCategoryNameForJml } from "@/lib/jml-assets";
+
+/** Match JML device line category (e.g. "Phone") to client inventory row category (e.g. "Smart Phones"). */
+function jmlInventoryCategoryMatchesDevice(deviceCategory: string, inventoryCategory: string): boolean {
+  const a = (deviceCategory || "").trim().toLowerCase();
+  const b = (inventoryCategory || "").trim().toLowerCase();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const ua = getUnderlyingAssetCategoryNameForJml(deviceCategory.trim());
+  const ub = getUnderlyingAssetCategoryNameForJml(inventoryCategory.trim());
+  if (ua && ub && ua.toLowerCase() === ub.toLowerCase()) return true;
+  if (ua && b === ua.toLowerCase()) return true;
+  if (ub && a === ub.toLowerCase()) return true;
+  return false;
+}
+
+/** Show Windows/Apple (etc.) badge for laptop, desktop, and phone categories when deviceType is set. */
+function jmlDeviceShowsTypeBadge(device: { category?: string; deviceType?: string }): boolean {
+  if (!device?.deviceType) return false;
+  const c = String(device.category || "").toLowerCase().trim();
+  return c === "laptop" || c === "desktop" || c.includes("phone");
+}
 
 const BookingApproval = () => {
   const { id } = useParams();
@@ -51,16 +73,28 @@ const BookingApproval = () => {
   const isGraded = booking?.status === 'graded';
   const isInventory = booking?.status === 'inventory';
   const isPending = booking?.status === 'pending';
-  const isLeaverOrBreakfix = booking?.bookingType === 'jml' && (booking?.jmlSubType === 'leaver' || booking?.jmlSubType === 'breakfix');
-  // Leaver/breakfix must be in inventory status to complete (graded → inventory → completed). Other types can complete from graded.
+  const isLeaverOrBreakfixOrMover =
+    booking?.bookingType === 'jml' &&
+    (booking?.jmlSubType === 'leaver' ||
+      booking?.jmlSubType === 'breakfix' ||
+      booking?.jmlSubType === 'mover');
+  const isJmlMover = booking?.bookingType === 'jml' && booking?.jmlSubType === 'mover';
+  // Leaver/breakfix/mover collection leg: must reach inventory before complete from this page (graded → inventory → …).
+  // Mover at inventory continues to device allocation (not completed from this page).
   const isDeliveredNewStarter = booking?.bookingType === 'jml' && booking?.jmlSubType === 'new_starter' && booking?.status === 'delivered';
-  const canCompleteFromThisPage = (isGraded && !isLeaverOrBreakfix) || isInventory || isDeliveredNewStarter;
+  const isDeliveredMover = booking?.bookingType === 'jml' && booking?.jmlSubType === 'mover' && booking?.status === 'delivered';
+  /** JML bookings that use this page after delivery, before completed (final overview). */
+  const isDeliveredJmlFinalReview = isDeliveredNewStarter || isDeliveredMover;
+  const canCompleteFromThisPage =
+    (isGraded && !isLeaverOrBreakfixOrMover) ||
+    (isInventory && !isJmlMover) ||
+    isDeliveredJmlFinalReview;
 
   const { data: clientInventory = [], isLoading: isLoadingClientInventory } = useQuery({
-    queryKey: ['inventory', booking?.clientId, 'delivered-new-starter'],
+    queryKey: ['inventory', booking?.clientId, 'delivered-jml-final', booking?.jmlSubType],
     queryFn: () =>
       booking?.clientId ? inventoryService.getInventory(booking.clientId) : Promise.resolve([]),
-    enabled: isDeliveredNewStarter && !!booking?.clientId,
+    enabled: isDeliveredJmlFinalReview && !!booking?.clientId,
     staleTime: 30000,
   });
 
@@ -73,7 +107,7 @@ const BookingApproval = () => {
       const notes = (h?.notes || '').toString();
 
       // Example: "Allocated 2 device(s): SN1, SN2"
-      const multiMatch = notes.match(/Allocated \d+ device\(s\):\s*(.+)$/);
+      const multiMatch = notes.match(/Allocated \d+ device\(s\):\s*(.+)$/i);
       if (multiMatch?.[1]) {
         multiMatch[1].split(',').forEach((s) => {
           const v = s.trim();
@@ -81,8 +115,17 @@ const BookingApproval = () => {
         });
       }
 
+      // Mover bulk link: "Devices auto-allocated: SN1, SN2"
+      const autoAlloc = notes.match(/Devices auto-allocated:\s*([^\n.]+)/i);
+      if (autoAlloc?.[1]) {
+        autoAlloc[1].split(',').forEach((s) => {
+          const v = s.trim();
+          if (v) serials.add(v);
+        });
+      }
+
       // Example: "Device allocated: SN1"
-      const singleMatch = notes.match(/Device allocated:\s*(.+)$/);
+      const singleMatch = notes.match(/Device allocated:\s*(.+)$/i);
       if (singleMatch?.[1]) {
         const v = singleMatch[1].trim();
         if (v) serials.add(v);
@@ -195,8 +238,8 @@ const BookingApproval = () => {
     );
   }
 
-  // Handle bookings that are not in pending, graded, inventory, or (JML new starter) delivered status
-  if (!isPending && !isGraded && !isInventory && !isDeliveredNewStarter) {
+  // Allow: pending, graded, inventory, or JML delivered (new starter / mover) for final overview → completed
+  if (!isPending && !isGraded && !isInventory && !isDeliveredJmlFinalReview) {
     const statusMessages: Record<string, { message: string; variant: 'default' | 'destructive' }> = {
       'created': {
         message: 'This booking has already been approved and is now active.',
@@ -237,6 +280,7 @@ const BookingApproval = () => {
   
   // For graded/inventory bookings, calculate completion data
   const isPostGrading = isGraded || isInventory;
+  const showFinalReviewChrome = isPostGrading || isDeliveredJmlFinalReview;
   const allAssetsGraded = isPostGrading ? booking?.assets.every(asset => {
     const gradedQty = gradingRecords
       .filter(r => r.assetId === asset.categoryId)
@@ -255,7 +299,7 @@ const BookingApproval = () => {
   const uniqueGradedAssets = isPostGrading ? new Set(gradingRecords.map(r => r.assetId)).size : 0;
   const uniqueSanitisedAssets = isPostGrading ? new Set(sanitisationRecords.map(r => r.assetId)).size : 0;
 
-  const inventoryAddingRequired = isLeaverOrBreakfix;
+  const inventoryAddingRequired = isLeaverOrBreakfixOrMover;
   const inventoryAdded = inventoryAddingRequired ? isInventory : true;
 
   const completionChecklist = isPostGrading ? [
@@ -323,21 +367,21 @@ const BookingApproval = () => {
         </Button>
         <div className="flex-1 min-w-0">
           <h2 className="text-xl sm:text-2xl font-bold text-foreground">
-            {isPostGrading ? 'Final Review' : 'Booking Approval'}
+            {showFinalReviewChrome ? 'Final Review' : 'Booking Approval'}
           </h2>
           <div className="text-sm sm:text-base text-muted-foreground">
             <span>{booking.bookingNumber}</span>
           </div>
         </div>
         <Badge className={cn(
-          isPostGrading ? "bg-success/10 text-success" : "bg-warning/10 text-warning",
+          showFinalReviewChrome ? "bg-success/10 text-success" : "bg-warning/10 text-warning",
           "text-xs sm:text-sm px-2 sm:px-3 py-1 flex-shrink-0 whitespace-nowrap"
         )}>
           <span className="hidden sm:inline">
-          {isPostGrading ? 'Ready for Final Review' : 'Pending Approval'}
+          {showFinalReviewChrome ? 'Ready for Final Review' : 'Pending Approval'}
           </span>
           <span className="sm:hidden">
-            {isPostGrading ? 'Ready' : 'Pending'}
+            {showFinalReviewChrome ? 'Ready' : 'Pending'}
           </span>
         </Badge>
       </motion.div>
@@ -401,24 +445,45 @@ const BookingApproval = () => {
               </div>
             )}
             {booking.jmlSubType === 'mover' && booking.currentAddress ? (
-              <>
-                <div className="flex items-start gap-2 text-sm">
-                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="font-medium">From (Collection)</p>
-                    <p className="text-muted-foreground">{booking.currentSiteName || 'Current Address'}</p>
-                    <p className="text-muted-foreground text-xs">{booking.currentAddress}</p>
+              isDeliveredJmlFinalReview ? (
+                <>
+                  <div className="flex items-start gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium">Site (Collection)</p>
+                      <p className="text-muted-foreground">{booking.currentSiteName || 'Previous location'}</p>
+                      <p className="text-muted-foreground text-xs">{booking.currentAddress}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start gap-2 text-sm">
-                  <MapPin className="h-4 w-4 text-primary mt-0.5" />
-                  <div>
-                    <p className="font-medium">To (Delivery) – Site</p>
-                    <p className="text-muted-foreground">{booking.siteName}</p>
-                    <p className="text-muted-foreground text-xs">{booking.siteAddress}</p>
+                  <div className="flex items-start gap-2 text-sm pt-1 border-t border-border/60">
+                    <MapPin className="h-4 w-4 text-primary mt-0.5" />
+                    <div>
+                      <p className="font-medium">Site (Delivery)</p>
+                      <p className="text-muted-foreground">{booking.siteName}</p>
+                      <p className="text-muted-foreground text-xs">{booking.siteAddress}</p>
+                    </div>
                   </div>
-                </div>
-              </>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-start gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium">From (Collection)</p>
+                      <p className="text-muted-foreground">{booking.currentSiteName || 'Current Address'}</p>
+                      <p className="text-muted-foreground text-xs">{booking.currentAddress}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-primary mt-0.5" />
+                    <div>
+                      <p className="font-medium">To (Delivery)</p>
+                      <p className="text-muted-foreground">{booking.siteName}</p>
+                      <p className="text-muted-foreground text-xs">{booking.siteAddress}</p>
+                    </div>
+                  </div>
+                </>
+              )
             ) : (
               <div className="flex items-center gap-2 text-sm">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -631,8 +696,8 @@ const BookingApproval = () => {
         </Card>
       )}
 
-      {/* Sanitisation Summary - Only for graded bookings */}
-      {isPostGrading && (
+      {/* Sanitisation Summary - Mover skips sanitised status */}
+      {isPostGrading && booking?.jmlSubType !== 'mover' && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -671,11 +736,11 @@ const BookingApproval = () => {
       )}
 
       {/* Device Details - For JML bookings */}
-      {/* For new starter, this page can be reached in `delivered` status, so also render there. */}
+      {/* New starter / mover: this page after `delivered` for final overview → completed. */}
       {booking.bookingType === 'jml' &&
         booking.statusHistory &&
         booking.statusHistory.length > 0 &&
-        (isPending || isDeliveredNewStarter) && (() => {
+        (isPending || isDeliveredJmlFinalReview) && (() => {
         // Extract device details from status history notes
         const creationHistory = booking.statusHistory.find(h => 
           h.notes && h.notes.includes('Device details:')
@@ -683,23 +748,178 @@ const BookingApproval = () => {
         
         if (creationHistory && creationHistory.notes) {
           try {
-            const deviceDetailsMatch = creationHistory.notes.match(/Device details: (\[.*\])/);
-            if (deviceDetailsMatch) {
-              const deviceDetails = JSON.parse(deviceDetailsMatch[1]);
-              return (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      {isDeliveredNewStarter ? 'Delivered Device Details' : 'Device Details'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+            const isBreakfix = booking.jmlSubType === 'breakfix';
+
+            const brokenMatch = creationHistory.notes.match(/Device details:\s*(\[.*?\])/);
+            const replacementMatch = creationHistory.notes.match(/Replacement Device details:\s*(\[.*?\])/i);
+
+            const brokenDeviceDetails = brokenMatch ? JSON.parse(brokenMatch[1]) : [];
+            const replacementDeviceDetails = replacementMatch ? JSON.parse(replacementMatch[1]) : [];
+
+            // For breakfix we show both: replacement requirements + broken devices.
+            // For other JML subtypes we preserve the existing behaviour.
+            if (brokenDeviceDetails.length === 0 && replacementDeviceDetails.length === 0) return null;
+
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    {isDeliveredJmlFinalReview
+                      ? 'Device Details'
+                      : isBreakfix
+                        ? 'Device Details (Replacement & Broken)'
+                        : 'Device Details'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isBreakfix ? (
+                    <div className="space-y-6">
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium text-muted-foreground">Replacement Device Requirements</p>
+                        {replacementDeviceDetails.length > 0 ? (
+                          <div className="space-y-3">
+                            {replacementDeviceDetails.map((device: any, index: number) => {
+                              const matchingItems = isDeliveredJmlFinalReview
+                                ? (deliveredInventoryItems as any[]).filter((i) =>
+                                    jmlInventoryCategoryMatchesDevice(String(device?.category || ""), String(i?.category || ""))
+                                  )
+                                : [];
+                              const deviceSerials = matchingItems.map((i) => i.serialNumber).filter(Boolean);
+                              const deviceConditionCodes = Array.from(
+                                new Set(matchingItems.map((i) => i.conditionCode).filter(Boolean))
+                              );
+
+                              return (
+                                <div key={index} className="p-3 rounded-lg bg-muted/30 border">
+                                  <div className="grid gap-2">
+                                    <div className="flex items-center justify-between">
+                                      <p className="font-medium">{device.category}</p>
+                                      {jmlDeviceShowsTypeBadge(device) ? (
+                                        <Badge variant="outline">{device.deviceType}</Badge>
+                                      ) : null}
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                      <div>
+                                        <span className="font-medium">Make:</span> {device.make}
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Model:</span> {device.model}
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Quantity:</span> {device.quantity}
+                                      </div>
+                                    </div>
+
+                                    {isDeliveredJmlFinalReview && (
+                                      <div className="space-y-1">
+                                        <p className="text-sm text-muted-foreground">
+                                          <span className="font-medium">Serials:</span>{" "}
+                                          {isLoadingClientInventory ? (
+                                            "Loading..."
+                                          ) : deviceSerials.length > 0 ? (
+                                            <span className="font-mono">{deviceSerials.join(", ")}</span>
+                                          ) : (
+                                            "-"
+                                          )}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                          <span className="font-medium">Condition Codes:</span>{" "}
+                                          {isLoadingClientInventory ? (
+                                            "Loading..."
+                                          ) : deviceConditionCodes.length > 0 ? (
+                                            <span className="font-mono">{deviceConditionCodes.join(", ")}</span>
+                                          ) : (
+                                            "-"
+                                          )}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No replacement device requirements found.</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium text-muted-foreground">Broken/Damaged Devices</p>
+                        {brokenDeviceDetails.length > 0 ? (
+                          <div className="space-y-3">
+                            {brokenDeviceDetails.map((device: any, index: number) => {
+                              const matchingItems = isDeliveredJmlFinalReview
+                                ? (deliveredInventoryItems as any[]).filter((i) =>
+                                    jmlInventoryCategoryMatchesDevice(String(device?.category || ""), String(i?.category || ""))
+                                  )
+                                : [];
+                              const deviceSerials = matchingItems.map((i) => i.serialNumber).filter(Boolean);
+                              const deviceConditionCodes = Array.from(
+                                new Set(matchingItems.map((i) => i.conditionCode).filter(Boolean))
+                              );
+
+                              return (
+                                <div key={index} className="p-3 rounded-lg bg-muted/30 border">
+                                  <div className="grid gap-2">
+                                    <div className="flex items-center justify-between">
+                                      <p className="font-medium">{device.category}</p>
+                                      {jmlDeviceShowsTypeBadge(device) ? (
+                                        <Badge variant="outline">{device.deviceType}</Badge>
+                                      ) : null}
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                      <div>
+                                        <span className="font-medium">Make:</span> {device.make}
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Model:</span> {device.model}
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Quantity:</span> {device.quantity}
+                                      </div>
+                                    </div>
+
+                                    {isDeliveredJmlFinalReview && (
+                                      <div className="space-y-1">
+                                        <p className="text-sm text-muted-foreground">
+                                          <span className="font-medium">Serials:</span>{" "}
+                                          {isLoadingClientInventory ? (
+                                            "Loading..."
+                                          ) : deviceSerials.length > 0 ? (
+                                            <span className="font-mono">{deviceSerials.join(", ")}</span>
+                                          ) : (
+                                            "-"
+                                          )}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                          <span className="font-medium">Condition Codes:</span>{" "}
+                                          {isLoadingClientInventory ? (
+                                            "Loading..."
+                                          ) : deviceConditionCodes.length > 0 ? (
+                                            <span className="font-mono">{deviceConditionCodes.join(", ")}</span>
+                                          ) : (
+                                            "-"
+                                          )}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No broken device details found.</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
                     <div className="space-y-3">
-                      {deviceDetails.map((device: any, index: number) => {
-                        const deviceCategoryNorm = String(device?.category || "").toLowerCase();
-                        const matchingItems = isDeliveredNewStarter
-                          ? (deliveredInventoryItems as any[]).filter(
-                              (i) => String(i?.category || "").toLowerCase() === deviceCategoryNorm
+                      {brokenDeviceDetails.map((device: any, index: number) => {
+                        const matchingItems = isDeliveredJmlFinalReview
+                          ? (deliveredInventoryItems as any[]).filter((i) =>
+                              jmlInventoryCategoryMatchesDevice(String(device?.category || ""), String(i?.category || ""))
                             )
                           : [];
                         const deviceSerials = matchingItems.map((i) => i.serialNumber).filter(Boolean);
@@ -708,59 +928,59 @@ const BookingApproval = () => {
                         );
 
                         return (
-                        <div key={index} className="p-3 rounded-lg bg-muted/30 border">
-                          <div className="grid gap-2">
-                            <div className="flex items-center justify-between">
-                              <p className="font-medium">{device.category}</p>
-                              {(device.category === 'Laptop' || device.category === 'Desktop') && device.deviceType ? (
-                                <Badge variant="outline">{device.deviceType}</Badge>
-                              ) : null}
-                            </div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                              <div>
-                                <span className="font-medium">Make:</span> {device.make}
+                          <div key={index} className="p-3 rounded-lg bg-muted/30 border">
+                            <div className="grid gap-2">
+                              <div className="flex items-center justify-between">
+                                <p className="font-medium">{device.category}</p>
+                                {jmlDeviceShowsTypeBadge(device) ? (
+                                  <Badge variant="outline">{device.deviceType}</Badge>
+                                ) : null}
                               </div>
-                              <div>
-                                <span className="font-medium">Model:</span> {device.model}
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                <div>
+                                  <span className="font-medium">Make:</span> {device.make}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Model:</span> {device.model}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Quantity:</span> {device.quantity}
+                                </div>
                               </div>
-                              <div>
-                                <span className="font-medium">Quantity:</span> {device.quantity}
-                              </div>
-                            </div>
 
-                            {isDeliveredNewStarter && (
-                              <div className="space-y-1">
-                                <p className="text-sm text-muted-foreground">
-                                  <span className="font-medium">Serials:</span>{" "}
-                                  {isLoadingClientInventory ? (
-                                    "Loading..."
-                                  ) : deviceSerials.length > 0 ? (
-                                    <span className="font-mono">{deviceSerials.join(", ")}</span>
-                                  ) : (
-                                    "-"
-                                  )}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  <span className="font-medium">Condition Codes:</span>{" "}
-                                  {isLoadingClientInventory ? (
-                                    "Loading..."
-                                  ) : deviceConditionCodes.length > 0 ? (
-                                    <span className="font-mono">{deviceConditionCodes.join(", ")}</span>
-                                  ) : (
-                                    "-"
-                                  )}
-                                </p>
-                              </div>
-                            )}
+                              {isDeliveredJmlFinalReview && (
+                                <div className="space-y-1">
+                                  <p className="text-sm text-muted-foreground">
+                                    <span className="font-medium">Serials:</span>{" "}
+                                    {isLoadingClientInventory ? (
+                                      "Loading..."
+                                    ) : deviceSerials.length > 0 ? (
+                                      <span className="font-mono">{deviceSerials.join(", ")}</span>
+                                    ) : (
+                                      "-"
+                                    )}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    <span className="font-medium">Condition Codes:</span>{" "}
+                                    {isLoadingClientInventory ? (
+                                      "Loading..."
+                                    ) : deviceConditionCodes.length > 0 ? (
+                                      <span className="font-mono">{deviceConditionCodes.join(", ")}</span>
+                                    ) : (
+                                      "-"
+                                    )}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
                         );
                       })}
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            }
+                  )}
+                </CardContent>
+              </Card>
+            );
           } catch (error) {
             // If parsing fails, don't show device details
           }
@@ -772,7 +992,7 @@ const BookingApproval = () => {
       {!showCancelForm ? (
         <Card
           className={
-            (isPostGrading && allProcessesComplete) || isDeliveredNewStarter
+            (isPostGrading && allProcessesComplete) || isDeliveredJmlFinalReview
               ? "border-2 border-success/20 bg-success/5"
               : "border-2 border-warning/20 bg-warning/5"
           }
@@ -780,15 +1000,15 @@ const BookingApproval = () => {
           <CardContent className="pt-6">
             <div className="space-y-4">
               <div
-                className={`flex items-center gap-2 ${((isPostGrading && allProcessesComplete) || isDeliveredNewStarter) ? "text-success" : "text-warning"}`}
+                className={`flex items-center gap-2 ${((isPostGrading && allProcessesComplete) || isDeliveredJmlFinalReview) ? "text-success" : "text-warning"}`}
               >
-                {((isPostGrading && allProcessesComplete) || isDeliveredNewStarter) ? (
+                {((isPostGrading && allProcessesComplete) || isDeliveredJmlFinalReview) ? (
                   <CheckCircle2 className="h-5 w-5" />
                 ) : (
                   <AlertCircle className="h-5 w-5" />
                 )}
                 <p className="font-medium">
-                  {(isPostGrading && allProcessesComplete) || isDeliveredNewStarter
+                  {(isPostGrading && allProcessesComplete) || isDeliveredJmlFinalReview
                     ? 'All requirements met. Ready for final approval.'
                     : 'Review booking details before approval'}
                 </p>
@@ -828,7 +1048,7 @@ const BookingApproval = () => {
               )}
 
               <div className="flex flex-col sm:flex-row gap-3 justify-end">
-                {isPostGrading || isDeliveredNewStarter ? (
+                {isPostGrading || isDeliveredJmlFinalReview ? (
                   canCompleteFromThisPage ? (
                     <>
                       <Button

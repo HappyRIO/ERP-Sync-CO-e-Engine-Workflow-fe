@@ -56,14 +56,10 @@ const getNextStatusForBooking = (booking: {
   if (
     status === "created" ||
     status === "device_allocated" ||
-    // Warehouse transitions are handled by dedicated actions.
-    // Exception: Mover needs warehouse → inventory (no sanitised/graded).
-    (status === "warehouse" && !(bookingType === "jml" && jmlSubType === "mover")) ||
+    status === "warehouse" ||
     status === "sanitised" ||
     status === "graded"
   ) {
-    // Exception: Mover needs warehouse → inventory (no sanitised/graded)
-    if (status === "warehouse" && bookingType === "jml" && jmlSubType === "mover") return "inventory";
     return null;
   }
 
@@ -138,7 +134,7 @@ const getNextStatusForBooking = (booking: {
             return "collected";
           case "collected":
             return "warehouse";
-          case "warehouse":
+          case "graded":
             return "inventory";
           case "inventory":
             return "device_allocated";
@@ -457,13 +453,19 @@ const BookingQueue = () => {
                               </Button>
                             )}
                             {booking.status === 'warehouse' &&
-                              !(booking.bookingType === 'jml' && booking.jmlSubType === 'mover') && (
-                              <Button asChild className="w-full mt-2" size="sm" variant="default">
-                                <Link to={`/admin/sanitisation/${booking.id}`} className="text-inherit no-underline">
-                                  Record Sanitisation
-                                </Link>
-                              </Button>
-                            )}
+                              (booking.bookingType === 'jml' && booking.jmlSubType === 'mover' ? (
+                                <Button asChild className="w-full mt-2" size="sm" variant="default">
+                                  <Link to={`/admin/grading/${booking.id}`} className="text-inherit no-underline">
+                                    Grade Assets
+                                  </Link>
+                                </Button>
+                              ) : (
+                                <Button asChild className="w-full mt-2" size="sm" variant="default">
+                                  <Link to={`/admin/sanitisation/${booking.id}`} className="text-inherit no-underline">
+                                    Record Sanitisation
+                                  </Link>
+                                </Button>
+                              ))}
                             {booking.status === 'sanitised' && (
                               <Button asChild className="w-full mt-2" size="sm" variant="default">
                                 <Link to={`/admin/grading/${booking.id}`} className="text-inherit no-underline">
@@ -473,7 +475,9 @@ const BookingQueue = () => {
                             )}
                             {booking.status === 'graded' &&
                               booking.bookingType === 'jml' &&
-                              (booking.jmlSubType === 'leaver' || booking.jmlSubType === 'breakfix') && (
+                              (booking.jmlSubType === 'leaver' ||
+                                booking.jmlSubType === 'breakfix' ||
+                                booking.jmlSubType === 'mover') && (
                               <Button asChild className="w-full mt-2" size="sm" variant="default">
                                 <Link to={`/admin/booking-inventory/${booking.id}`} className="text-inherit no-underline">
                                   Add to Inventory List
@@ -485,6 +489,23 @@ const BookingQueue = () => {
                             {(() => {
                               const nextStatus = getNextStatusForBooking(booking as any);
                               if (!nextStatus) return null;
+
+                              // Mover at inventory: allocate all devices linked to this booking (device allocation page auto-runs)
+                              if (
+                                booking.bookingType === 'jml' &&
+                                booking.jmlSubType === 'mover' &&
+                                booking.status === 'inventory' &&
+                                nextStatus === 'device_allocated'
+                              ) {
+                                return (
+                                  <Button asChild className="w-full mt-2" size="sm" variant="success">
+                                    <Link to={`/admin/device-allocation?booking=${booking.id}`} className="text-inherit no-underline">
+                                      <Package className="h-4 w-4 mr-2 inline" />
+                                      Allocate Device
+                                    </Link>
+                                  </Button>
+                                );
+                              }
 
                               // For any status that goes directly to Completed, send admin to final overview page
                               if (nextStatus === 'completed') {

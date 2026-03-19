@@ -274,8 +274,8 @@ const Inventory = () => {
   const statusColors: Record<string, string> = {
     available: "bg-green-500/10 text-green-500",
     allocated: "bg-blue-500/10 text-blue-500",
-    in_transit: "bg-yellow-500/10 text-yellow-500",
     delivered: "bg-purple-500/10 text-purple-500",
+    mover_allocated: "bg-amber-500/10 text-amber-500",
   };
 
   // Category filter: show all API categories plus any in inventory (so VOIP, WEEE Waste appear even with 0 items)
@@ -547,8 +547,8 @@ const Inventory = () => {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="available">Available</SelectItem>
                 <SelectItem value="allocated">Allocated</SelectItem>
-                <SelectItem value="in_transit">In Transit</SelectItem>
                 <SelectItem value="delivered">Delivered</SelectItem>
+                <SelectItem value="mover_allocated">Mover Allocated</SelectItem>
               </SelectContent>
             </Select>
             <Select value={conditionCodeFilter} onValueChange={setConditionCodeFilter}>

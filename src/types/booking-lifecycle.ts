@@ -19,7 +19,7 @@ export const lifecycleTransitions: Record<BookingLifecycleStatus, (BookingLifecy
   created: ['scheduled', 'cancelled', 'device_allocated', 'collection_scheduled'], // JML can go directly to device_allocated or collection_scheduled
   scheduled: ['collected', 'cancelled', 'courier_booked'], // ITAD: collected, JML can go to courier_booked
   collected: ['sanitised', 'warehouse', 'dispatched'], // ITAD: sanitised, Leaver: warehouse, New-starter/Mover: dispatched
-  warehouse: ['sanitised', 'inventory'], // ITAD: sanitised, Mover: inventory
+  warehouse: ['sanitised', 'inventory'], // ITAD/Leaver: sanitised; Mover uses type-specific warehouse → graded (no sanitised)
   sanitised: ['graded'],
   graded: ['completed', 'inventory'], // ITAD: completed, Leaver/Breakfix: inventory
   inventory: ['completed', 'device_allocated'], // Added to inventory (handles both reuse and disposal), Mover: device_allocated

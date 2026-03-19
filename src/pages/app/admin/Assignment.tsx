@@ -220,11 +220,18 @@ const Assignment = () => {
 
   // Initialize tracking number and courier service from booking if available
   useEffect(() => {
-    if (booking?.courierTracking) {
+    if (!booking) return;
+
+    // Mover at device_allocated: form is for a new delivery courier — do not pre-fill with collection tracking
+    if (booking.bookingType === 'jml' && booking.jmlSubType === 'mover' && booking.status === 'device_allocated') {
+      setTrackingNumber('');
+      return;
+    }
+
+    if (booking.courierTracking) {
       setTrackingNumber(booking.courierTracking);
     }
-    if (booking?.courierService) {
-      // Check if it's one of the predefined services
+    if (booking.courierService) {
       const predefinedServices = ['fedex', 'dpd', 'ups', 'parcelforce', 'royalmail'];
       const serviceLower = booking.courierService.toLowerCase();
       if (predefinedServices.includes(serviceLower)) {
@@ -305,8 +312,10 @@ const Assignment = () => {
             {isJMLBooking ? "Book Courier" : "Assign Driver"}
           </h2>
           <p className="text-muted-foreground">
-            {isJMLBooking 
-              ? "Add courier tracking number for delivery/collection" 
+            {isJMLBooking
+              ? booking.jmlSubType === 'mover' && booking.status === 'device_allocated'
+                ? "Collection tracking is kept below. Book a new courier for delivery of devices to the new address."
+                : "Add courier tracking for collection or delivery"
               : "Schedule booking and assign driver for collection"}
           </p>
         </div>
@@ -438,19 +447,61 @@ const Assignment = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <PackageSearch className="h-5 w-5" />
-                  Courier Booking
+                  {booking.jmlSubType === 'mover' && booking.status === 'device_allocated'
+                    ? 'Delivery courier (new devices)'
+                    : 'Courier booking'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {booking.courierTracking && (
+                {/* Mover: collection leg stays on file when booking delivery courier */}
+                {booking.jmlSubType === 'mover' &&
+                  ((booking as { collectionCourierTracking?: string }).collectionCourierTracking ||
+                    (booking as { collectionCourierService?: string }).collectionCourierService) && (
+                  <div className="space-y-2 p-3 rounded-lg border bg-muted/40">
+                    <p className="text-sm font-semibold text-foreground">Collection courier (reference)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Shown for traceability. It is not changed when you book delivery below.
+                    </p>
+                    {(booking as { collectionCourierService?: string }).collectionCourierService && (
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Service: </span>
+                        {(booking as { collectionCourierService?: string }).collectionCourierService}
+                      </p>
+                    )}
+                    {(booking as { collectionCourierTracking?: string }).collectionCourierTracking && (
+                      <div className="flex items-center gap-2">
+                        <PackageSearch className="h-4 w-4 shrink-0" />
+                        <span className="font-mono text-sm font-medium break-all">
+                          {(booking as { collectionCourierTracking?: string }).collectionCourierTracking}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {booking.courierTracking &&
+                  !(booking.jmlSubType === 'mover' && booking.status === 'device_allocated') && (
                   <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">Current Tracking Number</p>
+                    <p className="text-sm text-muted-foreground">Current tracking number</p>
                     <div className="p-3 rounded-lg bg-muted space-y-2">
                       <div className="flex items-center gap-2">
                         <PackageSearch className="h-4 w-4" />
                         <span className="font-mono font-medium">{booking.courierTracking}</span>
                       </div>
                     </div>
+                  </div>
+                )}
+                {booking.jmlSubType === 'mover' &&
+                  booking.status === 'courier_booked' &&
+                  booking.courierTracking && (
+                  <div className="space-y-2 p-3 rounded-lg bg-muted/30 border">
+                    <p className="text-sm font-medium text-muted-foreground">Delivery tracking (current)</p>
+                    <div className="flex items-center gap-2">
+                      <PackageSearch className="h-4 w-4 shrink-0" />
+                      <span className="font-mono text-sm font-medium break-all">{booking.courierTracking}</span>
+                    </div>
+                    {booking.courierService && (
+                      <p className="text-xs text-muted-foreground">Service: {booking.courierService}</p>
+                    )}
                   </div>
                 )}
                 <div className="space-y-2">
@@ -490,9 +541,11 @@ const Assignment = () => {
                     className="font-mono"
                   />
                   <p className="text-xs text-muted-foreground">
-                    {booking.courierTracking 
-                      ? "Update the tracking number if it has changed."
-                      : "Enter the tracking number provided by the courier service."}
+                    {booking.jmlSubType === 'mover' && booking.status === 'device_allocated'
+                      ? "Enter the delivery courier’s tracking number for the new devices."
+                      : booking.courierTracking
+                        ? "Update the tracking number if it has changed."
+                        : "Enter the tracking number provided by the courier service."}
                   </p>
                 </div>
                 <Button
@@ -519,7 +572,9 @@ const Assignment = () => {
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  This will update the booking status to "courier_booked" and add the tracking number.
+                  {booking.jmlSubType === 'mover' && booking.status === 'device_allocated'
+                    ? 'Saves delivery tracking and moves the booking to courier booked. Collection tracking above is preserved.'
+                    : 'This will update the booking status to "courier_booked" and add the tracking number.'}
                 </p>
               </CardContent>
             </Card>

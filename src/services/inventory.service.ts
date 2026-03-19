@@ -13,7 +13,7 @@ export interface InventoryItem {
   imei?: string;
   conditionCode: string;
   erpInventoryId?: string;
-  status: 'available' | 'allocated' | 'in_transit' | 'delivered' | 'collected' | 'warehouse';
+  status: 'available' | 'allocated' | 'delivered' | 'mover_allocated' | 'in_transit' | 'collected' | 'warehouse';
   allocatedTo: string | null; // Client ID if allocated
   createdAt: string;
   updatedAt: string;
@@ -21,7 +21,7 @@ export interface InventoryItem {
 }
 
 export interface InventoryUploadItem {
-  deviceType: string;
+  deviceType: string | null;
   make: string;
   model: string;
   serialNumber: string;
@@ -51,10 +51,15 @@ class InventoryService {
     return response || [];
   }
 
-  async uploadInventory(items: InventoryUploadItem[], clientId?: string): Promise<InventoryUploadResponse> {
+  async uploadInventory(
+    items: InventoryUploadItem[],
+    clientId?: string,
+    sourceBookingId?: string
+  ): Promise<InventoryUploadResponse> {
     const response = await apiClient.post<InventoryUploadResponse>('/inventory/upload', {
       items,
       clientId,
+      ...(sourceBookingId ? { sourceBookingId } : {}),
     });
     return response;
   }
@@ -71,8 +76,25 @@ class InventoryService {
     params.append('allocatedTo', allocatedTo);
     if (category) params.append('category', category);
     if (conditionCode) params.append('conditionCode', conditionCode);
-    
+
     const response = await apiClient.get<InventoryItem[]>(`/inventory/available?${params.toString()}`);
+    return response || [];
+  }
+
+  /** Get mover-allocated inventory for a client; pass bookingId to scope devices to one mover booking. */
+  async getMoverAllocatedInventory(
+    clientId: string,
+    bookingId?: string,
+    category?: string,
+    conditionCode?: string
+  ): Promise<InventoryItem[]> {
+    const params = new URLSearchParams();
+    params.append('clientId', clientId);
+    if (bookingId) params.append('bookingId', bookingId);
+    if (category) params.append('category', category);
+    if (conditionCode) params.append('conditionCode', conditionCode);
+
+    const response = await apiClient.get<InventoryItem[]>(`/inventory/mover-allocated?${params.toString()}`);
     return response || [];
   }
 

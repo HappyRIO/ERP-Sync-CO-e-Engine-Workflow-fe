@@ -68,3 +68,16 @@ export function inferDeviceTypeFromJmlCategory(category: string): JmlDeviceType 
   return "Windows";
 }
 
+/** Grading / inventory: phones and tablets need IMEI. */
+export function categoryRequiresImei(categoryName: string): boolean {
+  const c = (categoryName || "").trim().toLowerCase();
+  return (
+    c === "smart phones" ||
+    c === "smart phone" ||
+    c === "phone" ||
+    c === "tablets" ||
+    c === "tablet" ||
+    c === "mobile"
+  );
+}
+

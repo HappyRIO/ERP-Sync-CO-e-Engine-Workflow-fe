@@ -25,6 +25,7 @@ export function useCreateGradingRecord() {
       notes?: string;
       quantity?: number;
       serialNumbers?: string[];
+      imeiNumbers?: string[];
     }) => gradingService.createGradingRecord(
       data.bookingId,
       data.assetId,
@@ -34,7 +35,8 @@ export function useCreateGradingRecord() {
       data.condition,
       data.notes,
       data.quantity,
-      data.serialNumbers
+      data.serialNumbers,
+      data.imeiNumbers
     ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['grading'] });

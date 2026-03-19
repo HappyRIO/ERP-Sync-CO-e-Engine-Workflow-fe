@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, FileCheck, Loader2, Recycle, Warehouse, Upload, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,8 @@ import { useGradingRecords } from "@/hooks/useGrading";
 import { useUploadInventory } from "@/hooks/useInventory";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { categoryRequiresImei, inferDeviceTypeFromJmlCategory, shouldShowDeviceTypeForJmlCategory } from "@/lib/jml-assets";
+import { buildJmlDeviceDetailsMapFromBooking, lookupJmlDeviceDetails } from "@/lib/jml-booking-device-details";
 
 const gradeColors: Record<string, string> = {
   A: "bg-success/10 text-success",
@@ -20,7 +22,7 @@ const gradeColors: Record<string, string> = {
   Q: "bg-destructive/10 text-destructive",
 };
 
-export default function BookingInventory() {
+function BookingInventory() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: booking, isLoading: isLoadingBooking } = useBooking(id || null);
@@ -28,6 +30,15 @@ export default function BookingInventory() {
   const uploadInventory = useUploadInventory();
   const [hasAddedToInventory, setHasAddedToInventory] = useState(false);
   const updateBookingStatus = useUpdateBookingStatus();
+
+  const deviceDetailsMap = useMemo(
+    () =>
+      buildJmlDeviceDetailsMapFromBooking({
+        jmlSubType: (booking as { jmlSubType?: string })?.jmlSubType,
+        statusHistory: (booking as { statusHistory?: Array<{ notes?: string }> })?.statusHistory,
+      }),
+    [booking]
+  );
 
   useEffect(() => {
     if (booking?.status === "inventory") {
@@ -58,14 +69,19 @@ export default function BookingInventory() {
     );
   }
 
-  // Allow when graded (admin just arrived to add devices) or already in inventory
-  const canAccessInventoryPage = booking.status === "graded" || booking.status === "inventory";
+  const isMoverBooking =
+    booking.bookingType === "jml" && (booking as { jmlSubType?: string }).jmlSubType === "mover";
+  // Leaver/breakfix/mover: after graded (same collection leg). Any: when already at inventory step.
+  const canAccessInventoryPage =
+    booking.status === "inventory" || booking.status === "graded";
   if (!canAccessInventoryPage) {
     return (
       <div className="space-y-6">
         <Alert>
           <AlertDescription>
-            Inventory processing is only available after grading. Current status: {booking.status}
+            {isMoverBooking
+              ? `Add to inventory is available after grading (or when already in inventory). Current status: ${booking.status}`
+              : `Inventory processing is only available after grading. Current status: ${booking.status}`}
           </AlertDescription>
         </Alert>
         <Button asChild>
@@ -91,34 +107,17 @@ export default function BookingInventory() {
       return;
     }
 
-    const deviceDetailsMap = (() => {
-      const map = new Map<string, { make?: string; model?: string; deviceType?: string }>();
-      const statusHistory = (booking as any)?.statusHistory as Array<{ notes?: string }> | undefined;
-      if (!statusHistory?.length) return map;
-      const creationHistory = statusHistory.find(h => h.notes && h.notes.includes('Device details:'));
-      if (!creationHistory?.notes) return map;
-      try {
-        const deviceDetailsMatch = creationHistory.notes.match(/Device details: (\[.*\])/);
-        if (!deviceDetailsMatch) return map;
-        const deviceDetails = JSON.parse(deviceDetailsMatch[1]);
-        deviceDetails.forEach((device: any) => {
-          if (!device?.category) return;
-          map.set(device.category, {
-            make: device.make,
-            model: device.model,
-            deviceType: device.deviceType,
-          });
+    for (const r of inventoryRecords) {
+      if (!categoryRequiresImei(r.assetCategory)) continue;
+      const serials = r.serialNumbers || [];
+      const imeis = r.imeiNumbers || [];
+      if (imeis.length !== serials.length || imeis.some((x) => !String(x).trim())) {
+        toast.error("Cannot add to inventory", {
+          description: `Phones/tablets need one IMEI per serial (${r.assetCategory}). Re-grade with IMEIs if missing.`,
         });
-      } catch {
-        // Ignore parse errors; fallback to Unknown make/model.
+        return;
       }
-      return map;
-    })();
-
-    const requiresDeviceType = (category: string) => {
-      const c = (category || "").toLowerCase();
-      return c === "laptop" || c === "desktop";
-    };
+    }
 
     const buildConditionCode = (make: string, grade: string) => {
       const prefix = (make || "")
@@ -129,22 +128,30 @@ export default function BookingInventory() {
       return prefix.length === 3 && g ? `${prefix}${g}` : "";
     };
 
+    const isMover =
+      (booking as { bookingType?: string; jmlSubType?: string })?.bookingType === "jml" &&
+      (booking as { jmlSubType?: string })?.jmlSubType === "mover";
     const items = inventoryRecords.flatMap((r) => {
       const grade = (r.grade || "").toString().toUpperCase();
-      const details = deviceDetailsMap.get(r.assetCategory) || {};
+      const details = lookupJmlDeviceDetails(deviceDetailsMap, r.assetCategory);
       const make = (details.make || "Unknown").toString().trim() || "Unknown";
       const model = (details.model || "Unknown").toString().trim() || "Unknown";
       const conditionCode = (r.condition || buildConditionCode(make, grade)).toString().trim();
-      const deviceType = requiresDeviceType(r.assetCategory) ? (details.deviceType || null) : null;
+      const deviceType = shouldShowDeviceTypeForJmlCategory(r.assetCategory)
+        ? String(details.deviceType || inferDeviceTypeFromJmlCategory(r.assetCategory)).trim() || null
+        : null;
 
-      return (r.serialNumbers || []).map((serialNumber) => ({
+      return (r.serialNumbers || []).map((serialNumber, idx) => ({
         category: r.assetCategory,
         deviceType,
         make,
         model,
         serialNumber,
+        imei: categoryRequiresImei(r.assetCategory)
+          ? String((r.imeiNumbers || [])[idx] || "").trim() || undefined
+          : undefined,
         conditionCode,
-        status: "available",
+        status: isMover ? "mover_allocated" : "available",
       }));
     });
 
@@ -154,7 +161,11 @@ export default function BookingInventory() {
     }
 
     uploadInventory.mutate(
-      { items },
+      {
+        items,
+        clientId: isMover && booking.clientId ? booking.clientId : undefined,
+        sourceBookingId: isMover && id ? id : undefined,
+      },
       {
         onSuccess: () => {
           setHasAddedToInventory(true);
@@ -189,8 +200,19 @@ export default function BookingInventory() {
           <h2 className="text-xl sm:text-2xl font-bold text-foreground">Inventory Processing</h2>
           <p className="text-muted-foreground">{booking.bookingNumber}</p>
         </div>
-        <Badge className={cn("bg-green-500/10 text-green-500", "px-3 py-1")}>Inventory</Badge>
+        <Badge className={cn("bg-green-500/10 text-green-500", "px-3 py-1")}>
+          {isMoverBooking ? "Mover · Add inventory" : "Inventory"}
+        </Badge>
       </motion.div>
+
+      {isMoverBooking && (
+        <Alert>
+          <AlertDescription>
+            For mover bookings, devices you add here are stored as <strong>mover_allocated</strong> for this client. At{" "}
+            <strong>Device allocated</strong>, only those devices (same client) can be allocated to the booking.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
@@ -263,6 +285,12 @@ export default function BookingInventory() {
                     Missing serial numbers (required for A/B/C).
                   </p>
                 )}
+                {categoryRequiresImei(r.assetCategory) && r.imeiNumbers?.length ? (
+                  <p className="mt-1 text-sm">
+                    <span className="text-muted-foreground">IMEI:</span>{" "}
+                    <span className="font-mono">{r.imeiNumbers.join(", ")}</span>
+                  </p>
+                ) : null}
               </div>
             ))
           )}
@@ -315,3 +343,4 @@ export default function BookingInventory() {
   );
 }
 
+export default BookingInventory;

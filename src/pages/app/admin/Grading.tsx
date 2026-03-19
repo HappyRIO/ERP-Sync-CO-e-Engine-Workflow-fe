@@ -15,6 +15,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { categoryRequiresImei, getUnderlyingAssetCategoryNameForJml } from "@/lib/jml-assets";
+import { buildJmlDeviceDetailsMapFromBooking } from "@/lib/jml-booking-device-details";
 
 const grades: { value: 'A' | 'B' | 'C' | 'D' | 'Q'; label: string; color: string }[] = [
   { value: 'A', label: 'Grade A', color: 'bg-success/10 text-success' },
@@ -43,8 +45,15 @@ const Grading = () => {
   const [serialNumbersText, setSerialNumbersText] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [serialInput, setSerialInput] = useState<string>("");
-  
+  const [imeiNumbersText, setImeiNumbersText] = useState<string>("");
+  const [imeiInput, setImeiInput] = useState<string>("");
+
   const selectedAsset = booking?.assets.find(a => a.categoryId === selectedAssetId);
+
+  const selectedCategoryRequiresImei = useMemo(() => {
+    if (!selectedAsset) return false;
+    return categoryRequiresImei(selectedAsset.categoryName || "");
+  }, [selectedAsset]);
 
   // Pull device make/model from booking status history (JML creates these notes).
   const deviceDetailsMap = useMemo(() => {
@@ -54,21 +63,48 @@ const Grading = () => {
     const statusHistory = (booking as any).statusHistory as Array<{ notes?: string }> | undefined;
     if (!statusHistory?.length) return map;
 
-    const creationHistory = statusHistory.find(h => h.notes && h.notes.includes('Device details:'));
+    const isBreakfix = booking?.jmlSubType === 'breakfix';
+    const creationHistory = statusHistory.find(h =>
+      h.notes &&
+      (isBreakfix
+        ? h.notes.includes('Replacement Device details:')
+        : h.notes.includes('Device details:'))
+    );
     if (!creationHistory?.notes) return map;
 
     try {
-      const deviceDetailsMatch = creationHistory.notes.match(/Device details: (\[.*\])/);
+      // Prefer extracting the broken-device "Device details" block when breakfix notes contain both:
+      // "... Device details: <brokenArray>. Replacement Device details: <replacementArray>"
+            const deviceDetailsMatch =
+              creationHistory.notes.match(
+                /Device details:\s*(\[[\s\S]*?\])(?=\s*\.?\s*Replacement Device details:|$)/i
+              ) || creationHistory.notes.match(/Device details:\s*(\[[\s\S]*?\])/i);
       if (!deviceDetailsMatch) return map;
 
       const deviceDetails = JSON.parse(deviceDetailsMatch[1]);
       deviceDetails.forEach((device: any) => {
         if (!device?.category) return;
-        map.set(device.category, {
+
+        const rawCategory = String(device.category).trim();
+        const normalizedKey = rawCategory.toLowerCase();
+
+        // Store under lowercased UI category key (e.g. "Phone")
+        map.set(normalizedKey, {
           make: device.make,
           model: device.model,
           deviceType: device.deviceType,
         });
+
+        // Also store under underlying DB category name when possible
+        // Example: UI "Phone" -> DB "Smart Phones"
+        const underlyingCategory = getUnderlyingAssetCategoryNameForJml(rawCategory);
+        if (underlyingCategory) {
+          map.set(underlyingCategory.toLowerCase(), {
+            make: device.make,
+            model: device.model,
+            deviceType: device.deviceType,
+          });
+        }
       });
     } catch {
       // Ignore parse errors; grading can still proceed without device details.
@@ -79,8 +115,20 @@ const Grading = () => {
 
   const selectedAssetDevice = useMemo(() => {
     if (!selectedAsset) return undefined;
-    // Prefer matching by categoryName (JML uses category name as key), fallback to categoryId.
-    return deviceDetailsMap.get(selectedAsset.categoryName) || deviceDetailsMap.get(selectedAsset.categoryId);
+    const categoryNameKey = selectedAsset.categoryName
+      ? String(selectedAsset.categoryName).trim().toLowerCase()
+      : "";
+    const categoryIdKey = selectedAsset.categoryId
+      ? String(selectedAsset.categoryId).trim().toLowerCase()
+      : "";
+
+    const byName = categoryNameKey ? deviceDetailsMap.get(categoryNameKey) : undefined;
+    if (byName) return byName;
+
+    const byId = categoryIdKey ? deviceDetailsMap.get(categoryIdKey) : undefined;
+    if (byId) return byId;
+
+    return undefined;
   }, [deviceDetailsMap, selectedAsset]);
 
   const autoConditionCode = useMemo(() => {
@@ -91,7 +139,7 @@ const Grading = () => {
     if (!make) return '';
 
     const prefix = make.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3);
-    if (prefix.length < 3) return '';
+    if (!prefix) return '';
     return `${prefix}${g.slice(0, 1)}`;
   }, [grade, selectedAssetDevice?.make]);
 
@@ -112,6 +160,13 @@ const Grading = () => {
       .map(s => s.trim())
       .filter(Boolean);
   }, [serialNumbersText]);
+
+  const parsedImeiNumbers = useMemo(() => {
+    return imeiNumbersText
+      .split(/[\n,]+/g)
+      .map(s => s.trim())
+      .filter(Boolean);
+  }, [imeiNumbersText]);
 
   const { data: estimatedResaleValue = 0 } = useCalculateResaleValue(
     selectedAsset?.categoryName || selectedAsset?.categoryId,
@@ -155,6 +210,14 @@ const Grading = () => {
         });
         return;
       }
+      if (categoryRequiresImei(asset.categoryName || "")) {
+        if (parsedImeiNumbers.length !== quantity) {
+          toast.error("IMEI required for this category", {
+            description: `Enter exactly ${quantity} IMEI(s) for ${asset.categoryName}.`,
+          });
+          return;
+        }
+      }
     }
 
     const resaleValue = await calculateResaleValueFn(asset.categoryName || asset.categoryId, grade as any, quantity);
@@ -170,6 +233,10 @@ const Grading = () => {
         notes: notes || undefined,
         quantity,
         serialNumbers: ['A', 'B', 'C'].includes(grade) ? parsedSerialNumbers : [],
+        imeiNumbers:
+          ['A', 'B', 'C'].includes(grade) && categoryRequiresImei(asset.categoryName || "")
+            ? parsedImeiNumbers
+            : undefined,
       },
       {
         onSuccess: () => {
@@ -183,6 +250,8 @@ const Grading = () => {
           setNotes("");
           setQuantity(1);
           setSerialNumbersText("");
+          setImeiNumbersText("");
+          setImeiInput("");
         },
         onError: (error) => {
           toast.error("Failed to create grading record", {
@@ -214,12 +283,23 @@ const Grading = () => {
     );
   }
 
-  if (booking.status !== 'sanitised' && booking.status !== 'graded' && booking.status !== 'completed') {
+  const isMoverAtWarehouse =
+    booking.bookingType === 'jml' &&
+    booking.jmlSubType === 'mover' &&
+    booking.status === 'warehouse';
+
+  if (
+    booking.status !== 'sanitised' &&
+    booking.status !== 'graded' &&
+    booking.status !== 'completed' &&
+    !isMoverAtWarehouse
+  ) {
     return (
       <div className="space-y-6">
         <Alert>
           <AlertDescription>
-            Grading can only be performed on sanitised bookings. Current status: {booking.status}
+            Grading can only be performed on sanitised or graded bookings (JML mover: at warehouse). Current status:{' '}
+            {booking.status}
           </AlertDescription>
         </Alert>
         <Button asChild>
@@ -240,12 +320,23 @@ const Grading = () => {
 
   const totalResaleValue = records.reduce((sum, r) => sum + (r.resaleValue * (r.quantity || 1)), 0);
 
-  const allAssetsGraded = booking?.assets.every(asset => {
-    const gradedQty = records
-      .filter(r => r.assetId === asset.categoryId)
-      .reduce((s, r) => s + (r.quantity || 0), 0);
-    return gradedQty >= asset.quantity;
-  });
+  // Require at least one job asset; `[].every(...)` is vacuously true and would show the button too early (e.g. some mover payloads).
+  const allAssetsGraded =
+    Array.isArray(booking?.assets) &&
+    booking.assets.length > 0 &&
+    booking.assets.every((asset) => {
+      const gradedQty = records
+        .filter((r) => r.assetId === asset.categoryId)
+        .reduce((s, r) => s + (r.quantity || 0), 0);
+      return gradedQty >= asset.quantity;
+    });
+
+  const isJmlInventoryAfterGrading =
+    booking.bookingType === 'jml' &&
+    (booking.jmlSubType === 'leaver' ||
+      booking.jmlSubType === 'breakfix' ||
+      booking.jmlSubType === 'mover');
+  const isJmlMover = booking.bookingType === 'jml' && booking.jmlSubType === 'mover';
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -284,7 +375,10 @@ const Grading = () => {
             </div>
             <PoundSterling className="h-8 w-8 text-accent" />
           </div>
-          {allAssetsGraded && (booking.status === 'sanitised' || booking.status === 'graded') && (
+          {allAssetsGraded &&
+            (booking.status === 'sanitised' ||
+              booking.status === 'graded' ||
+              isMoverAtWarehouse) && (
             <div className="mt-4 pt-4 border-t border-accent/20">
               <Button 
                 variant="success" 
@@ -292,12 +386,18 @@ const Grading = () => {
                 className="w-full" 
                 onClick={() => {
                   if (!id) return;
-                  const isLeaverOrBreakfix = booking.bookingType === 'jml' && (booking.jmlSubType === 'leaver' || booking.jmlSubType === 'breakfix');
-                  // From sanitised we can only transition to graded; from graded we can go to inventory or completed
-                  const nextStatus = booking.status === 'sanitised'
-                    ? 'graded'
-                    : (isLeaverOrBreakfix ? 'inventory' : 'completed');
-                  const targetPath = isLeaverOrBreakfix ? `/admin/booking-inventory/${id}` : `/admin/booking-approval/${id}`;
+                  // Mover at warehouse → graded (same as sanitised → graded). Then graded → inventory for JML inventory leg or completed for ITAD.
+                  const nextStatus =
+                    booking.status === 'sanitised' || isMoverAtWarehouse
+                      ? 'graded'
+                      : isJmlInventoryAfterGrading
+                        ? 'inventory'
+                        : 'completed';
+                  const targetPath = isJmlMover
+                    ? `/admin/device-allocation?booking=${id}`
+                    : isJmlInventoryAfterGrading
+                      ? `/admin/booking-inventory/${id}`
+                      : `/admin/booking-approval/${id}`;
                   updateBookingStatus.mutate(
                     { bookingId: id, status: nextStatus as any },
                     {
@@ -325,9 +425,13 @@ const Grading = () => {
                 ) : (
                   <>
                     <ArrowRight className="h-4 w-4 mr-2" />
-                    {booking.bookingType === 'jml' && (booking.jmlSubType === 'leaver' || booking.jmlSubType === 'breakfix')
-                      ? 'Approve & Move to Inventory'
-                      : 'Approve & Complete'}
+                    {booking.status === 'sanitised' || isMoverAtWarehouse
+                      ? 'Approve & Mark Graded'
+                      : isJmlMover
+                        ? 'Approve & Allocate Devices'
+                        : isJmlInventoryAfterGrading
+                        ? 'Approve & Move to Inventory'
+                        : 'Approve & Complete'}
                   </>
                 )}
               </Button>
@@ -353,6 +457,8 @@ const Grading = () => {
                   setSelectedAssetId(v);
                   setQuantity(1);
                   setSerialNumbersText("");
+                  setImeiNumbersText("");
+                  setImeiInput("");
                 }}>
                   <SelectTrigger id="asset">
                     <SelectValue placeholder="Select asset category..." />
@@ -518,6 +624,91 @@ const Grading = () => {
                 </div>
               )}
 
+              {['A', 'B', 'C'].includes(grade) && selectedCategoryRequiresImei && (
+                <div className="space-y-2">
+                  <Label htmlFor="imeiInput">IMEI *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="imeiInput"
+                      value={imeiInput}
+                      onChange={(e) => setImeiInput(e.target.value)}
+                      placeholder={
+                        parsedImeiNumbers.length >= quantity
+                          ? `Maximum ${quantity} IMEI(s) added`
+                          : "Enter IMEI and press Enter or Add"
+                      }
+                      className="font-mono"
+                      disabled={parsedImeiNumbers.length >= quantity}
+                      inputMode="numeric"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const value = imeiInput.trim();
+                          if (!value) return;
+                          if (parsedImeiNumbers.length >= quantity) return;
+                          if (!parsedImeiNumbers.includes(value)) {
+                            setImeiNumbersText(prev =>
+                              prev ? `${prev}\n${value}` : value
+                            );
+                          }
+                          setImeiInput("");
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={parsedImeiNumbers.length >= quantity}
+                      onClick={() => {
+                        const value = imeiInput.trim();
+                        if (!value) return;
+                        if (parsedImeiNumbers.length >= quantity) return;
+                        if (!parsedImeiNumbers.includes(value)) {
+                          setImeiNumbersText(prev =>
+                            prev ? `${prev}\n${value}` : value
+                          );
+                        }
+                        setImeiInput("");
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Add {quantity} IMEI{quantity !== 1 ? "s" : ""} (one per device): {parsedImeiNumbers.length}/{quantity}
+                  </p>
+                  {parsedImeiNumbers.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {parsedImeiNumbers.map((im) => (
+                        <span
+                          key={im}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-xs font-mono border"
+                        >
+                          {im}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImeiNumbersText(prev =>
+                                prev
+                                  .split(/[\n,]+/g)
+                                  .map(s => s.trim())
+                                  .filter(Boolean)
+                                  .filter(s => s !== im)
+                                  .join("\n")
+                              );
+                            }}
+                            className="rounded-full p-0.5 hover:bg-muted-foreground/20 focus:outline-none focus:ring-1 focus:ring-ring"
+                            aria-label={`Remove ${im}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes (Optional)</Label>
                 <Textarea
@@ -607,6 +798,12 @@ const Grading = () => {
                               <p>
                                 <span className="text-muted-foreground">Serials:</span>{" "}
                                 <span className="text-foreground font-mono">{r.serialNumbers.join(", ")}</span>
+                              </p>
+                            ) : null}
+                            {r.imeiNumbers?.length ? (
+                              <p>
+                                <span className="text-muted-foreground">IMEI:</span>{" "}
+                                <span className="text-foreground font-mono">{r.imeiNumbers.join(", ")}</span>
                               </p>
                             ) : null}
                             {r.notes && (

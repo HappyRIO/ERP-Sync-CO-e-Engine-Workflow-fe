@@ -65,12 +65,13 @@ function getTimelineSteps(
       ];
     } else if (jmlSubType === 'mover') {
       // Mover: Leaver first (collect old), then New Starter (deliver new)
-      // created → collection_scheduled → collected → warehouse → inventory → device_allocated → courier_booked → dispatched → delivered → completed
+      // created → … → warehouse → graded → inventory → device_allocated → …
       return [
         { status: 'created', label: 'Created', icon: Package },
         { status: 'collection_scheduled', label: 'Collection Scheduled', icon: Calendar },
         { status: 'collected', label: 'Collected', icon: Truck },
         { status: 'warehouse', label: 'At Warehouse', icon: Warehouse },
+        { status: 'graded', label: 'Graded', icon: Award },
         { status: 'inventory', label: 'Inventory', icon: Package },
         { status: 'device_allocated', label: 'Device Allocated', icon: Package },
         { status: 'courier_booked', label: 'Courier Booked', icon: Calendar },
@@ -158,7 +159,7 @@ const BookingDetail = () => {
       
       if (creationHistory && creationHistory.notes) {
         try {
-          const deviceDetailsMatch = creationHistory.notes.match(/Device details: (\[.*\])/);
+          const deviceDetailsMatch = creationHistory.notes.match(/Device details:\s*(\[.*?\])/);
           if (deviceDetailsMatch) {
             const deviceDetails = JSON.parse(deviceDetailsMatch[1]);
             deviceDetails.forEach((device: any) => {
@@ -179,6 +180,31 @@ const BookingDetail = () => {
     
     return map;
   }, [booking]);
+
+  // For breakfix bookings, extract replacement requirements as well as broken device details.
+  const replacementDeviceDetails = useMemo(() => {
+    const empty: any[] = [];
+    if (!booking) return empty;
+
+    const statusHistory = (booking as any).statusHistory as Array<{
+      notes?: string;
+    }> | undefined;
+
+    if (!statusHistory || statusHistory.length === 0) return empty;
+
+    const creationHistory = statusHistory.find((h: any) => h.notes && h.notes.includes('Replacement Device details:'));
+    if (!creationHistory?.notes) return empty;
+
+    try {
+      const replacementMatch = creationHistory.notes.match(/Replacement Device details:\s*(\[.*?\])/i);
+      if (!replacementMatch) return empty;
+      return JSON.parse(replacementMatch[1]);
+    } catch {
+      return empty;
+    }
+  }, [booking]);
+
+  const isBreakfixBooking = booking?.bookingType === 'jml' && booking?.jmlSubType === 'breakfix';
 
   // Helper function to check if Device Type should be shown for a category
   const shouldShowDeviceType = (category: string): boolean => {
@@ -622,7 +648,7 @@ const BookingDetail = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Assets</CardTitle>
+              <CardTitle>{isBreakfixBooking ? 'Broken Devices (Assets)' : 'Assets'}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -664,6 +690,43 @@ const BookingDetail = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Replacement device requirements (Breakfix only) */}
+          {isBreakfixBooking && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Replacement Device Requirements</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {replacementDeviceDetails.length > 0 ? (
+                    replacementDeviceDetails.map((device: any, index: number) => {
+                      const deviceInfo =
+                        [device.make, device.model, device.deviceType].filter(Boolean).join(' • ') ||
+                        (device.notes?.trim() ? device.notes.trim() : 'Accessories');
+
+                      return (
+                        <div key={index} className="p-3 rounded-lg bg-muted/50 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Package className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{device.category}</span>
+                            </div>
+                            <Badge variant="secondary">{device.quantity} units</Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {deviceInfo}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No replacement device requirements found.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}

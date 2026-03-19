@@ -21,13 +21,34 @@ export function useAvailableInventory(allocatedTo: string, category?: string, co
   });
 }
 
+/** Mover bookings: mover_allocated for client; bookingId scopes rows to that mover booking. */
+export function useMoverAllocatedInventory(
+  clientId: string | undefined,
+  bookingId?: string | undefined,
+  category?: string,
+  conditionCode?: string
+) {
+  return useQuery({
+    queryKey: ['inventory', 'mover-allocated', clientId, bookingId, category, conditionCode],
+    queryFn: () => inventoryService.getMoverAllocatedInventory(clientId!, bookingId, category, conditionCode),
+    enabled: !!clientId,
+  });
+}
+
 export function useUploadInventory() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: ({ items, clientId }: { items: InventoryUploadItem[]; clientId?: string }) =>
-      inventoryService.uploadInventory(items, clientId),
+    mutationFn: ({
+      items,
+      clientId,
+      sourceBookingId,
+    }: {
+      items: InventoryUploadItem[];
+      clientId?: string;
+      sourceBookingId?: string;
+    }) => inventoryService.uploadInventory(items, clientId, sourceBookingId),
     onSuccess: async (data) => {
       if (data.created === 0) {
         toast.success("Devices already in inventory", {

@@ -166,6 +166,16 @@
   }
 }
 
+/* Sidebar: hide scrollbar but keep scrolling working */
+[data-sidebar="content"] {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge Legacy */
+}
+[data-sidebar="content"]::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-10px); }

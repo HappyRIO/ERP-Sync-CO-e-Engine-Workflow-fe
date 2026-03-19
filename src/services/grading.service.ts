@@ -26,7 +26,8 @@ class GradingService {
     condition?: string,
     notes?: string,
     quantity?: number,
-    serialNumbers?: string[]
+    serialNumbers?: string[],
+    imeiNumbers?: string[]
   ): Promise<GradingRecord> {
     const record = await apiClient.post<GradingRecord>('/grading', {
       bookingId,
@@ -37,6 +38,7 @@ class GradingService {
       notes,
       quantity,
       serialNumbers,
+      imeiNumbers,
     });
     return record;
   }

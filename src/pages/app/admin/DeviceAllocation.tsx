@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useBooking } from "@/hooks/useBookings";
-import { useInventory } from "@/hooks/useInventory";
+import { useInventory, useMoverAllocatedInventory } from "@/hooks/useInventory";
 import { jmlBookingService } from "@/services/jml-booking.service";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -39,22 +39,62 @@ const DeviceAllocation = () => {
   const queryClient = useQueryClient();
 
   const { data: booking, isLoading: isLoadingBooking } = useBooking(bookingId);
-  const { data: allInventory = [], isLoading: isLoadingInventory } = useInventory(null); // Get all unallocated inventory
+  const isMover = booking?.jmlSubType === "mover";
+  const { data: allInventoryList = [], isLoading: isLoadingAll } = useInventory(null);
+  const { data: moverAllocatedList = [], isLoading: isLoadingMover } = useMoverAllocatedInventory(
+    isMover ? booking?.clientId : undefined,
+    isMover ? bookingId ?? undefined : undefined
+  );
+  const allInventory = isMover ? moverAllocatedList : allInventoryList;
+  const isLoadingInventory = isMover ? isLoadingMover : isLoadingAll;
 
   // Extract device requirements from booking status history
   const deviceRequirements = useMemo<DeviceRequirement[]>(() => {
     if (!booking?.statusHistory) return [];
 
+    const isBreakfix = booking?.jmlSubType === "breakfix";
+
     // Find status history entry with device details
     const deviceHistory = booking.statusHistory.find((h: any) => 
-      h.notes && (h.notes.includes('Device details:') || h.notes.includes('broken devices:'))
+      h.notes && (
+        h.notes.includes('Device details:') ||
+        h.notes.includes('broken devices:') ||
+        h.notes.includes('Replacement Device details:')
+      )
     );
 
     if (!deviceHistory?.notes) return [];
 
     try {
-      // Extract JSON from notes
-      const jsonMatch = deviceHistory.notes.match(/Device details:\s*(\[.*?\])/);
+      // Breakfix: allocate replacement devices, not the broken devices being graded.
+      if (isBreakfix) {
+        const replacementMatch = deviceHistory.notes.match(/Replacement Device details:\s*(\[.*?\])/i);
+        if (replacementMatch && replacementMatch[1]) {
+          const devices = JSON.parse(replacementMatch[1]);
+          return devices
+            .map((d: any) => ({
+              category: (() => {
+                const raw = (d.category || "").toString().trim();
+                const lower = raw.toLowerCase();
+                if (lower.endsWith("laptop")) return "laptop";
+                if (lower.endsWith("phone")) return "smart phones";
+                return lower;
+              })(),
+              make: d.make || '',
+              model: d.model || '',
+              quantity: d.quantity || 1,
+              deviceType: d.deviceType || undefined,
+            }))
+            .filter((d: any) => d.category && d.category !== 'accessories');
+        }
+        // Fallback for older notes that might only have Device details:
+      }
+
+      // New starter / mover / fallback: extract JSON from "Device details:" (non-greedy across newlines)
+      const jsonMatch =
+        deviceHistory.notes.match(
+          /Device details:\s*(\[[\s\S]*?\])(?=\s*\.?\s*(?:Current address:|Replacement Device details:|$))/i
+        ) || deviceHistory.notes.match(/Device details:\s*(\[[\s\S]*?\])/i);
       if (jsonMatch && jsonMatch[1]) {
         const devices = JSON.parse(jsonMatch[1]);
         return devices
@@ -76,7 +116,7 @@ const DeviceAllocation = () => {
           .filter((d: any) => d.category && d.category !== 'accessories');
       }
 
-      // Try alternative format for breakfix
+      // Legacy fallback: old breakfix notes might embed "Device details" after "broken devices".
       const brokenDevicesMatch = deviceHistory.notes.match(/broken devices:.*?Device details:\s*(\[.*?\])/);
       if (brokenDevicesMatch && brokenDevicesMatch[1]) {
         const devices = JSON.parse(brokenDevicesMatch[1]);
@@ -110,23 +150,48 @@ const DeviceAllocation = () => {
   // State for collapsible categories in allocation summary
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
-  // Filter available inventory based on requirements
+  // Filter available inventory based on requirements.
+  // Mover: list is already mover_allocated for this client; new_starter/breakfix: filter to available only.
   const getAvailableDevicesForRequirement = (requirement: DeviceRequirement): InventoryItem[] => {
     return allInventory.filter(item => {
       const matchesCategory = item.category.toLowerCase() === requirement.category.toLowerCase();
       const matchesMake = item.make.toLowerCase() === requirement.make.toLowerCase();
       const matchesModel = item.model.toLowerCase() === requirement.model.toLowerCase();
-      // Device Type matching only applies to laptop and desktop
-      const matchesDeviceType = (requirement.category === "laptop" || requirement.category === "desktop")
-        ? (requirement.deviceType
-            ? (item.deviceType?.toLowerCase() === requirement.deviceType.toLowerCase())
-            : (item.deviceType === null || item.deviceType === undefined))
-        : true; // For other categories, deviceType doesn't matter
-      const isAvailable = item.status === 'available' && !item.allocatedTo;
+      const categoryNeedsDeviceType =
+        requirement.category === "laptop" ||
+        requirement.category === "desktop" ||
+        requirement.category === "smart phones" ||
+        requirement.category === "smart phone";
+      const matchesDeviceType = categoryNeedsDeviceType
+        ? requirement.deviceType
+          ? item.deviceType?.toLowerCase() === requirement.deviceType.toLowerCase()
+          : true
+        : true;
+      const isAvailable = isMover
+        ? (item.status === "mover_allocated" && item.allocatedTo === booking?.clientId)
+        : (item.status === "available" && !item.allocatedTo);
 
       return matchesCategory && matchesMake && matchesModel && matchesDeviceType && isAvailable;
     });
   };
+
+  const commitMoverMutation = useMutation({
+    mutationFn: ({ bookingId, serialNumbers }: { bookingId: string; serialNumbers: string[] }) =>
+      jmlBookingService.commitMoverSelectedDevices(bookingId, serialNumbers),
+    onSuccess: (data) => {
+      toast.success("Devices allocated to booking", {
+        description: `${data.quantity} serial(s) linked. Continue with Book Courier when ready.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"], exact: false });
+      navigate("/admin/bookings");
+    },
+    onError: (error) => {
+      toast.error("Could not allocate devices", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    },
+  });
 
   const allocateDeviceMutation = useMutation({
     mutationFn: async ({ bookingId, selectedDevices }: { bookingId: string; selectedDevices: SelectedDevice[] }) => {
@@ -187,8 +252,22 @@ const DeviceAllocation = () => {
       }
     }
 
-    if (booking?.status !== 'created' && booking?.status !== 'pending' && booking?.status !== 'device_allocated') {
-      toast.error("Only bookings in 'created', 'pending', or 'device_allocated' status can have devices allocated");
+    const canAllocateStatus =
+      booking?.status === "created" ||
+      booking?.status === "pending" ||
+      booking?.status === "device_allocated" ||
+      (booking?.jmlSubType === "mover" && booking?.status === "inventory");
+
+    if (!canAllocateStatus) {
+      toast.error("This booking cannot have devices allocated in its current status");
+      return;
+    }
+
+    if (booking?.jmlSubType === "mover" && booking?.status === "inventory") {
+      commitMoverMutation.mutate({
+        bookingId,
+        serialNumbers: selectedDevices.map((s) => s.serialNumber),
+      });
       return;
     }
 
@@ -242,10 +321,78 @@ const DeviceAllocation = () => {
     }
   }, [booking]);
 
-  if (isLoadingBooking || isLoadingInventory) {
+  const moverInventoryFlow =
+    booking?.jmlSubType === "mover" && booking?.status === "inventory";
+
+  // Mover @ inventory: preselect matching devices as if admin selected them manually.
+  useEffect(() => {
+    if (!moverInventoryFlow) return;
+    if (deviceRequirements.length === 0 || allInventory.length === 0) return;
+    if (selectedDevices.length > 0) return;
+
+    const usedSerials = new Set<string>();
+    const autoSelected: SelectedDevice[] = [];
+
+    deviceRequirements.forEach((requirement, requirementIndex) => {
+      const categoryNeedsDeviceType =
+        requirement.category === "laptop" ||
+        requirement.category === "desktop" ||
+        requirement.category === "smart phones" ||
+        requirement.category === "smart phone";
+
+      const available = allInventory.filter((item) => {
+        const matchesCategory = item.category.toLowerCase() === requirement.category.toLowerCase();
+        const matchesMake = item.make.toLowerCase() === requirement.make.toLowerCase();
+        const matchesModel = item.model.toLowerCase() === requirement.model.toLowerCase();
+        const matchesDeviceType = categoryNeedsDeviceType
+          ? requirement.deviceType
+            ? item.deviceType?.toLowerCase() === requirement.deviceType.toLowerCase()
+            : true
+          : true;
+        const isAvailable =
+          item.status === "mover_allocated" &&
+          item.allocatedTo === booking?.clientId &&
+          !usedSerials.has(item.serialNumber);
+
+        return matchesCategory && matchesMake && matchesModel && matchesDeviceType && isAvailable;
+      });
+
+      available.slice(0, requirement.quantity).forEach((item) => {
+        usedSerials.add(item.serialNumber);
+        autoSelected.push({
+          requirementIndex,
+          serialNumber: item.serialNumber,
+          inventoryItem: item,
+        });
+      });
+    });
+
+    if (autoSelected.length > 0) {
+      setSelectedDevices(autoSelected);
+      setSelectValues({});
+    }
+  }, [
+    moverInventoryFlow,
+    deviceRequirements,
+    allInventory,
+    booking?.clientId,
+    selectedDevices.length,
+  ]);
+
+  if (isLoadingBooking) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center gap-3 py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground text-center max-w-md">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!moverInventoryFlow && isLoadingInventory) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground text-center max-w-md">Loading…</p>
       </div>
     );
   }
@@ -261,13 +408,13 @@ const DeviceAllocation = () => {
     );
   }
 
-  // Only allow device allocation for new_starter and breakfix JML bookings
-  if (booking.bookingType !== 'jml' || (booking.jmlSubType !== 'new_starter' && booking.jmlSubType !== 'breakfix')) {
+  // Only allow device allocation for new_starter, breakfix, and mover JML bookings
+  if (booking.bookingType !== 'jml' || (booking.jmlSubType !== 'new_starter' && booking.jmlSubType !== 'breakfix' && booking.jmlSubType !== 'mover')) {
     return (
       <div className="space-y-6">
         <Alert>
           <AlertDescription>
-            Device allocation is only available for New Starter and Breakfix JML bookings.
+            Device allocation is only available for New Starter, Breakfix, and Mover JML bookings.
             Current booking type: {booking.bookingType} / {booking.jmlSubType}
           </AlertDescription>
         </Alert>
@@ -276,13 +423,36 @@ const DeviceAllocation = () => {
     );
   }
 
-  if (booking.status !== 'created' && booking.status !== 'pending' && booking.status !== 'device_allocated') {
+  const moverAllowed =
+    booking.jmlSubType === "mover" &&
+    (booking.status === "inventory" ||
+      booking.status === "created" ||
+      booking.status === "pending" ||
+      booking.status === "device_allocated");
+  const otherJmlAllowed =
+    booking.jmlSubType !== "mover" &&
+    (booking.status === "created" || booking.status === "pending" || booking.status === "device_allocated");
+
+  if (!moverAllowed && !otherJmlAllowed) {
     return (
       <div className="space-y-6">
         <Alert>
           <AlertDescription>
-            This booking cannot have devices allocated. Only bookings in "created", "pending", or "device_allocated" status can have devices allocated.
+            This booking cannot have devices allocated. For mover bookings, open this page from the queue when status is Inventory (auto-allocate) or Device allocated (already done).
             Current status: {booking.status}
+          </AlertDescription>
+        </Alert>
+        <Button onClick={() => navigate("/admin/bookings")}>Back to Booking Queue</Button>
+      </div>
+    );
+  }
+
+  if (booking.jmlSubType === "mover" && booking.status === "device_allocated") {
+    return (
+      <div className="space-y-6 max-w-lg mx-auto">
+        <Alert>
+          <AlertDescription>
+            Devices are already allocated for this mover booking. Continue with <strong>Book Courier</strong> from the queue.
           </AlertDescription>
         </Alert>
         <Button onClick={() => navigate("/admin/bookings")}>Back to Booking Queue</Button>
@@ -293,11 +463,19 @@ const DeviceAllocation = () => {
   const subTypeLabels: Record<string, string> = {
     new_starter: "New Starter",
     breakfix: "Breakfix",
+    mover: "Mover",
   };
 
   const getCategoryDisplay = (category: string) => {
     return category.charAt(0).toUpperCase() + category.slice(1);
   };
+
+  const startDateSource =
+    booking.startDate ||
+    booking.scheduledAt ||
+    booking.deliveryDate ||
+    booking.createdAt ||
+    null;
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -347,13 +525,12 @@ const DeviceAllocation = () => {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Start Date</p>
-                  <p className="text-xs">{booking.startDate ? format(new Date(booking.startDate), "PPP") : "N/A"}</p>
+                  <p className="text-xs">{startDateSource ? format(new Date(startDateSource), "PPP") : "N/A"}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Device Requirements */}
           {deviceRequirements.length > 0 && (
             <Card>
               <CardHeader>
@@ -592,11 +769,12 @@ const DeviceAllocation = () => {
                           const selectedForReq = selectedDevices.filter(s => s.requirementIndex === idx);
                           return selectedForReq.length < req.quantity;
                         }) ||
-                        allocateDeviceMutation.isPending
+                        allocateDeviceMutation.isPending ||
+                        commitMoverMutation.isPending
                       }
                       className="w-full"
                     >
-                      {allocateDeviceMutation.isPending ? (
+                      {allocateDeviceMutation.isPending || commitMoverMutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Allocating...
